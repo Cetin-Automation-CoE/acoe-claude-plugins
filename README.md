@@ -1,4 +1,4 @@
-# Acoe Claude Skills
+# ACOE Claude Skills
 
 Shared [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) skills for Acoe engineers, distributed as a plugin marketplace.
 
