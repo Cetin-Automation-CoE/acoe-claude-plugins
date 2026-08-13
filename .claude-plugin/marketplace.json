@@ -1,0 +1,12 @@
+{
+  "name": "acoe",
+  "owner": { "name": "Automation CoE" },
+  "plugins": [
+    {
+      "name": "acoe-skills",
+      "source": "./plugins/acoe-skills",
+      "description": "Shared internal skills.",
+      "version": "0.1.0"
+    }
+  ]
+}
