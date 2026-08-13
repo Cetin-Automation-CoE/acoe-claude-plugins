@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "acoe": {
+      "source": { "source": "github", "repo": "acoe/claude-plugins" }
+    }
+  },
+  "enabledPlugins": {
+    "acoe-skills@acoe": true
+  }
+}
