@@ -1,19 +1,40 @@
 # ACOE Claude Skills
 
-Shared [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) skills for Acoe engineers, distributed as a plugin marketplace.
+Shared [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) skills for Acoe engineers, distributed as a plugin marketplace. The same plugin also installs into the Claude app (claude.ai web and Claude Desktop) — see [Install in the Claude app](#install-in-the-claude-app-claudeai--desktop).
 
 Skills give Claude our conventions — review checklists, migration rules, house style — so you don't have to re-explain them in every session. Claude loads a skill automatically when a task matches its description.
 
-## Install
+## Install in Claude Code
 
 Run these two commands inside Claude Code (they're slash commands, not shell commands):
 
 ```
-/plugin marketplace add acoe/claude-plugins
+/plugin marketplace add Cetin-Automation-CoE/acoe-claude-plugins
 /plugin install acoe-skills@acoe
 ```
 
 That's it. Restart isn't required. Verify with `/plugin` — you should see `acoe-skills` listed as enabled.
+
+## Install in the Claude app (claude.ai / Desktop)
+
+Plugins work in chat on the web, the Chat tab in Claude Desktop, and Claude Cowork. Requires a paid plan (Pro, Max, Team, Enterprise).
+
+As a personal plugin:
+
+1. In claude.ai, open the **Customize** menu in the left sidebar and go to the **Plugins** tab.
+2. In **Personal plugins**, click **+** and select **Add marketplace**.
+3. Choose **GitHub** as the source and enter `Cetin-Automation-CoE/acoe-claude-plugins`.
+4. Install **Automation CoE** (`acoe-skills`) from the marketplace and leave **Sync automatically** on.
+
+The [Claude GitHub App](https://github.com/apps/claude) must be installed on this repository for syncing to work.
+
+Org-wide (Team/Enterprise): an Owner can instead add the same repository under **Organization settings > Plugins**, which provisions the plugin for everyone.
+
+### How the app picks up updates
+
+- **Automatic sync** fires only when a **merged pull request** on `main` contains a **version bump** in `.claude-plugin/marketplace.json` / `plugin.json`. Direct pushes to `main` do not trigger a sync — this is why changes here should land via PR with a version bump.
+- **Manual sync** is available anytime from the Plugins page if you don't want to wait.
+- Either way, a sync can take up to 30 minutes to propagate.
 
 ## What's included
 
@@ -23,11 +44,13 @@ That's it. Restart isn't required. Verify with `/plugin` — you should see `aco
 
 ## Updating
 
-New skills and fixes land here regularly. Pull them with:
+New skills and fixes land here regularly. In Claude Code, pull them with:
 
 ```
 /plugin marketplace update acoe
 ```
+
+The Claude app updates itself via GitHub sync — see [How the app picks up updates](#how-the-app-picks-up-updates).
 
 ## Team rollout
 
@@ -39,7 +62,7 @@ Create `.claude/settings.json` in the project repo:
 {
   "extraKnownMarketplaces": {
     "acoe": {
-      "source": { "source": "github", "repo": "acoe/claude-plugins" }
+      "source": { "source": "github", "repo": "Cetin-Automation-CoE/acoe-claude-plugins" }
     }
   },
   "enabledPlugins": {
