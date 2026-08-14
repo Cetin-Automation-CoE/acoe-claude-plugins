@@ -1,6 +1,7 @@
 {
   "name": "acoe-skills",
+  "displayName": "Automation CoE",
   "description": "Shared internal skills.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": { "name": "Automation CoE" }
 }
