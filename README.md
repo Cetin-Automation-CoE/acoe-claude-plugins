@@ -40,7 +40,17 @@ Org-wide (Team/Enterprise): an Owner can instead add the same repository under *
 
 | Skill | Fires when |
 |---|---|
+| `cetin-design` | Producing CETIN business deliverables (presentations, artifacts, dashboards, documents) — applies CETIN brand colors, fonts, and logos |
+| `company-design` | Producing work-related visual output for any company — learns the brand once (website, logos, guidelines), then applies it automatically |
+| `critique` | Asking for feedback on emails, slides, documents, or messages — "critique this", "is this clear", "poke holes in this" (Czech and English) |
+| `gantt` | "Udělej gantt", "harmonogram projektu" — builds a roadmap-style Gantt PowerPoint from a Microsoft Planner export (.xlsx) |
+| `idea-forge` | "Draft a PRD", "run idea forge" — guided 8-phase business analyst interview producing a Markdown PRD with As-Is/To-Be diagrams |
+| `morning-brief` | "Morning brief", "what's on my plate today" — daily summary of calendar, email, Teams, and Planner tasks |
 | `pr-review` | Reviewing a PR or diff, or asking whether a change is ready to merge |
+| `projektovy-status-pmo` | "Připrav projektový status" — builds an R/A/G project status for PMO from recent emails, meetings, and Teams activity |
+| `rfp-evaluation` | "Evaluate vendor proposals", "score this RFP" — weighted scoring matrix, HTML dashboard, and shortlist memo for CETIN procurement |
+| `skill-explorer` | "Which skills should I use" — onboarding interview that recommends a personalised skill set for the user's role |
+| `weekly-planning` | "Plan my week", "weekly recap" — persistent weekly planning with task list in OneDrive and Adaptive Card dashboards |
 
 ## Updating
 
@@ -122,6 +132,9 @@ plugins/
     skills/
       pr-review/
         SKILL.md
+      critique/
+        SKILL.md
+      …one folder per skill
 ```
 
 Two `.claude-plugin` folders, doing different jobs. The root one declares the marketplace; the inner one declares a single plugin. The `name` in `plugin.json` must match the `plugins[].name` entry in `marketplace.json` — a mismatch there is the usual cause of an install failing while both files look fine on their own.
