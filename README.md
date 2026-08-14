@@ -41,6 +41,7 @@ Org-wide (Team/Enterprise): an Owner can instead add the same repository under *
 | Skill | Fires when |
 |---|---|
 | `cetin-design` | Producing CETIN business deliverables (presentations, artifacts, dashboards, documents) — applies CETIN brand colors, fonts, and logos |
+| `cetin-html-slides` | Building or editing a CETIN training deck as self-contained HTML slides — fixed 16:9 stage, chapter files, contents page, markdown companions; also converting a PowerPoint or outline into that format |
 | `company-design` | Producing work-related visual output for any company — learns the brand once (website, logos, guidelines), then applies it automatically |
 | `critique` | Asking for feedback on emails, slides, documents, or messages — "critique this", "is this clear", "poke holes in this" (Czech and English) |
 | `gantt` | "Udělej gantt", "harmonogram projektu" — builds a roadmap-style Gantt PowerPoint from a Microsoft Planner export (.xlsx) |
