@@ -6,7 +6,7 @@
       "name": "acoe-skills",
       "source": "./plugins/acoe-skills",
       "description": "Shared internal skills.",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }

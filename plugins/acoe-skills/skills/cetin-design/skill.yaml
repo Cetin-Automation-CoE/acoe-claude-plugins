@@ -1,0 +1,10 @@
+name: cetin-design
+display_name: CETIN Design
+description: CETIN corporate design system — applies CETIN branding (CETIN Blue + Red, Avenir/Arial, official logos, brand layouts) to visual outputs including presentations, HTML/React artifacts, dashboards, Excel charts, and Word documents. Generates from the brand guidelines by default; uses the bundled product PPTX template (1:1 slide reuse) only when the user explicitly asks for the product/official template.
+version: 1.4.0
+tags:
+  - communication
+  - presentation
+install_method: zip
+requires: []
+author: jforman
