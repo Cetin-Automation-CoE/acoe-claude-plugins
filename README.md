@@ -47,6 +47,7 @@ Org-wide (Team/Enterprise): an Owner can instead add the same repository under *
 | `gantt` | "Udělej gantt", "harmonogram projektu" — builds a roadmap-style Gantt PowerPoint from a Microsoft Planner export (.xlsx) |
 | `idea-forge` | "Draft a PRD", "run idea forge" — guided 8-phase business analyst interview producing a Markdown PRD with As-Is/To-Be diagrams |
 | `morning-brief` | "Morning brief", "what's on my plate today" — daily summary of calendar, email, Teams, and Planner tasks |
+| `portal-article` | "Write a portal article", "napiš článek na portál" — authors or updates a solution article or hosted HTML page for the ACOE portal |
 | `pr-review` | Reviewing a PR or diff, or asking whether a change is ready to merge |
 | `projektovy-status-pmo` | "Připrav projektový status" — builds an R/A/G project status for PMO from recent emails, meetings, and Teams activity |
 | `rfp-evaluation` | "Evaluate vendor proposals", "score this RFP" — weighted scoring matrix, HTML dashboard, and shortlist memo for CETIN procurement |
