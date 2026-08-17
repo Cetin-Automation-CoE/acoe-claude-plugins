@@ -1,0 +1,104 @@
+/* ===========================================================
+   SINGLE-FILE SHELL
+   The contents page and the 51-slide deck live in one document.
+   html/body stay locked so the fixed 1920x1080 stage can letterbox;
+   the contents page therefore scrolls as its own fixed layer rather
+   than relying on the document scroller.
+   =========================================================== */
+html, body { overflow: hidden; }
+
+#home {
+    position: fixed; inset: 0; z-index: 900;
+    overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    display: none;
+}
+body.home-open #home { display: block; }
+
+/* deck chrome is hidden while the contents page is up */
+body.home-open .deck-viewport,
+body.home-open .deck-controls,
+body.home-open .rail,
+body.home-open .home-btn { display: none !important; }
+
+/* the contents button only makes sense once you are in the deck */
+.home-btn { z-index: 950; }
+
+/* "1–2" was wrapping onto two lines in the deck badges */
+#home .deck-num { min-width: 78px; white-space: nowrap; }
+
+/* presenter links sit on the blue hero, so they need the light treatment */
+#home .hero-meta a.li { color: #dfe4ff; }
+#home .hero-meta a.li:hover { color: #fff; }
+
+/* The Contents button is viewport-fixed while the stage letterboxes, so at
+   smaller windows the eyebrow rises to meet it. Keep the button compact and
+   high enough to clear the eyebrow down to 1280x720. */
+.home-btn {
+    top: 5px !important; left: 10px !important;
+    padding: 5px 12px !important;
+    font-size: 11px !important; letter-spacing: 1.6px !important;
+}
+.home-btn svg { width: 13px !important; height: 13px !important; }
+
+
+/* ===========================================================
+   CROSS-CHAPTER UTILITIES
+   These must stay GLOBAL in the merged file: they are used on the
+   title slide (c12), the video slides (c12, c67) and the contents
+   page, so they cannot be scoped to a single chapter.
+   =========================================================== */
+/* presenter LinkedIn links (title slide + home hero) */
+a.li {
+    display: inline-flex; align-items: center; gap: 8px;
+    text-decoration: none; color: inherit;
+    border-bottom: 1px solid rgba(255,255,255,.28);
+    transition: color .16s, border-color .16s;
+}
+a.li:hover { color: #fff; border-bottom-color: #fff; }
+a.li .li-ico { width: .78em; height: .78em; flex: 0 0 auto; opacity: .75; transition: opacity .16s; }
+a.li:hover .li-ico { opacity: 1; }
+
+/* link out to a video that lives on the web rather than in the file */
+a.vidlink {
+    display: inline-flex; align-items: center; gap: 10px;
+    margin-top: 12px; margin-bottom: 10px; text-decoration: none;
+    font-size: 20px; font-weight: 700; color: var(--cetin-blue);
+    border-bottom: 2px solid var(--cetin-red); padding-bottom: 3px;
+    align-self: flex-start;
+}
+a.vidlink:hover { color: var(--cetin-red); }
+a.vidlink svg { width: 22px; height: 22px; flex: 0 0 auto; }
+
+/* ---- click-to-play YouTube stand-in --------------------------------
+   In the single shareable file the local .mp4 is replaced by a local
+   poster frame plus a play badge. The iframe is only created on click,
+   so the slide still shows something useful with no network. The chapter
+   CSS only sizes `video`, so size these to the same 16:9 box or the
+   flex wrapper collapses to zero height. ------------------------------ */
+.videowrap { position: relative; }
+
+.ytbox, .videowrap iframe {
+    aspect-ratio: 16 / 9;
+    height: 100%; width: auto; max-width: 100%;
+    display: block; border: 0;
+}
+.ytbox {
+    position: relative; overflow: hidden;
+    border-radius: 10px; background: #0d0d18;
+    box-shadow: 0 18px 48px rgba(48, 0, 145, .26);
+    cursor: pointer;
+}
+.ytbox > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ytbox > iframe { width: 100%; height: 100%; border: 0; display: block; aspect-ratio: auto; }
+
+.ytplay {
+    position: absolute; inset: 0; margin: auto;
+    width: 132px; height: 132px; padding: 0;
+    background: none; border: 0; cursor: pointer;
+    transition: transform .18s ease;
+}
+.ytbox:hover .ytplay { transform: scale(1.07); }
+.ytplay svg { width: 100%; height: 100%; display: block; }
+.ytplay circle { fill: rgba(241, 46, 73, .93); }   /* CETIN Red */
+.ytplay path   { fill: #fff; }

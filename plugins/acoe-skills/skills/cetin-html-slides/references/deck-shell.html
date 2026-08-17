@@ -1,0 +1,168 @@
+<!-- ============================================================
+     CETIN HTML DECK — BOILERPLATE SHELL
+     Assemble as:  [this file up to BODY_OPEN] + [slide sections] + [this file from BODY_CLOSE]
+     Tokens to substitute at build time:
+       DECK_TITLE       page <title>
+       DECK_NAV_CONFIG  <script>window.DECK_NAV = {...}</script>
+       LOGO_LIGHT       data URI, CETIN logo for light backgrounds
+       LOGO_DARK        data URI, CETIN logo for dark backgrounds
+     ============================================================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DECK_TITLE</title>
+<style>
+/* === FIXED 16:9 STAGE (mandatory) ===
+   Slides are authored at 1920x1080 and the whole stage is scaled.
+   Never switch slides with display:none — later layout rules re-show them. */
+html, body { width:100%; height:100%; margin:0; overflow:hidden; background:var(--stage-bg,#000); }
+.deck-viewport { position:fixed; inset:0; overflow:hidden; background:var(--stage-bg,#000); }
+.deck-stage { position:absolute; left:0; top:0; width:1920px; height:1080px; overflow:hidden;
+              transform-origin:0 0; background:var(--slide-bg,#fff); }
+.slide { position:absolute; inset:0; width:1920px; height:1080px; overflow:hidden; display:block;
+         visibility:hidden; opacity:0; pointer-events:none; background:var(--slide-bg,#fff); }
+.slide.active, .slide.visible { visibility:visible; opacity:1; pointer-events:auto; z-index:1; }
+img, video, canvas, svg { max-width:100%; max-height:100%; }
+@media print {
+  html, body { width:1920px; height:auto; overflow:visible; background:#fff; }
+  .deck-viewport { position:static; overflow:visible; background:#fff; }
+  .deck-stage { position:static; width:auto; height:auto; transform:none !important; background:none; }
+  .slide { position:relative; display:block !important; visibility:visible !important; opacity:1 !important;
+           pointer-events:auto !important; width:1920px; height:1080px; transform:none !important;
+           break-after:page; page-break-after:always; }
+  .slide:last-child { break-after:auto; page-break-after:auto; }
+  .deck-controls, .home-btn, .next-ch, .hint { display:none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:.01ms !important; transition-duration:.2s !important; }
+}
+
+/* === CETIN BRAND TOKENS ===  #300091 is CETIN BLUE — never call it purple. */
+:root {
+  --cetin-blue:#300091; --cetin-deep:#1a0060; --cetin-red:#f12e49;
+  --white:#fff; --ink:#1a1a1a;
+  --mid-gray:#c7c9c7; --light-blue:#41b6e6; --light-purple:#6f79bd;
+  --bg-light-gray:#d9d9d6; --panel:#f5f6fa; --rule:#d7dae1; --gray-text:#66678a;
+  /* complementary palette, chart series order */
+  --c1:#3F3E98; --c2:#87C4E7; --c3:#7078B8; --c4:#1F4D9A;
+  --c5:#81C78F; --c6:#70D1E2; --c7:#49A2D8; --c8:#6AC9BB; --c9:#DEE5F1; --c10:#C6E4EF;
+  --stage-bg:#e8e9ee;   /* letterbox surround */
+  --slide-bg:#ffffff;   /* LIGHT MODE is the default for content slides */
+  --font: Arial, "Avenir Next LT Pro", "Helvetica Neue", sans-serif;
+}
+
+/* === TRANSITION: horizontal slide, next enters from the right === */
+.slide { transform:translateX(100%);
+         transition:transform 620ms cubic-bezier(.65,.02,.28,1), opacity 320ms ease; }
+.slide.active { transform:translateX(0); }
+.slide.exit-left  { transform:translateX(-100%); visibility:visible; opacity:1; z-index:0; }
+.slide.exit-right { transform:translateX(100%);  visibility:visible; opacity:1; z-index:0; }
+.slide.stage-left { transform:translateX(-100%); }
+
+/* === SHARED SLIDE FURNITURE === */
+.slide { font-family:var(--font); color:var(--ink); }
+.pad { position:absolute; inset:0; padding:92px 120px 108px; display:flex; flex-direction:column; }
+.eyebrow { font-size:19px; font-weight:700; letter-spacing:4.5px; text-transform:uppercase;
+           color:var(--cetin-blue); margin-bottom:20px; }
+/* Plain CETIN-Blue type on white. No filled header bar, no rule under the title. */
+h1.title { font-size:62px; font-weight:700; line-height:1.1; text-transform:uppercase;
+           color:var(--cetin-blue); margin:0; letter-spacing:-.5px; }
+.lede { margin-top:26px; font-size:27px; line-height:1.5; color:var(--ink); max-width:1180px; }
+.lede strong { color:var(--cetin-blue); font-weight:700; }
+/* House rule: full-size bottom-left on intro/divider, smaller bottom-right on content */
+.logo-intro   { position:absolute; left:120px;  bottom:84px; width:300px; height:auto; }
+.logo-content { position:absolute; right:120px; bottom:52px; width:168px; height:auto; opacity:.95; }
+.slide-no { position:absolute; left:120px; bottom:58px; font-size:17px; font-weight:700;
+            letter-spacing:2.5px; color:var(--gray-text); }
+
+/* === ENTRANCE ANIMATIONS ===
+   growW/growH MUST animate opacity too: .anim starts at opacity:0 and a keyframe
+   that omits a property leaves it at its base value (i.e. invisible). */
+@keyframes riseIn  { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:none} }
+@keyframes slideIn { from{opacity:0;transform:translateX(-34px)} to{opacity:1;transform:none} }
+@keyframes popIn   { from{opacity:0;transform:scale(.9)} to{opacity:1;transform:none} }
+@keyframes fadeIn  { from{opacity:0} to{opacity:1} }
+@keyframes growW   { from{opacity:0;transform:scaleX(0)} to{opacity:1;transform:scaleX(1)} }
+@keyframes growH   { from{opacity:0;transform:scaleY(0)} to{opacity:1;transform:scaleY(1)} }
+.slide .anim { opacity:0; }
+.slide.active .anim { animation:riseIn .72s cubic-bezier(.2,.7,.3,1) forwards; }
+.slide.active .anim.a-slide { animation-name:slideIn; }
+.slide.active .anim.a-pop   { animation-name:popIn; }
+.slide.active .anim.a-fade  { animation-name:fadeIn; }
+.d1{animation-delay:.1s}.d2{animation-delay:.2s}.d3{animation-delay:.3s}.d4{animation-delay:.4s}
+.d5{animation-delay:.5s}.d6{animation-delay:.6s}.d7{animation-delay:.7s}.d8{animation-delay:.8s}
+.d9{animation-delay:.9s}.d10{animation-delay:1s}.d11{animation-delay:1.1s}.d12{animation-delay:1.2s}
+.d13{animation-delay:1.3s}.d14{animation-delay:1.4s}.d15{animation-delay:1.5s}
+
+/* === CHROME: progress rail, home, counter, hint, next-chapter ===
+   Keep the band short and high (top:9px, ~30px tall) or it collides with .eyebrow. */
+.rail { position:fixed; left:0; top:0; height:5px; background:var(--cetin-red); z-index:1200;
+        transition:width .5s cubic-bezier(.65,.02,.28,1); }
+.home-btn { position:fixed; left:16px; top:9px; z-index:1300; display:inline-flex; align-items:center;
+            gap:9px; background:rgba(255,255,255,.82); border:1px solid rgba(48,0,145,.14);
+            border-radius:999px; padding:6px 13px 6px 10px; text-decoration:none; color:var(--cetin-blue);
+            font-family:var(--font); font-size:11.5px; font-weight:700; letter-spacing:1.5px;
+            text-transform:uppercase; box-shadow:0 3px 12px rgba(48,0,145,.1);
+            -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+            opacity:.5; transition:opacity .18s ease; }
+.home-btn:hover { opacity:1; background:#fff; }
+.home-btn svg { width:15px; height:15px; display:block; }
+.deck-controls { position:fixed; right:16px; top:9px; z-index:1300; display:flex; align-items:center;
+                 background:rgba(255,255,255,.55); border:1px solid rgba(48,0,145,.1);
+                 border-radius:999px; padding:6px 13px; font-family:var(--font);
+                 -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+                 opacity:.55; transition:opacity .18s ease; }
+.deck-controls:hover { opacity:1; }
+.deck-controls button { display:none; }   /* keyboard + home button are the navigation */
+.deck-controls .pos { color:var(--cetin-blue); font-size:12px; letter-spacing:2px; font-weight:700;
+                      font-variant-numeric:tabular-nums; }
+.hint { position:fixed; left:152px; top:13px; z-index:1200; font-family:var(--font); font-size:11.5px;
+        letter-spacing:1.3px; text-transform:uppercase; color:rgba(26,0,96,.4);
+        transition:opacity .6s ease; }
+.next-ch { position:fixed; right:98px; top:9px; z-index:1300; display:inline-flex; align-items:center;
+           gap:10px; background:var(--cetin-red); border-radius:999px; padding:7px 12px 7px 16px;
+           text-decoration:none; color:#fff; font-family:var(--font); font-size:12.5px; font-weight:700;
+           letter-spacing:1.6px; text-transform:uppercase; box-shadow:0 5px 18px rgba(241,46,73,.32);
+           opacity:0; pointer-events:none; transform:translateX(10px);
+           transition:opacity .28s ease, transform .28s ease; }
+.next-ch.on { opacity:1; pointer-events:auto; transform:none; }
+.next-ch svg { width:18px; height:18px; display:block; }
+.next-ch .nc-sub { display:block; font-size:11px; letter-spacing:.6px; text-transform:none;
+                   font-weight:400; opacity:.85; margin-top:1px; }
+.next-ch .nc-txt { text-align:right; }
+body.editing [contenteditable="true"]:hover { outline:2px dashed rgba(241,46,73,.55); outline-offset:4px; }
+body.editing [contenteditable="true"]:focus { outline:2px solid var(--cetin-red); outline-offset:4px; }
+
+/* COMPONENT_CSS — append the component library here (see references/components.md) */
+</style>
+</head>
+<body>
+DECK_NAV_CONFIG
+<div class="rail" id="rail"></div>
+<a class="home-btn" href="index.html" title="Back to contents">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-6h4v6"/>
+  </svg>
+  Contents
+</a>
+<div class="deck-viewport" id="viewport">
+  <div class="deck-stage" id="stage">
+<!-- ============================ BODY_OPEN ============================ -->
+
+<!-- ...slide <section class="slide" data-slide="N"> blocks go here... -->
+
+<!-- ============================ BODY_CLOSE =========================== -->
+  </div><!-- /deck-stage -->
+</div><!-- /deck-viewport -->
+<div class="deck-controls">
+  <button id="prev" aria-label="Previous slide">&#8249;</button>
+  <span class="pos" id="pos">1 / 1</span>
+  <button id="next" aria-label="Next slide">&#8250;</button>
+</div>
+<div class="hint" id="hint">&larr; &rarr; to navigate &middot; E to edit</div>
+<script src="deck.js"></script>  <!-- inline the contents of references/deck.js instead -->
+</body>
+</html>
