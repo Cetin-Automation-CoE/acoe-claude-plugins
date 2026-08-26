@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PROCESS_NAME}} — Process Visual</title>
+<style>
+  :root{
+    /* CETIN brand — see references/cetin-brand.md */
+    --brand:#300091; --brand-red:#f12e49; --brand-lightblue:#41b6e6; --brand-purple:#6f79bd;
+    --ink:#1a1346; --ink2:#39414b; --muted:#66678a; --rule:#cdd4e5;
+    --page:#ffffff; --bg:#f5f6fa; --card:#ffffff;
+    --g:#12694a; --gbg:#e7f3ec; --gbd:#a8d4bd;
+    --a:#8a5a00; --abg:#fbf1de; --abd:#e3c68a;
+    --r:#9c2b2b; --rbg:#fbeaea; --rbd:#e0aeae;
+    --n:#300091; --nbg:#eaeaf6; --nbd:#bcbce0;
+    --accent:#300091;
+  }
+  /* The page is white by default so it prints, projects and screenshots cleanly.
+     Dark mode is opt-in only: set <html data-theme="dark"> if someone asks for it. */
+  :root[data-theme="dark"]{
+      --brand:#8f7fe8; --brand-red:#ff6b7f; --brand-lightblue:#41b6e6; --brand-purple:#9aa2d6;
+      --ink:#eceafa; --ink2:#c3c6da; --muted:#9a9ab8; --rule:#2e2b4a;
+      --page:#12102a; --bg:#12102a; --card:#1c1938;
+      --g:#6fd3a4; --gbg:#14301f; --gbd:#2c5c40;
+      --a:#e8bd6a; --abg:#33270f; --abd:#66502a;
+      --r:#f0908f; --rbg:#331a1a; --rbd:#663434;
+      --n:#9dbde6; --nbg:#211d42; --nbd:#3d3768;
+      --accent:#a897f5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+    font:15px/1.55 'Avenir Next LT Pro','Avenir Next',Avenir,Arial,'Helvetica Neue',sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1480px;margin:0 auto;padding:40px 28px 72px}
+  header{border-bottom:2px solid var(--brand);padding-bottom:22px;margin-bottom:34px}
+  .brandbar{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .brandbar img{height:26px;width:auto}
+  .brandbar .tagline{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);font-weight:700}
+  h1{font-size:27px;line-height:1.2;margin:0 0 8px;letter-spacing:-.01em;color:var(--brand)}
+  .sub{color:var(--muted);font-size:13.5px}
+  .sub b{color:var(--ink2);font-weight:600}
+  h2{font-size:17px;margin:44px 0 6px;letter-spacing:-.005em;color:var(--brand)}
+  h2 .num{color:var(--muted);font-weight:400;margin-right:8px}
+  .lede{color:var(--muted);font-size:13.5px;margin:0 0 20px;max-width:78ch}
+
+  /* legend */
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+  .chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+    padding:5px 11px;border-radius:999px;border:1px solid}
+  .chip .dot{width:8px;height:8px;border-radius:50%}
+  .c-g{background:var(--gbg);border-color:var(--gbd);color:var(--g)}
+  .c-a{background:var(--abg);border-color:var(--abd);color:var(--a)}
+  .c-r{background:var(--rbg);border-color:var(--rbd);color:var(--r)}
+  .c-n{background:var(--nbg);border-color:var(--nbd);color:var(--n)}
+  .c-g .dot{background:var(--g)} .c-a .dot{background:var(--a)}
+  .c-r .dot{background:var(--r)} .c-n .dot{background:var(--n)}
+
+  /* timeline */
+  .tl{display:flex;width:100%;height:40px;border-radius:7px;overflow:hidden;
+    border:1px solid var(--rule);background:var(--card)}
+  .tl div{position:relative;border-right:1px solid var(--rule);min-width:2px}
+  .tl div:last-child{border-right:0}
+  .tl .s-g{background:var(--gbg)} .tl .s-a{background:var(--abg)}
+  .tl .s-r{background:var(--rbg)} .tl .s-n{background:var(--nbg)}
+  .tl .hl{outline:2px solid var(--accent);outline-offset:-2px;z-index:2}
+  .tlk{display:flex;width:100%;margin-top:7px;font-size:10.5px;color:var(--muted)}
+  .tlk div{border-right:1px solid transparent;padding-right:4px;overflow:hidden;
+    white-space:nowrap;text-overflow:ellipsis}
+  .tmark{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;margin-top:4px}
+
+  /* pipeline */
+  .pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
+  @media(max-width:1080px){.pipe{grid-template-columns:1fr 1fr}}
+  @media(max-width:680px){.pipe{grid-template-columns:1fr}}
+  .stage{background:var(--card);border:1px solid var(--rule);border-radius:10px;
+    padding:14px 14px 16px;position:relative}
+  .stage > .sh{font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;margin-bottom:2px}
+  .stage > .st{font-size:15px;font-weight:650;margin-bottom:2px;letter-spacing:-.005em}
+  .stage > .sm{font-size:11.5px;color:var(--muted);margin-bottom:12px;
+    font-variant-numeric:tabular-nums}
+  .step{border:1px solid var(--rule);border-left-width:3px;border-radius:7px;
+    padding:9px 11px;margin-bottom:8px;background:var(--bg)}
+  .step:last-child{margin-bottom:0}
+  .step.g{border-left-color:var(--g)} .step.a{border-left-color:var(--a)}
+  .step.r{border-left-color:var(--r)} .step.n{border-left-color:var(--n)}
+  .step .t{font-size:13px;font-weight:600;line-height:1.35}
+  .step .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+    font-weight:700;color:var(--accent)}
+  .step .d{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+  .step .ts{display:inline-block;font-size:10.5px;font-weight:700;color:var(--muted);
+    font-variant-numeric:tabular-nums;background:var(--card);border:1px solid var(--rule);
+    border-radius:4px;padding:1px 5px;margin-top:5px}
+  .step.hero{background:var(--nbg);border-color:var(--accent);border-left-color:var(--accent)}
+  .step.hero .d{color:var(--ink2)}
+
+  /* anatomy */
+  .anat{background:var(--card);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+  .arow{display:grid;grid-template-columns:20px 1.15fr 1.5fr 1fr 96px;gap:12px;
+    padding:11px 14px;border-top:1px solid var(--rule);align-items:center;font-size:12.5px}
+  .arow:first-child{border-top:0;background:var(--bg);font-size:10.5px;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .sw{width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.18)}
+  .arow b{font-weight:650}
+  .arow .m{color:var(--muted)}
+  .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;
+    border:1px solid;display:inline-block;white-space:nowrap}
+  .t-var{background:var(--abg);border-color:var(--abd);color:var(--a)}
+  .t-fix{background:var(--gbg);border-color:var(--gbd);color:var(--g)}
+  .t-jud{background:var(--rbg);border-color:var(--rbd);color:var(--r)}
+
+  /* callouts */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:960px){.grid3{grid-template-columns:1fr}}
+  .call{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:15px 16px}
+  .call.warn{border-color:var(--rbd);background:var(--rbg)}
+  .call.dec{border-color:var(--abd);background:var(--abg)}
+  .call h3{margin:0 0 7px;font-size:13.5px;letter-spacing:-.005em}
+  .call ul{margin:0;padding-left:17px;font-size:12.5px;color:var(--ink2);line-height:1.55}
+  .call li{margin-bottom:5px}
+  .call li:last-child{margin-bottom:0}
+  footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--rule);
+    font-size:11.5px;color:var(--muted)}
+  .kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--bg);
+    border:1px solid var(--rule);border-radius:4px;padding:1px 5px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============================================================
+     HOW TO USE THIS TEMPLATE
+
+     Replace every {{PLACEHOLDER}} and every block marked REPEAT.
+     The CSS above is complete and validated in light and dark mode -
+     you should not need to touch it. What you change is the content.
+
+     Four RAG classes are used throughout and must stay consistent
+     with the written analysis:
+       g = automatable as-is        a = needs an agreed rule
+       r = blocked / manual         n = decision or handover point
+
+     Delete section 3 (anatomy) if the process has no composite
+     output worth decomposing. Keep sections 1, 2 and 4 always.
+     ============================================================ -->
+
+<header>
+  <!-- Logo optional on internal working docs; required on anything leaving the team.
+       Embed the real file as a data URI (from the cetin-design skill's references/) -
+       never redraw it. Delete this block if not branding. -->
+  <div class="brandbar">
+    <img src="data:image/svg+xml;base64,{{CETIN_LOGO_BASE64}}" alt="CETIN">
+    <span class="tagline">Automation CoE · process intake</span>
+  </div>
+  <h1>{{PROCESS_NAME}} — as-is process &amp; automation readiness</h1>
+  <div class="sub">
+    Reconstructed from the walkthrough <b>“{{RECORDING_TITLE}}”</b>,
+    {{DATE}} · {{DURATION}} · presenter <b>{{PRESENTER}}</b> ({{PRESENTER_ROLE}}), {{WORKED_EXAMPLE}}.
+    Timestamps in <span class="kbd">[mm:ss]</span> point into that recording.
+  </div>
+  <div class="legend">
+    <span class="chip c-g"><span class="dot"></span>Automatable as-is</span>
+    <span class="chip c-a"><span class="dot"></span>Automatable once a rule is agreed</span>
+    <span class="chip c-r"><span class="dot"></span>Blocked or genuinely manual</span>
+    <span class="chip c-n"><span class="dot"></span>Decision / handover point</span>
+  </div>
+</header>
+
+<!-- ============ 1. TIME MAP =====================================
+     A proportional bar of the recording. Set flex to the segment's
+     length IN SECONDS - that is what makes it proportional, and it
+     is why this reads as evidence rather than decoration.
+     Add class "hl" to the one segment that matters most.
+     Keep the .tlk keys in the SAME ORDER with the SAME flex values.
+     ============================================================== -->
+<h2><span class="num">1</span>Where the {{DURATION_MINUTES}} minutes went</h2>
+<p class="lede">{{TIMELINE_LEDE}}</p>
+<div class="tl">
+  <!-- REPEAT per segment -->
+  <div class="s-n" style="flex:{{SECONDS}}" title="{{FROM}}–{{TO}} {{LABEL}}"></div>
+  <div class="s-g hl" style="flex:{{SECONDS}}" title="{{FROM}}–{{TO}} {{KEY_MOMENT_LABEL}}"></div>
+</div>
+<div class="tlk">
+  <!-- REPEAT with matching flex values, short labels -->
+  <div style="flex:{{SECONDS}}">{{SHORT_LABEL}}</div>
+</div>
+<div class="tmark"><span>0:00</span><span>{{KEY_MOMENT_CAPTION}}</span><span>{{DURATION}}</span></div>
+
+<!-- ============ 2. PIPELINE ====================================
+     One .stage column per stage, 3-5 stages. Inside each, one
+     .step per step, colour-coded. Give the single most important
+     step class "hero" - exactly one per page, or the emphasis
+     stops meaning anything.
+     ============================================================= -->
+<h2><span class="num">2</span>The process, end to end</h2>
+<p class="lede">{{PIPELINE_LEDE}}</p>
+
+<div class="pipe">
+  <!-- REPEAT per stage -->
+  <div class="stage">
+    <div class="sh">Stage {{N}}</div>
+    <div class="st">{{STAGE_NAME}}</div>
+    <div class="sm">{{STAGE_TIME_RANGE}} · {{STAGE_NOTE}}</div>
+
+    <!-- REPEAT per step; class g|a|r|n, or "hero" for the one key step -->
+    <div class="step g">
+      <div class="t"><span class="code">{{SYSTEM_OR_CODE}}</span> {{STEP_TITLE}}</div>
+      <div class="d">{{PARAMETERS_AND_GOTCHAS}}</div>
+      <div class="ts">{{TIMESTAMP}}</div>
+    </div>
+
+    <div class="step hero">
+      <div class="t"><span class="code">{{CODE}}</span> {{KEY_STEP_TITLE}}</div>
+      <div class="d">{{WHY_THIS_ONE_MATTERS}}</div>
+      <div class="ts">▶ {{TIMESTAMP_RANGE}}</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 3. OUTPUT ANATOMY (optional) ===================
+     Use when the deliverable is a composite - a wide sheet built
+     from several sources, a multi-tab workbook, a layered report.
+     Decomposing it shows which parts are stable and which move,
+     which is what tells a reader where the automation risk is.
+     Delete the whole section if it does not apply.
+     ============================================================= -->
+<h2><span class="num">3</span>Anatomy of the {{OUTPUT_NAME}}</h2>
+<p class="lede">{{ANATOMY_LEDE}}</p>
+<div class="anat">
+  <div class="arow"><div></div><div>Block</div><div>Content</div><div>Source</div><div>Behaviour</div></div>
+  <!-- REPEAT per block. Swatch colour should match what the owner actually uses. -->
+  <div class="arow">
+    <div><div class="sw" style="background:{{HEX}}"></div></div>
+    <div><b>{{BLOCK_NAME}}</b></div>
+    <div class="m">{{CONTENT}}</div>
+    <div class="m">{{SOURCE}}</div>
+    <div><span class="tag t-var">variable</span></div>
+  </div>
+  <!-- other tag options: <span class="tag t-fix">fixed</span>
+                          <span class="tag t-jud">judgement</span> -->
+</div>
+
+<!-- ============ 4. WHAT BLOCKS THIS ============================
+     Three columns. This is the section stakeholders read first,
+     so lead each bullet with the claim, not the context, and cite
+     a timestamp so any of it can be checked in a minute.
+     ============================================================= -->
+<h2><span class="num">4</span>What actually blocks this project</h2>
+<div class="grid3">
+  <div class="call warn">
+    <h3>Structural defects to fix before go-live</h3>
+    <ul>
+      <li><b>{{DEFECT}}</b> {{CONSEQUENCE}} <span class="kbd">{{TS}}</span></li>
+    </ul>
+  </div>
+  <div class="call dec">
+    <h3>Decisions still open</h3>
+    <ul>
+      <li>{{DECISION_AS_A_QUESTION}} <span class="kbd">{{TS}}</span></li>
+    </ul>
+  </div>
+  <div class="call">
+    <h3>Next steps agreed on the call</h3>
+    <ul>
+      <li>{{ACTION}} — {{OWNER}}. <span class="kbd">{{TS}}</span></li>
+    </ul>
+  </div>
+</div>
+
+<footer>
+  Source: {{SOURCE_DESCRIPTION}}. {{SOURCE_QUALITY_CAVEAT}}
+  Timestamps mark the start of the speaker turn containing the topic, so inside long
+  monologues the exact moment can fall up to ~2 minutes later. Hover a timeline segment for its label.
+</footer>
+
+</div>
+</body>
+</html>
