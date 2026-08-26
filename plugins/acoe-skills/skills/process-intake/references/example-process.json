@@ -1,0 +1,141 @@
+{
+  "_comment": "Worked example: CETIN monthly fleet cost report ('Report Cars'), reconstructed from the 3 Aug 2026 walkthrough. Trimmed to ~25 nodes to stay readable as a reference. Note how the happy path stays on row 0 and every exception drops to row 1, how the external party is a separate pool reached by a messageFlow, and how each task carries the 'ts' that points back into the recording.",
+
+  "id": "cars_report",
+  "name": "CETIN monthly fleet cost report",
+
+  "pools": [
+    {
+      "id": "cetin",
+      "name": "CETIN — monthly fleet cost report (\"Report Cars\")",
+      "lanes": [
+        { "id": "ops",  "name": "Transport / Fleet — process owner" },
+        { "id": "ctrl", "name": "Controlling / BI" }
+      ]
+    },
+    { "id": "ext", "name": "Leasing companies (Arval, Business Lease, Ayvens)" }
+  ],
+
+  "nodes": [
+    { "id": "start",   "type": "startEvent", "lane": "ops", "col": 0,
+      "name": "Financial month-end close completed (~12th of following month)" },
+
+    { "id": "kob1",    "type": "task", "lane": "ops", "col": 1, "ts": "8:36",
+      "name": "Extract actual line items on transport orders (KOB1, order group Z001, custom 5,000,000-row variant)" },
+    { "id": "excel",   "type": "task", "lane": "ops", "col": 2, "ts": "~11:38",
+      "name": "Export to Excel — SUBZAK block" },
+    { "id": "ke5z",    "type": "task", "lane": "ops", "col": 3, "ts": "~13:30",
+      "name": "Extract profit-centre line items (KE5Z): insurance & employee damage recoveries" },
+
+    { "id": "g_dmg",   "type": "exclusiveGateway", "lane": "ops", "col": 4, "ts": "17:44",
+      "name": "Damage-committee items without a vehicle reference?" },
+    { "id": "z1fi",    "type": "task", "lane": "ops", "col": 5, "row": 1, "ts": "17:44",
+      "name": "Run damages report (Z1FI_…_SKODY) — AUTHORIZATION PENDING for RPA" },
+    { "id": "dmgman",  "type": "task", "lane": "ops", "col": 6, "row": 1, "ts": "~18:30",
+      "name": "Manually identify vehicle: plate + equipment no., cross-check who caused the damage" },
+    { "id": "g_dmg_j", "type": "exclusiveGateway", "lane": "ops", "col": 7 },
+
+    { "id": "recv",    "type": "task", "lane": "ops", "col": 8, "ts": "42:27",
+      "name": "Receive lessor files (invoice Excel + text data records)" },
+    { "id": "g_per",   "type": "exclusiveGateway", "lane": "ops", "col": 9, "ts": "~21:00",
+      "name": "Invoice belongs to the report month?" },
+    { "id": "defer",   "type": "task", "lane": "ops", "col": 10, "row": 1, "ts": "~21:00",
+      "name": "Park invoice for the next report period (personal invoice register)" },
+    { "id": "g_per_j", "type": "exclusiveGateway", "lane": "ops", "col": 11 },
+
+    { "id": "ih08",    "type": "task", "lane": "ops", "col": 12, "ts": "47:36",
+      "name": "Map registration plate → order & equipment no. (IH08)" },
+    { "id": "val",     "type": "task", "lane": "ops", "col": 13, "ts": "45:05",
+      "name": "Validate billed amount against SAP; approve invoice on substance" },
+
+    { "id": "vm1",     "type": "task", "lane": "ops", "col": 14, "ts": "~53:16",
+      "name": "Extract vehicle master list as at the 1st of the report month" },
+    { "id": "g_vm",    "type": "exclusiveGateway", "lane": "ops", "col": 15, "ts": "~54:00",
+      "name": "Vehicle found?" },
+    { "id": "vm2",     "type": "task", "lane": "ops", "col": 16, "row": 1, "ts": "~55:00",
+      "name": "Re-run as at the last day of month, then as at the report date" },
+    { "id": "g_vm_j",  "type": "exclusiveGateway", "lane": "ops", "col": 17 },
+
+    { "id": "alloc",   "type": "task", "lane": "ops", "col": 18, "ts": "~57:00",
+      "name": "Assign costs: keep on Transport vs. distribute to business cost centres" },
+    { "id": "zdo",     "type": "task", "lane": "ops", "col": 19, "ts": "1:13:40",
+      "name": "Extract mileage, consumption and fuel price (ZDOMET / ZDOMET2); convert price to net of VAT" },
+    { "id": "pivot",   "type": "task", "lane": "ops", "col": 20, "ts": "36:24",
+      "name": "Build PivotTable: orders × cost elements (variable column set)" },
+    { "id": "assem",   "type": "task", "lane": "ops", "col": 21, "ts": "~53:16",
+      "name": "Assemble report blocks and set the Nová Optika flag" },
+
+    { "id": "g_set",   "type": "exclusiveGateway", "lane": "ops", "col": 22, "ts": "~1:02:00",
+      "name": "Closing settlement on a returned vehicle?" },
+    { "id": "drv",     "type": "task", "lane": "ops", "col": 23, "row": 1, "ts": "~1:02:00",
+      "name": "Research the last actual driver (vehicles returned up to 2 years ago)" },
+    { "id": "g_set_j", "type": "exclusiveGateway", "lane": "ops", "col": 24 },
+
+    { "id": "send",    "type": "task", "lane": "ops", "col": 25, "ts": "53:16",
+      "name": "Send the final sheet (\"plachta\") to Controlling" },
+    { "id": "g_par",   "type": "parallelGateway", "lane": "ops", "col": 26 },
+    { "id": "reuse",   "type": "task", "lane": "ops", "col": 27, "row": 1, "ts": "6:33",
+      "name": "Transport reuse: Nová Optika re-invoicing, accruals, business planning" },
+    { "id": "endops",  "type": "endEvent", "lane": "ops", "col": 28, "row": 1,
+      "name": "Transport outputs complete" },
+
+    { "id": "append",  "type": "task", "lane": "ctrl", "col": 27, "ts": "1:22:26",
+      "name": "Append the month's rows to the master workbook" },
+    { "id": "helper",  "type": "task", "lane": "ctrl", "col": 28, "ts": "1:27:27",
+      "name": "Add helper columns: org. structure via the cost-centre mapping bridge" },
+    { "id": "pbi",     "type": "task", "lane": "ctrl", "col": 29, "ts": "1:22:14",
+      "name": "Refresh the Power BI model" },
+    { "id": "endctrl", "type": "endEvent", "lane": "ctrl", "col": 30,
+      "name": "Report available to the business" },
+
+    { "id": "lstart",  "type": "startEvent", "lane": "ext", "col": 6, "name": "Lessor billing run" },
+    { "id": "lsend",   "type": "task", "lane": "ext", "col": 7, "ts": "42:27",
+      "name": "Issue invoice and send Excel + text data records by e-mail" },
+    { "id": "lend",    "type": "endEvent", "lane": "ext", "col": 8 }
+  ],
+
+  "flows": [
+    { "from": "start", "to": "kob1" },
+    { "from": "kob1", "to": "excel" },
+    { "from": "excel", "to": "ke5z" },
+    { "from": "ke5z", "to": "g_dmg" },
+    { "from": "g_dmg", "to": "z1fi", "name": "yes" },
+    { "from": "z1fi", "to": "dmgman" },
+    { "from": "dmgman", "to": "g_dmg_j" },
+    { "from": "g_dmg", "to": "g_dmg_j", "name": "no" },
+    { "from": "g_dmg_j", "to": "recv" },
+    { "from": "recv", "to": "g_per" },
+    { "from": "g_per", "to": "defer", "name": "no — future period" },
+    { "from": "defer", "to": "g_per_j" },
+    { "from": "g_per", "to": "g_per_j", "name": "yes" },
+    { "from": "g_per_j", "to": "ih08" },
+    { "from": "ih08", "to": "val" },
+    { "from": "val", "to": "vm1" },
+    { "from": "vm1", "to": "g_vm" },
+    { "from": "g_vm", "to": "vm2", "name": "no" },
+    { "from": "vm2", "to": "g_vm_j" },
+    { "from": "g_vm", "to": "g_vm_j", "name": "yes" },
+    { "from": "g_vm_j", "to": "alloc" },
+    { "from": "alloc", "to": "zdo" },
+    { "from": "zdo", "to": "pivot" },
+    { "from": "pivot", "to": "assem" },
+    { "from": "assem", "to": "g_set" },
+    { "from": "g_set", "to": "drv", "name": "yes" },
+    { "from": "drv", "to": "g_set_j" },
+    { "from": "g_set", "to": "g_set_j", "name": "no" },
+    { "from": "g_set_j", "to": "send" },
+    { "from": "send", "to": "g_par" },
+    { "from": "g_par", "to": "reuse" },
+    { "from": "reuse", "to": "endops" },
+    { "from": "g_par", "to": "append" },
+    { "from": "append", "to": "helper" },
+    { "from": "helper", "to": "pbi" },
+    { "from": "pbi", "to": "endctrl" },
+    { "from": "lstart", "to": "lsend" },
+    { "from": "lsend", "to": "lend" }
+  ],
+
+  "messageFlows": [
+    { "from": "lsend", "to": "recv", "name": "invoice Excel + data records" }
+  ]
+}
