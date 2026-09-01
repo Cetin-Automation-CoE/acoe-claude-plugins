@@ -1,0 +1,6 @@
+id,category,severity,file,line,summary,proposed_fix,rung,status
+F-001,defect,high,Src/Activities.pa.yaml,412,"Savings figure labelled with the row's native currency but computed in EUR","Label the field EUR; the value is already normalised",3,open
+F-002,defect,high,Src/App.pa.yaml,1312,"funcSaveItem only patches; a new record always fails with Not found","Branch on IsBlank(LookUp(...)) and Collect on the create path",3,open
+F-003,structural,medium,Src/Dashboard.pa.yaml,87,"RGBA(0,120,212,1) belongs to no palette (1 use — see inventory)","Fold into constPrimaryColor",5,open
+F-004,structural,medium,Src/Vendors.pa.yaml,55,"Screen references data source MyList directly","Move the read into funcLoadVendors in the data-access region",4,open
+F-005,ambiguity,high,Src/App.pa.yaml,1064,"Unfinished items contribute their full baseline to the savings roll-up — intended?","ASK THE HUMAN. Do not guess a business rule.",2,blocked-on-human

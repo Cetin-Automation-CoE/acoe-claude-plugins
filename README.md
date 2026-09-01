@@ -44,6 +44,7 @@ Org-wide (Team/Enterprise): an Owner can instead add the same repository under *
 | `cetin-html-slides` | Building or editing a CETIN training deck as self-contained HTML slides — fixed 16:9 stage, chapter files, contents page, markdown companions; also converting a PowerPoint or outline into that format |
 | `company-design` | Producing work-related visual output for any company — learns the brand once (website, logos, guidelines), then applies it automatically |
 | `critique` | Asking for feedback on emails, slides, documents, or messages — "critique this", "is this clear", "poke holes in this" (Czech and English) |
+| `formulas-first-canvas-app` | Building, editing or refactoring a Power Apps Canvas App (`.pa.yaml`, `App.Formulas`, Power Fx named formulas, UDFs) — enforces one-definition-per-value architecture, scaffolds a whole app in one command, ships design tokens, eight reusable components and five guard scripts, plus a six-rung ladder for refactoring legacy apps |
 | `gantt` | "Udělej gantt", "harmonogram projektu" — builds a roadmap-style Gantt PowerPoint from a Microsoft Planner export (.xlsx) |
 | `idea-forge` | "Draft a PRD", "run idea forge" — guided 8-phase business analyst interview producing a Markdown PRD with As-Is/To-Be diagrams |
 | `morning-brief` | "Morning brief", "what's on my plate today" — daily summary of calendar, email, Teams, and Planner tasks |

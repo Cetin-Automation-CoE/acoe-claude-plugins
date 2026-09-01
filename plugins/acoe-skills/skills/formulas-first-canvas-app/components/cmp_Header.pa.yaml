@@ -1,0 +1,255 @@
+# App header: back / menu affordances on the left, screen title, utility
+# actions and a progress bar on the right. Put it FIRST in every screen's
+# Children so every screen shares one chrome.
+#
+#   - cmp_List_Header:
+#       Control: CanvasComponent
+#       ComponentName: cmp_Header
+#       Properties:
+#         DisplayName: ="Items"
+#         AllowNavigation: =true
+#         OnNavigate: =UpdateContext({locNavigation: !locNavigation})
+#         IsLoading: =glBoolIsLoading
+#         Height: =constStyle.Header.Height
+#         Width: =Parent.Width
+#
+# PORTED CHANGE: this is a lean rewrite, not a line-for-line port. The original
+# carried a country-scope switcher and an entity vocabulary specific to one
+# app. The INTERFACE is preserved so screens port unchanged; the domain-coupled
+# body is gone. Add your own scope control as an extra child if you need one.
+#
+# Requires: constPrimaryColor, constPaperColor, constStyle, constTransparent
+ComponentDefinitions:
+  cmp_Header:
+    DefinitionType: CanvasComponent
+    AccessAppScope: true
+    CustomProperties:
+      AllowBack:
+        PropertyKind: Input
+        DisplayName: AllowBack
+        Description: Show the back arrow
+        DataType: Boolean
+        Default: =false
+      AllowNavigation:
+        PropertyKind: Input
+        DisplayName: AllowNavigation
+        Description: Show the menu toggle
+        DataType: Boolean
+        Default: =true
+      BackLabel:
+        PropertyKind: Input
+        DisplayName: BackLabel
+        Description: Accessible name for the back arrow, e.g. "Back to item list"
+        DataType: Text
+        Default: ="Back"
+      CanRefresh:
+        PropertyKind: Input
+        DisplayName: CanRefresh
+        Description: Show the refresh action
+        DataType: Boolean
+        Default: =false
+      DisplayName:
+        PropertyKind: Input
+        DisplayName: DisplayName
+        Description: Screen title
+        DataType: Text
+        Default: =""
+      IsLoading:
+        PropertyKind: Input
+        DisplayName: IsLoading
+        Description: Drives the indeterminate bar along the header's bottom edge
+        DataType: Boolean
+        Default: =false
+      NotificationCount:
+        PropertyKind: Input
+        DisplayName: NotificationCount
+        Description: Badge number — hidden at 0
+        DataType: Number
+        Default: =0
+      OnBack:
+        PropertyKind: Event
+        DisplayName: OnBack
+        Description: Raised by the back arrow — normally funcGoBack()
+        ReturnType: None
+        Default: =false
+      OnNavigate:
+        PropertyKind: Event
+        DisplayName: OnNavigate
+        Description: Raised by the menu toggle
+        ReturnType: None
+        Default: =false
+      OnSelectHelp:
+        PropertyKind: Event
+        DisplayName: OnSelectHelp
+        Description: Raised by the help action
+        ReturnType: None
+        Default: =
+      OnSelectNotifications:
+        PropertyKind: Event
+        DisplayName: OnSelectNotifications
+        Description: Raised by the notifications action
+        ReturnType: None
+        Default: =
+      OnSelectRefresh:
+        PropertyKind: Event
+        DisplayName: OnSelectRefresh
+        Description: Raised by the refresh action
+        ReturnType: None
+        Default: =
+      ShowCommandBar:
+        PropertyKind: Input
+        DisplayName: ShowCommandBar
+        Description: Hide every right-hand utility action in one binding
+        DataType: Boolean
+        Default: =true
+    Properties:
+      Height: =constStyle.Header.Height
+      Width: =App.Width
+    Children:
+      - con_Header:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderColor: =constTransparent.RGBA
+            BorderStyle: =BorderStyle.None
+            DropShadow: =DropShadow.Light
+            Fill: =constPrimaryColor.RGBA
+            Height: =Parent.Height
+            LayoutAlignItems: =LayoutAlignItems.Center
+            LayoutDirection: =LayoutDirection.Horizontal
+            LayoutGap: =constStyle.Spacing.S
+            PaddingLeft: =constStyle.Spacing.L
+            PaddingRight: =constStyle.Spacing.L
+            Width: =Parent.Width
+          Children:
+            - btn_Header_Navigate:
+                Control: Button
+                Properties:
+                  AccessibleLabel: ="Toggle navigation menu"
+                  Appearance: ='ButtonCanvas.Appearance'.Transparent
+                  # Pinned: a flexible sibling in a row steals an equal share of
+                  # the width from the title.
+                  FillPortions: =0
+                  FontColor: =constPaperColor.RGBA
+                  Height: =constStyle.Button.Height.Medium
+                  Icon: ="List"
+                  IconStyle: ='ButtonCanvas.IconStyle'.Filled
+                  Layout: ='ButtonCanvas.Layout'.IconOnly
+                  OnSelect: =cmp_Header.OnNavigate()
+                  TabIndex: =0
+                  Text: =""
+                  Visible: =cmp_Header.AllowNavigation
+                  Width: =32
+            - btn_Header_Back:
+                Control: Button
+                Properties:
+                  AccessibleLabel: =cmp_Header.BackLabel
+                  Appearance: ='ButtonCanvas.Appearance'.Transparent
+                  FillPortions: =0
+                  FontColor: =constPaperColor.RGBA
+                  Height: =constStyle.Button.Height.Medium
+                  Icon: ="ArrowLeft"
+                  IconStyle: ='ButtonCanvas.IconStyle'.Filled
+                  Layout: ='ButtonCanvas.Layout'.IconOnly
+                  OnSelect: =cmp_Header.OnBack()
+                  TabIndex: =0
+                  Text: =""
+                  Visible: =cmp_Header.AllowBack
+                  Width: =32
+            - lbl_Header_Title:
+                Control: ModernText
+                Properties:
+                  AccessibleLabel: =Self.Text
+                  Color: =constPaperColor.RGBA
+                  # The one flexible child: the title absorbs the spare width and
+                  # pushes the utility actions to the right edge.
+                  FillPortions: =1
+                  FontWeight: =constStyle.Header.FontWeight
+                  Height: =Parent.Height
+                  Size: =constStyle.BasicStyle.FontSize.Large
+                  Text: =cmp_Header.DisplayName
+                  VerticalAlign: =VerticalAlign.Middle
+            - btn_Header_Refresh:
+                Control: Button
+                Properties:
+                  AccessibleLabel: ="Refresh data"
+                  Appearance: ='ButtonCanvas.Appearance'.Transparent
+                  FillPortions: =0
+                  FontColor: =constPaperColor.RGBA
+                  Height: =constStyle.Button.Height.Medium
+                  Icon: ="ArrowSync"
+                  IconStyle: ='ButtonCanvas.IconStyle'.Filled
+                  Layout: ='ButtonCanvas.Layout'.IconOnly
+                  OnSelect: =cmp_Header.OnSelectRefresh()
+                  TabIndex: =0
+                  Text: =""
+                  Visible: =cmp_Header.ShowCommandBar And cmp_Header.CanRefresh
+                  Width: =32
+            - btn_Header_Notifications:
+                Control: Button
+                Properties:
+                  # The count is IN the label, not only in a badge: a screen
+                  # reader gets the number, not "button".
+                  AccessibleLabel: |-
+                    =If(
+                        cmp_Header.NotificationCount > 0,
+                        "Notifications, " & cmp_Header.NotificationCount & " unread",
+                        "Notifications"
+                    )
+                  Appearance: ='ButtonCanvas.Appearance'.Transparent
+                  FillPortions: =0
+                  FontColor: =constPaperColor.RGBA
+                  Height: =constStyle.Button.Height.Medium
+                  Icon: ="Alert"
+                  IconStyle: ='ButtonCanvas.IconStyle'.Filled
+                  Layout: ='ButtonCanvas.Layout'.IconOnly
+                  OnSelect: =cmp_Header.OnSelectNotifications()
+                  TabIndex: =0
+                  Text: =""
+                  Visible: =cmp_Header.ShowCommandBar
+                  Width: =32
+            - lbl_Header_Badge:
+                Control: ModernText
+                Properties:
+                  AccessibleLabel: =""
+                  Align: ='TextCanvas.Align'.Center
+                  Color: =constPaperColor.RGBA
+                  Fill: =constSecondaryColor.RGBA
+                  FillPortions: =0
+                  FontWeight: =FontWeight.Bold
+                  Height: =18
+                  RadiusBottomLeft: =Self.Height / 2
+                  RadiusBottomRight: =Self.Height / 2
+                  RadiusTopLeft: =Self.Height / 2
+                  RadiusTopRight: =Self.Height / 2
+                  Size: =constStyle.BasicStyle.FontSize.Caption
+                  Text: =Text(cmp_Header.NotificationCount)
+                  Visible: =cmp_Header.ShowCommandBar And cmp_Header.NotificationCount > 0
+                  Width: =18
+            - btn_Header_Help:
+                Control: Button
+                Properties:
+                  AccessibleLabel: ="Help"
+                  Appearance: ='ButtonCanvas.Appearance'.Transparent
+                  FillPortions: =0
+                  FontColor: =constPaperColor.RGBA
+                  Height: =constStyle.Button.Height.Medium
+                  Icon: ="QuestionCircle"
+                  IconStyle: ='ButtonCanvas.IconStyle'.Filled
+                  Layout: ='ButtonCanvas.Layout'.IconOnly
+                  OnSelect: =cmp_Header.OnSelectHelp()
+                  TabIndex: =0
+                  Text: =""
+                  Visible: =cmp_Header.ShowCommandBar
+                  Width: =32
+      - prg_Header_Loading:
+          Control: Progress
+          Properties:
+            AccessibleLabel: ="Loading"
+            BasePaletteColor: =constSecondaryColor.RGBA
+            Height: =3
+            Thickness: ='Progress.Thickness'.Medium
+            Visible: =cmp_Header.IsLoading
+            Width: =Parent.Width
+            X: =0
+            Y: =Parent.Height - Self.Height

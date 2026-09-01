@@ -1,0 +1,191 @@
+// =============================================================================
+// DESIGN TOKENS — paste-ready block for App.Formulas
+//
+// Two ways to use this file:
+//   Greenfield — templates/App.pa.yaml already points here; paste at its marker.
+//   Brownfield — paste at the TOP of an existing Formulas block (tokens must be
+//                declared before anything that reads them), then repoint screens
+//                in a SEPARATE commit. See references/refactoring-legacy-apps.md
+//                rung 5.
+//
+// This is Power Fx, not YAML. It belongs INSIDE the `Formulas: |` block scalar,
+// indented to match, with `=` on the first line only.
+//
+// -----------------------------------------------------------------------------
+// TO REBRAND: change these nine values and nothing else.
+//   constPrimaryColor      brand / chrome / active state
+//   constSecondaryColor    brand accent  (NOT an alarm colour — see below)
+//   constReactGray         app canvas
+//   constInkColor          body text
+//   constPaperColor        cards and surfaces
+//   constBrandTint.T100    chips, selected rows      (primary faded ~92%)
+//   constBrandTint.T200    borders on tinted fills   (primary faded ~78%)
+//   constErrorColor        danger  — MUST be >= 4.5:1 on paper
+//   constSuccessColor      positive fills
+//
+// Then re-verify contrast. Every "Text" colour below must be >= 4.5:1 against
+// constPaperColor. references/design-system.md carries the measured table and
+// the arithmetic.
+// =============================================================================
+
+// --- brand -------------------------------------------------------------------
+constPrimaryColor = {RGBA: RGBA(48, 0, 145, 1), HEX: "#300091"};
+constSecondaryColor = {RGBA: RGBA(241, 46, 73, 1), HEX: "#f12e49"};
+
+// --- neutrals ----------------------------------------------------------------
+constReactGray = {RGBA: RGBA(242, 242, 246, 1), HEX: "#F2F2F6"};
+constInkColor = {RGBA: RGBA(26, 26, 31, 1), HEX: "#1A1A1F"};
+constPaperColor = {RGBA: RGBA(255, 255, 255, 1), HEX: "#FFFFFF"};
+constTransparent = {RGBA: RGBA(0, 0, 0, 0), HEX: "#000000"};
+
+// --- brand tints: formalized ColorFade steps ---------------------------------
+// Named, not computed at each call site, so "the selected-row tint" is one
+// value with one name rather than four slightly different ColorFade percentages.
+constBrandTint = {
+    T100: {RGBA: RGBA(234, 229, 247, 1), HEX: "#EAE5F7"},
+    T200: {RGBA: RGBA(201, 190, 233, 1), HEX: "#C9BEE9"}
+};
+
+// --- status FILLS: vivid. Dots, chips, backgrounds. Never small text. --------
+constErrorColor = {RGBA: RGBA(184, 0, 0, 1), HEX: "#B80000"};
+constSuccessColor = {RGBA: RGBA(54, 176, 75, 1), HEX: "#36B04B"};
+constInprogressColor = {RGBA: RGBA(255, 191, 0, 1), HEX: "#FFBF00"};
+
+constSemaforColors = {
+    green: {RGBA: RGBA(54, 176, 75, 1), HEX: "#36B04B"},
+    amber: {RGBA: RGBA(255, 191, 0, 1), HEX: "#FFBF00"},
+    red: {RGBA: RGBA(184, 0, 0, 1), HEX: "#B80000"}
+};
+
+// --- status TEXT: AA-safe darkened variants ----------------------------------
+// The vivid set fails WCAG AA as text on white: amber 1.65:1, green 2.81:1.
+// These pass: 5.40 / 5.38 / 6.91. Fill and text are different jobs.
+constGainTextColor = {RGBA: RGBA(31, 122, 51, 1), HEX: "#1F7A33"};
+constHoldTextColor = {RGBA: RGBA(138, 100, 0, 1), HEX: "#8A6400"};
+constLossTextColor = {RGBA: RGBA(184, 0, 0, 1), HEX: "#B80000"};
+
+// --- overlays: scrim and backdrop --------------------------------------------
+// Both are design decisions (how much of the app stays readable while it is
+// blocked), both are used in more than one component, so both are tokens.
+constScrimColor = {RGBA: RGBA(237, 237, 237, 0.5), HEX: "#EDEDED"};
+constBackdropColor = {RGBA: RGBA(0, 0, 0, 0.1), HEX: "#000000"};
+
+// --- geometry: ONE radius, ONE spacing grid (4px) ----------------------------
+constBorderRadius = 10;
+constGridUnit = 4;
+
+// --- the style object --------------------------------------------------------
+// Two levels of nesting. A third means the value should have been a component
+// input property instead.
+constStyle = {
+    BasicStyle: {
+        Font: Font.'Segoe UI',
+        // 28 is KPI-only and deliberately absent here: it belongs to the one
+        // control that shows a headline figure, not to the general scale.
+        FontSize: {Large: 20, Medium: 14, Small: 12, Caption: 11},
+        Border: {
+            Width: 1,
+            Style: BorderStyle.Solid,
+            Color: constPrimaryColor.RGBA
+        },
+        FontColor: constInkColor.RGBA
+    },
+    Spacing: {
+        XS: 4, S: 8, M: 12, L: 16, XL: 24, XXL: 32
+    },
+    Header: {
+        Height: 60,
+        FontWeight: FontWeight.Bold
+    },
+    Card: {
+        Fill: constPaperColor.RGBA,
+        Shadow: DropShadow.Semilight,
+        Radius: 10,
+        Padding: 16
+    },
+    List: {
+        TemplateHeight: 40,
+        Shadow: DropShadow.Light,
+        Radius: 10,
+        Gap: 5,
+        Padding: 0,
+        HeaderHeight: 32
+    },
+    Label: {
+        Fill: constTransparent.RGBA,
+        Radius: 10,
+        Height: {Large: 40, Medium: 32, Small: 27},
+        TextLabel: {
+            Align: 'TextCanvas.Align'.Start,
+            VerticalAlign: VerticalAlign.Middle,
+            PaddingLeft: 8,
+            PaddingRight: 8,
+            PaddingTop: 4,
+            PaddingBottom: 4
+        },
+        TextInput: {
+            Align: 'TextCanvas.Align'.Start,
+            VerticalAlign: VerticalAlign.Middle,
+            PaddingLeft: 0,
+            PaddingRight: 0,
+            PaddingTop: 4,
+            PaddingBottom: 4,
+            BorderRadius: 10,
+            Appearance: Appearance.FilledDarker,
+            Height: {SingleLine: 32, MultiLine: 96}
+        },
+        // Money and quantities are right-aligned. Grid cells are Labels, not
+        // NumberInputs, so they do NOT inherit this — set it explicitly there.
+        NumberInput: {
+            Align: 'TextCanvas.Align'.End,
+            VerticalAlign: VerticalAlign.Middle,
+            PaddingLeft: 8,
+            PaddingRight: 8
+        }
+    },
+    Button: {
+        Height: {Medium: 32, Small: 27},
+        BorderRadius: 10,
+        FontWeight: FontWeight.Semibold,
+        IconStyle: 'Icon.IconStyle'.Filled,
+        Align: Align.Center,
+        VerticalAlign: VerticalAlign.Middle
+    },
+    Combobox: {
+        Height: {Large: 40, Medium: 32, Small: 27},
+        BorderRadius: 10,
+        Appearance: Appearance.FilledDarker,
+        PaddingLeft: 8,
+        PaddingRight: 8
+    }
+};
+
+// --- the ONLY place a status colour is chosen --------------------------------
+// One function per role. A palette change is then one edit, not a sweep.
+funcSemaforColor(semafor: Text): Color =
+    Switch(
+        semafor,
+        "green", constSemaforColors.green.RGBA,
+        "amber", constSemaforColors.amber.RGBA,
+        "red", constSemaforColors.red.RGBA,
+        constStyle.BasicStyle.FontColor
+    );
+
+funcStatusTextColor(status: Text): Color =
+    Switch(
+        status,
+        "Finished", constGainTextColor.RGBA,
+        "In Progress", constHoldTextColor.RGBA,
+        "On hold", constHoldTextColor.RGBA,
+        "Cancelled", constLossTextColor.RGBA,
+        constPrimaryColor.RGBA
+    );
+
+funcMoneyTextColor(value: Number): Color =
+    If(
+        value > 0,
+        constGainTextColor.RGBA,
+        value < 0,
+        constLossTextColor.RGBA,
+        constInkColor.RGBA
+    );

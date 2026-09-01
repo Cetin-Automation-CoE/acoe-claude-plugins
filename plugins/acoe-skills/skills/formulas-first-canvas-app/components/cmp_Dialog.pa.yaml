@@ -1,0 +1,195 @@
+# Modal confirm dialog with an optional date picker. Overlay it on a screen and
+# gate Visible on a context variable.
+#
+#   - cmp_Screen_Dialog:
+#       Control: CanvasComponent
+#       ComponentName: cmp_Dialog
+#       Properties:
+#         Title: ="Delete this item?"
+#         Description: ="This cannot be undone."
+#         SubmitLabel: ="Delete"
+#         OnSubmit: =funcDeleteItem(glSelectedKey); UpdateContext({locDialog: false})
+#         OnCancel: =UpdateContext({locDialog: false})
+#         Visible: =locDialog
+#         Height: =Parent.Height
+#         Width: =Parent.Width
+#
+# Requires: constPaperColor, constPrimaryColor, constSecondaryColor,
+#           constStyle, constTransparent, constBackdropColor
+ComponentDefinitions:
+  cmp_Dialog:
+    DefinitionType: CanvasComponent
+    AccessAppScope: true
+    CustomProperties:
+      BackdropColor:
+        PropertyKind: Input
+        DisplayName: Backdrop Color
+        Description: Scrim painted behind the dialog body
+        DataType: Color
+        Default: =constBackdropColor.RGBA
+      CancelLabel:
+        PropertyKind: Input
+        DisplayName: CancelLabel
+        Description: Text on the dismiss button
+        DataType: Text
+        Default: ="Cancel"
+      DateOutput:
+        PropertyKind: Output
+        DisplayName: DateOutput
+        Description: Date chosen when ShowDatePicker is true
+        DataType: DateAndTime
+      Description:
+        PropertyKind: Input
+        DisplayName: Description
+        Description: Body copy — say what will happen, not that you are sorry
+        DataType: Text
+        Default: ="Description"
+      OnCancel:
+        PropertyKind: Event
+        DisplayName: OnCancel
+        Description: Raised on dismiss
+        ReturnType: None
+        Default: =
+      OnSubmit:
+        PropertyKind: Event
+        DisplayName: OnSubmit
+        Description: Raised on confirm
+        ReturnType: None
+        Default: =
+      ShowDatePicker:
+        PropertyKind: Input
+        DisplayName: ShowDatePicker
+        Description: Show the date field — read the value from DateOutput
+        DataType: Boolean
+        # PORTED CHANGE: the original always rendered a date picker, which made
+        # a generic dialog carry one screen's requirement. Off by default.
+        Default: =false
+      SubmitLabel:
+        PropertyKind: Input
+        DisplayName: SubmitLabel
+        Description: Text on the confirm button — name the action ("Delete"), not "OK"
+        DataType: Text
+        Default: ="Submit"
+      Title:
+        PropertyKind: Input
+        DisplayName: Title
+        Description: Dialog heading
+        DataType: Text
+        Default: ="Title"
+    Properties:
+      DateOutput: =dp_Dialog_DatePicker.SelectedDate
+      Height: =640
+      Width: =640
+    Children:
+      - con_Dialog:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderColor: =constTransparent.RGBA
+            BorderStyle: =BorderStyle.None
+            DropShadow: =DropShadow.Semibold
+            Fill: =cmp_Dialog.BackdropColor
+            Height: =Parent.Height
+            LayoutAlignItems: =LayoutAlignItems.Center
+            LayoutDirection: =LayoutDirection.Horizontal
+            LayoutJustifyContent: =LayoutJustifyContent.Center
+            PaddingBottom: =constStyle.Spacing.XL
+            PaddingLeft: =constStyle.Spacing.XL
+            PaddingRight: =constStyle.Spacing.XL
+            PaddingTop: =constStyle.Spacing.XL
+            Width: =Parent.Width
+            X: =0
+          Children:
+            - con_Dialog_Body:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  AlignInContainer: =AlignInContainer.SetByContainer
+                  BorderColor: =constTransparent.RGBA
+                  BorderStyle: =BorderStyle.None
+                  DropShadow: =DropShadow.Semibold
+                  Fill: =constPaperColor.RGBA
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutGap: =constStyle.Spacing.M
+                  LayoutMaxWidth: =600
+                  LayoutMinWidth: =300
+                  PaddingBottom: =constStyle.Spacing.XL
+                  PaddingLeft: =constStyle.Spacing.XL
+                  PaddingRight: =constStyle.Spacing.XL
+                  PaddingTop: =constStyle.Spacing.XL
+                  RadiusBottomLeft: =constBorderRadius
+                  RadiusBottomRight: =constBorderRadius
+                  RadiusTopLeft: =constBorderRadius
+                  RadiusTopRight: =constBorderRadius
+                  Width: =400
+                Children:
+                  - lbl_Dialog_Title:
+                      Control: Text
+                      Properties:
+                        Align: ='TextCanvas.Align'.Start
+                        Size: =constStyle.BasicStyle.FontSize.Large
+                        Text: =cmp_Dialog.Title
+                        VerticalAlign: =VerticalAlign.Middle
+                        Weight: ='TextCanvas.Weight'.Bold
+                  - lbl_Dialog_Description:
+                      Control: Text
+                      Properties:
+                        Align: ='TextCanvas.Align'.Start
+                        AutoHeight: =true
+                        # NOTE: classic Text uses FontColor; ModernText uses Color.
+                        # Getting this wrong is one of the few things compile catches.
+                        FontColor: =constStyle.BasicStyle.FontColor
+                        Size: =constStyle.BasicStyle.FontSize.Medium
+                        Text: =cmp_Dialog.Description
+                        VerticalAlign: =VerticalAlign.Middle
+                        Weight: ='TextCanvas.Weight'.Regular
+                  - dp_Dialog_DatePicker:
+                      Control: ModernDatePicker
+                      Properties:
+                        AccessibleLabel: ="Date"
+                        RadiusBottomLeft: =constStyle.Button.BorderRadius
+                        RadiusBottomRight: =constStyle.Button.BorderRadius
+                        RadiusTopLeft: =constStyle.Button.BorderRadius
+                        RadiusTopRight: =constStyle.Button.BorderRadius
+                        Visible: =cmp_Dialog.ShowDatePicker
+                  - con_Dialog_Actions:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        AlignInContainer: =AlignInContainer.SetByContainer
+                        BorderColor: =constTransparent.RGBA
+                        BorderStyle: =BorderStyle.None
+                        DropShadow: =DropShadow.None
+                        # Fixed child of an auto-layout container: explicit Height
+                        # is mandatory or the ~200px control default applies.
+                        FillPortions: =0
+                        Height: =constStyle.Button.Height.Medium
+                        LayoutAlignItems: =LayoutAlignItems.End
+                        LayoutDirection: =LayoutDirection.Horizontal
+                        LayoutGap: =constStyle.Spacing.S
+                        LayoutJustifyContent: =LayoutJustifyContent.End
+                        Width: =250
+                      Children:
+                        - btn_Dialog_Cancel:
+                            Control: Button
+                            Properties:
+                              AccessibleLabel: =Self.Text
+                              BasePaletteColor: =constSecondaryColor.RGBA
+                              BorderRadius: =constStyle.Button.BorderRadius
+                              Height: =constStyle.Button.Height.Medium
+                              OnSelect: =Reset(dp_Dialog_DatePicker); cmp_Dialog.OnCancel()
+                              TabIndex: =0
+                              Text: =cmp_Dialog.CancelLabel
+                              Width: =100
+                        - btn_Dialog_Submit:
+                            Control: Button
+                            Properties:
+                              AccessibleLabel: =Self.Text
+                              Appearance: ='ButtonCanvas.Appearance'.Primary
+                              BorderRadius: =constStyle.Button.BorderRadius
+                              Height: =constStyle.Button.Height.Medium
+                              OnSelect: =Reset(dp_Dialog_DatePicker); cmp_Dialog.OnSubmit()
+                              TabIndex: =0
+                              Text: =cmp_Dialog.SubmitLabel
+                              Width: =100

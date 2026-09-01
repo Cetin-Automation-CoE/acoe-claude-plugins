@@ -1,0 +1,297 @@
+Screens:
+  ListScreen:
+    Properties:
+      # Every value on this screen resolves to a token or a formula.
+      # If you are about to type RGBA(, a hex string, or a font size here,
+      # the token is missing — go add it. See SKILL.md rule 2.
+      Fill: =constReactGray.RGBA
+      LoadingSpinnerColor: =constPrimaryColor.RGBA
+      OnVisible: |-
+        =// Sort state lives in colSorts keyed by entity, so it survives
+        // navigation and is readable from components. A screen-local
+        // context variable would be invisible to the header and the
+        // column buttons.
+        RemoveIf(colSorts, Table = enumEntity.Items);
+        Collect(
+            colSorts,
+            {
+                Table: enumEntity.Items,
+                ID: "Title",
+                SortOrder: "asc"
+            }
+        );
+        UpdateContext({locNavigation: false})
+    Children:
+      # ---- chrome: configured, never re-authored -------------------------
+      - cmp_List_Header:
+          Control: CanvasComponent
+          ComponentName: cmp_Header
+          Properties:
+            AllowNavigation: =true
+            CanRefresh: =true
+            DisplayName: ="Items"
+            Height: =constStyle.Header.Height
+            IsLoading: =glBoolIsLoading
+            NotificationCount: =CountRows(colNotifications)
+            OnNavigate: |-
+              =UpdateContext({locNavigation: !locNavigation})
+            OnSelectRefresh: |-
+              =funcStartLoading();
+              funcLoadItems();
+              funcStopLoading();
+              funcNotifySuccess("Data reloaded.")
+            Width: =Parent.Width
+
+      - con_List_Main:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderStyle: =BorderStyle.None
+            Height: =Parent.Height - cmp_List_Header.Height
+            LayoutAlignItems: =LayoutAlignItems.Stretch
+            LayoutDirection: =LayoutDirection.Horizontal
+            Width: =Parent.Width
+            Y: =cmp_List_Header.Height
+          Children:
+            # The rail reads constScreens. Adding a screen to the menu is a
+            # row in that registry, not an edit here.
+            - cmp_List_Navigation:
+                Control: CanvasComponent
+                ComponentName: cmp_Navigation
+                Properties:
+                  FillPortions: =0
+                  Height: =Parent.Height
+                  Navigation: =locNavigation
+                  OnClose: |-
+                    =UpdateContext({locNavigation: false})
+
+            - con_List_Body:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  BorderStyle: =BorderStyle.None
+                  FillPortions: =1
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutGap: =constStyle.Spacing.M
+                  PaddingBottom: =constStyle.Spacing.L
+                  PaddingLeft: =constStyle.Spacing.XL
+                  PaddingRight: =constStyle.Spacing.XL
+                  PaddingTop: =constStyle.Spacing.L
+                Children:
+                  # ---- toolbar: search, quick filter, actions --------------
+                  - con_List_Toolbar:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        BorderStyle: =BorderStyle.None
+                        # Pinned: a flexible sibling in a row would steal an
+                        # equal share of the height from the gallery below.
+                        FillPortions: =0
+                        Height: =constStyle.Label.Height.Medium
+                        LayoutAlignItems: =LayoutAlignItems.Center
+                        LayoutDirection: =LayoutDirection.Horizontal
+                        LayoutGap: =constStyle.Spacing.S
+                      Children:
+                        - txt_List_Search:
+                            Control: ModernTextInput
+                            Properties:
+                              AccessibleLabel: ="Search items"
+                              Appearance: =constStyle.Label.TextInput.Appearance
+                              FillPortions: =0
+                              Height: =constStyle.Label.TextInput.Height.SingleLine
+                              HintText: ="Search"
+                              TabIndex: =0
+                              Width: =280
+                        - com_List_StatusFilter:
+                            Control: ModernCombobox
+                            Properties:
+                              AccessibleLabel: ="Filter by status"
+                              FillPortions: =0
+                              Height: =constStyle.Combobox.Height.Medium
+                              # The vocabulary, not a re-typed list of strings.
+                              Items: =constStatusChoices
+                              SelectMultiple: =true
+                              TabIndex: =0
+                              Value: ="Value"
+                              Width: =200
+                        # Each verb is gated on the SAME expression that guards
+                        # the function behind it. A hidden button is not a
+                        # permission check.
+                        - cmp_List_Commands:
+                            Control: CanvasComponent
+                            ComponentName: cmp_CommandBar
+                            Properties:
+                              CanAdd: =true
+                              CanRemoveFilters: =!IsEmpty(colFilters)
+                              FillPortions: =1
+                              Height: =constStyle.Label.Height.Medium
+                              OnAdd: |-
+                                =Set(glSelectedKey, "");
+                                funcAddBack();
+                                Navigate(FormScreen)
+                              OnRemoveFilter: =Clear(colFilters)
+
+                  # ---- column headers, declared once per column ------------
+                  - con_List_Headers:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        BorderStyle: =BorderStyle.None
+                        FillPortions: =0
+                        Height: =constStyle.List.HeaderHeight
+                        LayoutDirection: =LayoutDirection.Horizontal
+                        LayoutGap: =constStyle.Spacing.S
+                      Children:
+                        - cmp_List_HeadTitle:
+                            Control: CanvasComponent
+                            ComponentName: cmp_FilterButton
+                            Properties:
+                              DataType: ="string"
+                              Field: ="Title"
+                              Height: =constStyle.List.HeaderHeight
+                              IsFiltered: ="Title" in colFilters.ID
+                              IsSorted: ="Title" in colSorts.ID
+                              Label: ="TITLE"
+                              Title: ="Title"
+                              Width: =360
+                        - cmp_List_HeadStatus:
+                            Control: CanvasComponent
+                            ComponentName: cmp_FilterButton
+                            Properties:
+                              Choices: =constStatusChoices
+                              DataType: ="string"
+                              Field: ="Status"
+                              Height: =constStyle.List.HeaderHeight
+                              IsFiltered: ="Status" in colFilters.ID
+                              IsSorted: ="Status" in colSorts.ID
+                              Label: ="STATUS"
+                              Title: ="Status"
+                              Width: =140
+                        - cmp_List_HeadAmount:
+                            Control: CanvasComponent
+                            ComponentName: cmp_FilterButton
+                            Properties:
+                              # Money headers align with money cells, or the
+                              # column stops being scannable.
+                              Align: =Align.Right
+                              DataType: ="number"
+                              Field: ="Amount"
+                              Height: =constStyle.List.HeaderHeight
+                              IsFiltered: ="Amount" in colFilters.ID
+                              IsSorted: ="Amount" in colSorts.ID
+                              Label: ="AMOUNT"
+                              Title: ="Amount"
+                              Width: =160
+
+                  # ---- the grid --------------------------------------------
+                  - gal_List_Items:
+                      Control: Gallery
+                      Variant: Vertical
+                      Properties:
+                        AccessibleLabel: ="Items table"
+                        BorderColor: =constTransparent.RGBA
+                        # Items reads the SCOPE formula, not the raw collection.
+                        # Gallery, counter and filter chips must share one base
+                        # or they drift apart.
+                        Items: |-
+                          =SortByColumns(
+                              Filter(
+                                  constItemsInScope,
+                                  IsEmpty(com_List_StatusFilter.SelectedItems)
+                                      Or Status in com_List_StatusFilter.SelectedItems.Value,
+                                  IsBlank(txt_List_Search.Text)
+                                      Or txt_List_Search.Text in Title
+                              ),
+                              // WARNING: this string column name is NEVER
+                              // validated by the compiler. A typo sorts by
+                              // nothing, silently. check_collection_columns.py
+                              // is what catches it.
+                              LookUp(colSorts, Table = enumEntity.Items).ID,
+                              If(
+                                  LookUp(colSorts, Table = enumEntity.Items).SortOrder = "asc",
+                                  SortOrder.Ascending,
+                                  SortOrder.Descending
+                              )
+                          )
+                        TemplateSize: =constStyle.List.TemplateHeight
+                      Children:
+                        - con_List_Row:
+                            Control: GroupContainer
+                            Variant: AutoLayout
+                            Properties:
+                              BorderStyle: =BorderStyle.None
+                              Fill: =If(ThisItem.IsSelected, constBrandTint.T100.RGBA, constPaperColor.RGBA)
+                              Height: =constStyle.List.TemplateHeight
+                              LayoutDirection: =LayoutDirection.Horizontal
+                              LayoutGap: =constStyle.Spacing.S
+                              Width: =Parent.Width
+                            Children:
+                              - lbl_Row_Title:
+                                  Control: ModernText
+                                  Properties:
+                                    FontColor: =constStyle.BasicStyle.FontColor
+                                    Size: =constStyle.BasicStyle.FontSize.Medium
+                                    Text: =funcEllipsis(ThisItem.Title, 48)
+                                    Width: =360
+                              - lbl_Row_Status:
+                                  Control: ModernText
+                                  Properties:
+                                    # One function owns status colour. Never a
+                                    # Switch inline on a screen — that is the
+                                    # same decision authored in N places.
+                                    FontColor: =funcStatusTextColor(ThisItem.Status)
+                                    Size: =constStyle.BasicStyle.FontSize.Small
+                                    Text: =ThisItem.Status
+                                    Width: =140
+                              - lbl_Row_Amount:
+                                  Control: ModernText
+                                  Properties:
+                                    Align: =constStyle.Label.NumberInput.Align
+                                    FontColor: =funcMoneyTextColor(ThisItem.Amount)
+                                    Size: =constStyle.BasicStyle.FontSize.Medium
+                                    Text: =funcAsCurrency(ThisItem.Amount)
+                                    Width: =160
+                              - btn_Row_Open:
+                                  Control: Button
+                                  Properties:
+                                    # Icon-only controls need an accessible
+                                    # label — normally the largest single
+                                    # app-checker finding count.
+                                    AccessibleLabel: ="Open " & ThisItem.Title
+                                    Height: =constStyle.Button.Height.Small
+                                    OnSelect: |-
+                                      =Set(glSelectedKey, ThisItem.Key);
+                                      funcAddBack();
+                                      Navigate(FormScreen)
+                                    TabIndex: =0
+                                    Text: ="Open"
+
+                  # ---- empty state: same base as the gallery ----------------
+                  - cmp_List_Empty:
+                      Control: CanvasComponent
+                      ComponentName: cmp_Empty
+                      Properties:
+                        FillPortions: =0
+                        Height: =200
+                        Icon: ="Search"
+                        Message: ="No items match these filters"
+                        Visible: =IsEmpty(gal_List_Items.AllItems)
+
+      # ---- overlays LAST so they paint over everything -------------------
+      - cmp_List_Notification:
+          Control: CanvasComponent
+          ComponentName: cmp_Notification
+          Properties:
+            Notifications: =colNotifications
+            OnCancel: =RemoveIf(colNotifications, Created = ThisRecord.Created)
+            Visible: =!IsEmpty(colNotifications)
+            Width: =400
+            X: =Parent.Width - Self.Width - constStyle.Spacing.XL
+            Y: =cmp_List_Header.Height + constStyle.Spacing.M
+
+      - cmp_List_Spinner:
+          Control: CanvasComponent
+          ComponentName: cmp_Spinner
+          Properties:
+            Visible: =glBoolIsLoading

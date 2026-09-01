@@ -1,0 +1,254 @@
+Screens:
+  FormScreen:
+    Properties:
+      Fill: =constReactGray.RGBA
+      LoadingSpinnerColor: =constPrimaryColor.RGBA
+      OnVisible: |-
+        =// The record being edited is resolved ONCE into a context variable.
+        // Every field below reads locItem. Repeating the LookUp per control
+        // is the most common form of duplication on a form screen — it also
+        // re-evaluates on every render.
+        UpdateContext(
+            {
+                locItem: LookUp(constItemsInScope, Key = glSelectedKey),
+                locDirty: false,
+                locConfirmDelete: false
+            }
+        )
+    Children:
+      - cmp_Form_Header:
+          Control: CanvasComponent
+          ComponentName: cmp_Header
+          Properties:
+            AllowBack: =true
+            AllowNavigation: =false
+            BackLabel: ="Back to the item list"
+            DisplayName: =If(IsBlank(glSelectedKey), "New item", locItem.Title)
+            Height: =constStyle.Header.Height
+            IsLoading: =glBoolIsLoading
+            OnBack: =funcGoBack()
+            Width: =Parent.Width
+
+      - con_Form_Body:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderStyle: =BorderStyle.None
+            Height: =Parent.Height - cmp_Form_Header.Height
+            LayoutAlignItems: =LayoutAlignItems.Stretch
+            LayoutDirection: =LayoutDirection.Vertical
+            LayoutGap: =constStyle.Spacing.M
+            # Scroll belongs on THIS container. A lone flexible child absorbs
+            # the parent's height, so a Scroll set on the parent never engages.
+            LayoutOverflowY: =LayoutOverflow.Scroll
+            PaddingBottom: =constStyle.Spacing.L
+            PaddingLeft: =constStyle.Spacing.XL
+            PaddingRight: =constStyle.Spacing.XL
+            PaddingTop: =constStyle.Spacing.L
+          Children:
+            - con_Form_Card:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  DropShadow: =constStyle.Card.Shadow
+                  Fill: =constStyle.Card.Fill
+                  FillPortions: =0
+                  # Fixed child of an auto-layout container: explicit Height
+                  # is mandatory, LayoutMinHeight is ignored here.
+                  Height: =320
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutGap: =constStyle.Spacing.M
+                  PaddingBottom: =constStyle.Card.Padding
+                  PaddingLeft: =constStyle.Card.Padding
+                  PaddingRight: =constStyle.Card.Padding
+                  PaddingTop: =constStyle.Card.Padding
+                  RadiusBottomLeft: =constStyle.Card.Radius
+                  RadiusBottomRight: =constStyle.Card.Radius
+                  RadiusTopLeft: =constStyle.Card.Radius
+                  RadiusTopRight: =constStyle.Card.Radius
+                Children:
+                  - lbl_Form_TitleLabel:
+                      Control: ModernText
+                      Properties:
+                        Size: =constStyle.BasicStyle.FontSize.Small
+                        Text: ="Title"
+                        Weight: =FontWeight.Semibold
+                  - txt_Form_Title:
+                      Control: ModernTextInput
+                      Properties:
+                        AccessibleLabel: ="Item title"
+                        Appearance: =constStyle.Label.TextInput.Appearance
+                        Default: =locItem.Title
+                        Height: =constStyle.Label.TextInput.Height.SingleLine
+                        OnChange: |-
+                          =UpdateContext({locDirty: true})
+                        TabIndex: =0
+
+                  - lbl_Form_StatusLabel:
+                      Control: ModernText
+                      Properties:
+                        Size: =constStyle.BasicStyle.FontSize.Small
+                        Text: ="Status"
+                        Weight: =FontWeight.Semibold
+                  - com_Form_Status:
+                      Control: ModernCombobox
+                      Properties:
+                        AccessibleLabel: ="Item status"
+                        DefaultSelectedItems: =Filter(constStatusChoices, Value = locItem.Status)
+                        Height: =constStyle.Combobox.Height.Medium
+                        Items: =constStatusChoices
+                        OnChange: |-
+                          =UpdateContext({locDirty: true})
+                        SelectMultiple: =false
+                        TabIndex: =0
+                        Value: ="Value"
+
+                  - lbl_Form_AmountLabel:
+                      Control: ModernText
+                      Properties:
+                        Size: =constStyle.BasicStyle.FontSize.Small
+                        Text: ="Amount"
+                        Weight: =FontWeight.Semibold
+                  - txt_Form_Amount:
+                      Control: ModernTextInput
+                      Properties:
+                        AccessibleLabel: ="Item amount"
+                        Align: =constStyle.Label.NumberInput.Align
+                        Default: =Text(locItem.Amount)
+                        Format: =TextFormat.Number
+                        Height: =constStyle.Label.TextInput.Height.SingleLine
+                        OnChange: |-
+                          =UpdateContext({locDirty: true})
+                        TabIndex: =0
+
+            # ---- validation summary: one source of truth ------------------
+            - lbl_Form_Errors:
+                Control: ModernText
+                Properties:
+                  # Validation lives in ONE formula that both this label and
+                  # the Save button read. Duplicating the rule in the button's
+                  # DisplayMode is how a form ends up able to save invalid data.
+                  Color: =constLossTextColor.RGBA
+                  FillPortions: =0
+                  Height: =constStyle.Label.Height.Medium
+                  Size: =constStyle.BasicStyle.FontSize.Small
+                  Text: |-
+                    =Concat(
+                        Filter(
+                            Table(
+                                {Msg: If(IsBlank(txt_Form_Title.Text), "Title is required", "")},
+                                {Msg: If(Value(txt_Form_Amount.Text) < 0, "Amount cannot be negative", "")}
+                            ),
+                            !IsBlank(Msg)
+                        ),
+                        Msg,
+                        " · "
+                    )
+                  Visible: =!IsBlank(Self.Text)
+
+            # ---- actions ---------------------------------------------------
+            - con_Form_Actions:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  BorderStyle: =BorderStyle.None
+                  FillPortions: =0
+                  Height: =constStyle.Button.Height.Medium
+                  LayoutDirection: =LayoutDirection.Horizontal
+                  LayoutGap: =constStyle.Spacing.S
+                  LayoutJustifyContent: =LayoutJustifyContent.End
+                Children:
+                  - btn_Form_Delete:
+                      Control: Button
+                      Properties:
+                        AccessibleLabel: ="Delete this item"
+                        BasePaletteColor: =constSecondaryColor.RGBA
+                        Height: =constStyle.Button.Height.Medium
+                        # Destructive actions confirm. The dialog owns the
+                        # confirmation; this button only opens it.
+                        OnSelect: |-
+                          =UpdateContext({locConfirmDelete: true})
+                        TabIndex: =0
+                        Text: ="Delete"
+                        Visible: =!IsBlank(glSelectedKey)
+                  - btn_Form_Cancel:
+                      Control: Button
+                      Properties:
+                        AccessibleLabel: ="Discard changes and go back"
+                        Height: =constStyle.Button.Height.Medium
+                        OnSelect: =funcGoBack()
+                        TabIndex: =0
+                        Text: ="Cancel"
+                  - btn_Form_Save:
+                      Control: Button
+                      Properties:
+                        AccessibleLabel: ="Save item"
+                        # Same expression as the error label, so the button can
+                        # never be enabled while an error is displayed.
+                        DisplayMode: |-
+                          =If(
+                              locDirty And IsBlank(lbl_Form_Errors.Text),
+                              DisplayMode.Edit,
+                              DisplayMode.Disabled
+                          )
+                        Fill: =constPrimaryColor.RGBA
+                        Height: =constStyle.Button.Height.Medium
+                        # The screen calls the data-access UDF. It does not
+                        # Patch, does not name a data source, and does not know
+                        # whether the backend is a mock or a real list.
+                        OnSelect: |-
+                          =funcStartLoading();
+                          funcSaveItem(
+                              glSelectedKey,
+                              txt_Form_Title.Text,
+                              First(com_Form_Status.SelectedItems).Value,
+                              Value(txt_Form_Amount.Text)
+                          );
+                          funcStopLoading();
+                          UpdateContext({locDirty: false});
+                          funcNotifySuccess("Item saved.");
+                          funcGoBack()
+                        TabIndex: =0
+                        Text: ="Save"
+
+
+      # ---- overlays LAST so they paint over everything -------------------
+      - cmp_Form_Dialog:
+          Control: CanvasComponent
+          ComponentName: cmp_Dialog
+          Properties:
+            CancelLabel: ="Keep it"
+            Description: ="This removes the item permanently. There is no undo."
+            Height: =Parent.Height
+            OnCancel: |-
+              =UpdateContext({locConfirmDelete: false})
+            OnSubmit: |-
+              =funcStartLoading();
+              funcDeleteItem(glSelectedKey);
+              funcStopLoading();
+              UpdateContext({locConfirmDelete: false});
+              funcNotifySuccess("Item deleted.");
+              funcGoBack()
+            SubmitLabel: ="Delete"
+            Title: ="Delete this item?"
+            Visible: =locConfirmDelete
+            Width: =Parent.Width
+            X: =0
+            Y: =0
+
+      - cmp_Form_Notification:
+          Control: CanvasComponent
+          ComponentName: cmp_Notification
+          Properties:
+            Notifications: =colNotifications
+            OnCancel: =RemoveIf(colNotifications, Created = ThisRecord.Created)
+            Visible: =!IsEmpty(colNotifications)
+            Width: =400
+            X: =Parent.Width - Self.Width - constStyle.Spacing.XL
+            Y: =cmp_Form_Header.Height + constStyle.Spacing.M
+
+      - cmp_Form_Spinner:
+          Control: CanvasComponent
+          ComponentName: cmp_Spinner
+          Properties:
+            Visible: =glBoolIsLoading
