@@ -1,0 +1,196 @@
+# Icon rail that expands to a labelled menu. Reads the constScreens REGISTRY —
+# adding a screen to the app's menu is a row in that table, not an edit here.
+#
+#   - cmp_Screen_Navigation:
+#       Control: CanvasComponent
+#       ComponentName: cmp_Navigation
+#       Properties:
+#         Navigation: =locNavigation          # expanded / collapsed
+#         OnClose: =UpdateContext({locNavigation: false})
+#         OnBack: =funcGoBack()
+#         Height: =Parent.Height - cmp_Screen_Header.Height
+#
+# Only rows with Type = enumScreenType.List appear. Form rows are reachable by
+# navigation from a list, so they carry Group = "" and stay out of the menu.
+#
+# Requires: constScreens, enumScreenType, constPrimaryColor, constPaperColor,
+#           constReactGray, constStyle, constTransparent, constBackdropColor
+ComponentDefinitions:
+  cmp_Navigation:
+    DefinitionType: CanvasComponent
+    AccessAppScope: true
+    CustomProperties:
+      AllowBack:
+        PropertyKind: Input
+        DisplayName: AllowBack
+        Description: Show the back affordance at the top of the rail
+        DataType: Boolean
+        Default: =false
+      Navigation:
+        PropertyKind: Input
+        DisplayName: Navigation
+        Description: Expanded (labels visible) when true, icon rail when false
+        DataType: Boolean
+        Default: =false
+      OnBack:
+        PropertyKind: Event
+        DisplayName: OnBack
+        Description: Raised by the back button — normally funcGoBack()
+        ReturnType: None
+        Default: =
+      OnClose:
+        PropertyKind: Event
+        DisplayName: OnClose
+        Description: Raised when the rail should collapse
+        ReturnType: None
+        Default: =false
+      Screens:
+        PropertyKind: Input
+        DisplayName: Screens
+        Description: The routing registry. Defaults to the app-wide constScreens.
+        DataType: Table
+        Default: =constScreens
+    Properties:
+      Fill: =If(cmp_Navigation.Navigation, constBackdropColor.RGBA, constTransparent.RGBA)
+      Width: =If(cmp_Navigation.Navigation, 250, 60)
+    Children:
+      - con_Navigation:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderColor: =constTransparent.RGBA
+            BorderStyle: =BorderStyle.None
+            DropShadow: =DropShadow.Bold
+            Fill: =constReactGray.RGBA
+            Height: =Parent.Height
+            LayoutAlignItems: =LayoutAlignItems.Stretch
+            LayoutDirection: =LayoutDirection.Vertical
+            # Scroll goes on the scrolling container itself. A flexible child
+            # absorbs the parent's height, so Scroll set on the parent never fires.
+            LayoutOverflowY: =LayoutOverflow.Scroll
+            PaddingLeft: =If(cmp_Navigation.Navigation, constStyle.Spacing.L, 0)
+            PaddingTop: =constStyle.Spacing.M
+            RadiusBottomRight: =If(cmp_Navigation.Navigation, constStyle.Spacing.XS, 0)
+            RadiusTopRight: =If(cmp_Navigation.Navigation, constStyle.Spacing.XS, 0)
+            Width: =If(cmp_Navigation.Navigation, 250, 60)
+          Children:
+            - con_Navigation_Back:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  BorderColor: =constTransparent.RGBA
+                  BorderStyle: =BorderStyle.None
+                  DropShadow: =DropShadow.None
+                  FillPortions: =0
+                  Height: =50
+                  LayoutAlignItems: =LayoutAlignItems.Center
+                  LayoutDirection: =LayoutDirection.Horizontal
+                  LayoutGap: =constStyle.Spacing.S
+                  Visible: =cmp_Navigation.AllowBack
+                  Width: =Parent.Width
+                Children:
+                  - btn_Navigation_Back:
+                      Control: Button
+                      Properties:
+                        AccessibleLabel: ="Back"
+                        Appearance: ='ButtonCanvas.Appearance'.Subtle
+                        BorderRadius: =constBorderRadius
+                        Height: =40
+                        Icon: ="ArrowReset"
+                        IconStyle: ='ButtonCanvas.IconStyle'.Filled
+                        Layout: ='ButtonCanvas.Layout'.IconOnly
+                        OnSelect: =cmp_Navigation.OnBack()
+                        TabIndex: =0
+                        Text: ="Back"
+                        Width: =32
+                  - lbl_Navigation_Back:
+                      Control: ModernText
+                      Properties:
+                        Color: =constPrimaryColor.RGBA
+                        FontWeight: =FontWeight.Bold
+                        Size: =constStyle.BasicStyle.FontSize.Small
+                        Text: ="Back"
+                        Visible: =cmp_Navigation.Navigation
+                        Width: =96
+            - gal_Navigation:
+                Control: Gallery
+                Variant: Vertical
+                Properties:
+                  AccessibleLabel: ="Main navigation"
+                  BorderColor: =constTransparent.RGBA
+                  BorderStyle: =BorderStyle.None
+                  DelayItemLoading: =false
+                  # The registry drives the menu. No Switch, no per-screen edit.
+                  Items: =Filter(cmp_Navigation.Screens, Type = enumScreenType.List)
+                  LayoutMinWidth: =Parent.Width
+                  LoadingSpinner: =LoadingSpinner.None
+                  TabIndex: =0
+                  TemplatePadding: =0
+                  TemplateSize: =50
+                Children:
+                  - con_Navigation_Screen:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        BorderColor: =constTransparent.RGBA
+                        BorderStyle: =BorderStyle.None
+                        DropShadow: =DropShadow.None
+                        Height: =Parent.TemplateHeight - 2 * Self.Y
+                        LayoutAlignItems: =LayoutAlignItems.Center
+                        LayoutDirection: =LayoutDirection.Horizontal
+                        LayoutGap: =constStyle.Spacing.S
+                        RadiusBottomLeft: =constBorderRadius
+                        RadiusBottomRight: =constBorderRadius
+                        RadiusTopLeft: =constBorderRadius
+                        RadiusTopRight: =constBorderRadius
+                        Width: =Parent.TemplateWidth
+                        Y: =5
+                      Children:
+                        - btn_Navigation:
+                            Control: Button
+                            Properties:
+                              AccessibleLabel: =ThisItem.DisplayName
+                              Align: =Align.Center
+                              # Active state compares the registry's LogicalName
+                              # to the live screen — no global to keep in sync.
+                              Appearance: |-
+                                =If(
+                                    ThisItem.LogicalName = App.ActiveScreen.Name,
+                                    'ButtonCanvas.Appearance'.Primary,
+                                    'ButtonCanvas.Appearance'.Outline
+                                )
+                              BorderRadius: =constBorderRadius
+                              FontColor: |-
+                                =If(
+                                    ThisItem.LogicalName = App.ActiveScreen.Name,
+                                    constPaperColor.RGBA,
+                                    constPrimaryColor.RGBA
+                                )
+                              Height: =40
+                              Icon: =ThisItem.Icon
+                              IconStyle: ='ButtonCanvas.IconStyle'.Filled
+                              Layout: ='ButtonCanvas.Layout'.IconOnly
+                              OnSelect: |-
+                                =cmp_Navigation.OnClose();
+                                Navigate(ThisItem.Screen)
+                              TabIndex: =0
+                              Text: =ThisItem.DisplayName
+                              Width: =32
+                        - lbl_Navigation_DisplayName:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: =Self.Text
+                              Color: |-
+                                =If(
+                                    ThisItem.LogicalName = App.ActiveScreen.Name,
+                                    constPrimaryColor.RGBA,
+                                    constStyle.BasicStyle.FontColor
+                                )
+                              FillPortions: =1
+                              FontWeight: =FontWeight.Bold
+                              Height: =Parent.Height
+                              LayoutMinWidth: =96
+                              Size: =constStyle.BasicStyle.FontSize.Small
+                              Text: =ThisItem.DisplayName
+                              Visible: =cmp_Navigation.Navigation
+                              Width: =96

@@ -1,0 +1,179 @@
+# Column header that doubles as the filter/sort affordance for one field.
+# Its Value output is the field's metadata record — a filter dialog reads that
+# record rather than being told about each column separately, which is what
+# makes columns declarative.
+#
+#   - cmp_Grid_TitleHeader:
+#       Control: CanvasComponent
+#       ComponentName: cmp_FilterButton
+#       Properties:
+#         Field: ="Title"
+#         Label: ="TITLE"
+#         Title: ="Title"
+#         DataType: ="string"
+#         IsFiltered: ="Title" in colFilters.ID
+#         IsSorted: ="Title" in colSorts.ID
+#         OnSelect: =UpdateContext({locFilter: cmp_Grid_TitleHeader.Value})
+#
+# READ THE TRAP BEFORE CONSUMING .Value: references/powerfx-limits.md,
+# "Whole-record output resolution". If you build a collection whose TYPE comes
+# from this record, anchor every field with a fixed-return projection.
+#
+# Requires: constPaperColor, constStyle
+ComponentDefinitions:
+  cmp_FilterButton:
+    DefinitionType: CanvasComponent
+    AccessAppScope: true
+    CustomProperties:
+      Align:
+        PropertyKind: Input
+        DisplayName: Align
+        Description: Header text alignment — End for money columns
+        DataType: Text
+        Default: =Align.Center
+      AllowMultiple:
+        PropertyKind: Input
+        DisplayName: AllowMultiple
+        Description: Whether the filter dialog offers multi-select
+        DataType: Boolean
+        Default: =false
+      Choices:
+        PropertyKind: Input
+        DisplayName: Choices
+        Description: Closed vocabulary for this column, e.g. constStatusChoices
+        DataType: Table
+        Default: =
+      DataType:
+        PropertyKind: Input
+        DisplayName: DataType
+        Description: "string | number | date | boolean — drives which operators the dialog offers"
+        DataType: Text
+        Default: ="string"
+      Field:
+        PropertyKind: Input
+        DisplayName: Field
+        Description: Column name. Must match the collection column exactly — never validated by compile
+        DataType: Text
+        Default: ="Text"
+      IsFiltered:
+        PropertyKind: Input
+        DisplayName: IsFiltered
+        Description: Whether a filter is active on this column
+        DataType: Boolean
+        Default: =false
+      IsSorted:
+        PropertyKind: Input
+        DisplayName: IsSorted
+        Description: Whether the grid is sorted by this column
+        DataType: Boolean
+        Default: =false
+      Items:
+        PropertyKind: Input
+        DisplayName: Items
+        Description: Distinct values offered in the dialog when there is no fixed vocabulary
+        DataType: Table
+        Default: =
+      Label:
+        PropertyKind: Input
+        DisplayName: Label
+        Description: Text shown in the header
+        DataType: Text
+        Default: ="ID"
+      OnSelect:
+        PropertyKind: Event
+        DisplayName: OnSelect
+        Description: Raised on click — normally opens the filter dialog with Self.Value
+        ReturnType: None
+        Default: =false
+      Placeholder:
+        PropertyKind: Input
+        DisplayName: Placeholder
+        Description: Hint text inside the filter dialog's input
+        DataType: Text
+        Default: ="Text"
+      Title:
+        PropertyKind: Input
+        DisplayName: Title
+        Description: Human-readable column name used as the dialog heading
+        DataType: Text
+        Default: ="Text"
+      Unfilterable:
+        PropertyKind: Input
+        DisplayName: Unfilterable
+        Description: Suppress the filter affordance
+        DataType: Boolean
+        Default: =false
+      Unsortable:
+        PropertyKind: Input
+        DisplayName: Unsortable
+        Description: Suppress the sort affordance
+        DataType: Boolean
+        Default: =false
+      Value:
+        PropertyKind: Output
+        DisplayName: Value
+        Description: This column's metadata record, consumed by the filter dialog
+        DataType: Record
+    Properties:
+      Height: =constStyle.List.HeaderHeight
+      Value: |-
+        ={
+            ID: Self.Field,
+            Title: Self.Title,
+            DataType: Self.DataType,
+            Placeholder: Self.Placeholder,
+            AllowMultiple: Self.AllowMultiple,
+            Unsortable: Self.Unsortable,
+            Items: Self.Items,
+            Choices: Self.Choices
+        }
+      Width: =160
+    Children:
+      - btn_FilterButton:
+          Control: Button
+          Properties:
+            AccessibleLabel: |-
+              =Self.Text & If(
+                  cmp_FilterButton.IsFiltered,
+                  ", filtered",
+                  ""
+              ) & If(
+                  cmp_FilterButton.IsSorted,
+                  ", sorted",
+                  ""
+              )
+            Align: =cmp_FilterButton.Align
+            Appearance: ='ButtonCanvas.Appearance'.Primary
+            BorderRadius: =0
+            BorderThickness: =0
+            DisplayMode: |-
+              =If(
+                  cmp_FilterButton.Unfilterable And cmp_FilterButton.Unsortable,
+                  DisplayMode.View,
+                  DisplayMode.Edit
+              )
+            FontColor: =constPaperColor.RGBA
+            FontWeight: =FontWeight.Bold
+            Height: =Parent.Height
+            # State is carried by the icon as well as by colour: colour alone
+            # is not an accessible way to say "this column is filtered".
+            Icon: |-
+              =If(
+                  cmp_FilterButton.IsFiltered Or cmp_FilterButton.IsSorted,
+                  "Filter",
+                  "ChevronDown"
+              )
+            IconStyle: ='ButtonCanvas.IconStyle'.Filled
+            Layout: |-
+              =If(
+                  cmp_FilterButton.Unfilterable And cmp_FilterButton.Unsortable,
+                  'ButtonCanvas.Layout'.TextOnly,
+                  'ButtonCanvas.Layout'.IconAfter
+              )
+            OnSelect: =cmp_FilterButton.OnSelect()
+            PaddingLeft: =constStyle.Spacing.S
+            PaddingRight: =constStyle.Spacing.S
+            Size: =constStyle.BasicStyle.FontSize.Small
+            TabIndex: =0
+            Text: =cmp_FilterButton.Label
+            Width: =Parent.Width

@@ -1,0 +1,70 @@
+# Empty-state row for a gallery that returned nothing. Bind Visible to the
+# same expression the gallery's Items uses, wrapped in IsEmpty().
+#
+#   - cmp_List_Empty:
+#       Control: CanvasComponent
+#       ComponentName: cmp_Empty
+#       Properties:
+#         Icon: ="Search"
+#         Message: ="No items match these filters"
+#         Visible: =IsEmpty(gal_List_Items.AllItems)
+#
+# Requires: constPrimaryColor, constStyle, constTransparent
+ComponentDefinitions:
+  cmp_Empty:
+    DefinitionType: CanvasComponent
+    # PORTED CHANGE: the original omitted AccessAppScope, so it could not see
+    # constStyle and kept private literals — the exact drift the token layer
+    # exists to prevent.
+    AccessAppScope: true
+    CustomProperties:
+      Icon:
+        PropertyKind: Input
+        DisplayName: Icon
+        Description: Fluent icon name shown beside the message
+        DataType: Text
+        Default: ="Search"
+      Message:
+        PropertyKind: Input
+        DisplayName: Message
+        Description: What the user should read when there is nothing to show
+        DataType: Text
+        Default: ="No items found"
+    Properties:
+      Height: =200
+    Children:
+      - con_Empty:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderColor: =constTransparent.RGBA
+            BorderStyle: =BorderStyle.None
+            DropShadow: =DropShadow.None
+            Height: =Parent.Height
+            LayoutAlignItems: =LayoutAlignItems.Center
+            LayoutDirection: =LayoutDirection.Horizontal
+            LayoutGap: =constStyle.Spacing.S
+            LayoutJustifyContent: =LayoutJustifyContent.Center
+            Width: =Parent.Width
+          Children:
+            - ico_Empty:
+                Control: Icon
+                Properties:
+                  Icon: =cmp_Empty.Icon
+                  IconColor: =constPrimaryColor.RGBA
+                  IconStyle: ='Icon.IconStyle'.Filled
+            - lbl_Empty:
+                Control: ModernText
+                Properties:
+                  AccessibleLabel: =Self.Text
+                  AutoHeight: =true
+                  # PORTED CHANGE: was App.Theme.Colors.Primary and Size: =16 —
+                  # a theme colour the token layer does not control, and a font
+                  # size off the scale.
+                  Color: =constPrimaryColor.RGBA
+                  FontWeight: =FontWeight.Bold
+                  LayoutMinWidth: =96
+                  PaddingTop: =2
+                  Size: =constStyle.BasicStyle.FontSize.Large
+                  Text: =cmp_Empty.Message
+                  Width: =210

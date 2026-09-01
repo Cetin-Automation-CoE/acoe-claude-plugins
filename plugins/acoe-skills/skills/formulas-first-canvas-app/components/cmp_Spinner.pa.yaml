@@ -1,0 +1,38 @@
+# Full-screen loading overlay. Place LAST in a screen's Children so it paints
+# over everything, and bind Visible to your loading global.
+#
+#   - cmp_Screen_Spinner:
+#       Control: CanvasComponent
+#       ComponentName: cmp_Spinner
+#       Properties:
+#         Visible: =glBoolIsLoading
+#
+# Requires: constPrimaryColor, constScrimColor
+ComponentDefinitions:
+  cmp_Spinner:
+    DefinitionType: CanvasComponent
+    AccessAppScope: true
+    Properties:
+      Height: =App.Height
+      Width: =App.Width
+    Children:
+      - con_Spinner:
+          Control: GroupContainer
+          Variant: ManualLayout
+          Properties:
+            # Scrim is a token, not a literal: it is a design decision (how much
+            # of the app stays readable while blocked) and it is used twice.
+            Fill: =constScrimColor.RGBA
+            Height: =Parent.Height
+            Width: =Parent.Width
+          Children:
+            - spn_Loading:
+                Control: Spinner
+                Properties:
+                  AccessibleLabel: ="Loading"
+                  Appearance: ='Spinner.Appearance'.Primary
+                  Height: =100
+                  SpinnerSize: ='Spinner.SpinnerSize'.Huge
+                  Width: =Parent.Width
+                  X: =(Parent.Width - Self.Width) / 2
+                  Y: =(Parent.Height - Self.Height) / 2

@@ -1,0 +1,273 @@
+App:
+  Properties:
+    # =========================================================================
+    # DECLARATION ORDER IS LOAD-BEARING.
+    # The studio document-server binder cannot forward-reference one named
+    # formula from another; when it fails it drops the ENTIRE Formulas blob and
+    # every screen reports "unknown name". Nothing may reference a name
+    # declared below it. See references/app-formulas-layout.md.
+    # =========================================================================
+    Formulas: |
+      =// ############ 1-4. TOKENS, STYLE, VOCABULARIES ############
+      // >>> PASTE templates/design-tokens.pa.yaml HERE <<<
+
+      // ---- vocabularies: closed sets, defined once ----------------
+      // Every dropdown, filter and validation reads these. A value that
+      // exists in the UI but not here is a value nothing can validate.
+      constStatusChoices = Table(
+          {Value: "Planned"},
+          {Value: "In Progress"},
+          {Value: "On hold"},
+          {Value: "Finished"},
+          {Value: "Cancelled"}
+      );
+
+      // ---- enums: keys, not display text -------------------------
+      // Screens compare against enumEntity.Items, never the string
+      // "items" — a typo in an enum reference fails to compile; a typo
+      // in a bare string silently matches nothing.
+      enumScreenType = {
+          List: "list",
+          Form: "form"
+      };
+
+      enumEntity = {
+          Items: "items",
+          Contacts: "contacts"
+      };
+
+      // ---- scalar constants --------------------------------------
+      constPageSize = 50;
+
+      // ############ 5. PURE HELPER UDFs ############
+      // Scalar in, scalar out. No side effects, no table returns.
+      funcDaysBetween(fromDate: DateTime, toDate: DateTime): Number =
+          If(
+              IsBlank(fromDate) Or IsBlank(toDate),
+              Blank(),
+              DateDiff(fromDate, toDate, TimeUnit.Days)
+          );
+
+      // ############ 6. DERIVED VALUES ############
+      // Named formulas, because these return TABLES — a UDF cannot.
+
+      // ############ 7. DATA ACCESS LAYER ############
+      // ============================================================
+      // ===== DATA ACCESS LAYER — BEGIN ============================
+      // The ONLY region where a data source may be named.
+      // Screens read flat scalar collections and call funcSave/funcDelete.
+      // See references/data-access-layer.md.
+      // ============================================================
+
+      // ---- scope: one base for grid, filters and counters --------
+      // Defining this once is what keeps a gallery, its filter chips and
+      // its "N of M" counter from silently disagreeing.
+      constItemsInScope =
+          Filter(
+              colItems,
+              IsBlank(glScopeFilter) Or Owner = glScopeFilter
+          );
+
+      // ---- read --------------------------------------------------
+      funcLoadItems(): Void =
+      {
+          // MOCK — one fully typed row per shape. Power Fx infers the
+          // collection schema from this literal; an untyped or empty seed
+          // makes every named formula over it fail with "no type found".
+          ClearCollect(
+              colItems,
+              Table(
+                  {
+                      Key: "A|1",
+                      Title: "Example item",
+                      Status: "Planned",
+                      Owner: "",
+                      Amount: 0,
+                      DueDate: Today()
+                  }
+              )
+          );
+          Clear(colItems);
+          // SWITCH DAY: delete the mock above, uncomment below.
+          // Choice/lookup unwrapping happens HERE and nowhere else.
+          // ClearCollect(
+          //     colItems,
+          //     ForAll(
+          //         MyList As r,
+          //         {
+          //             Key: r.Suffix & "|" & r.ID,
+          //             Title: r.Title,
+          //             Status: r.Status.Value,
+          //             Owner: r.Owner.Email,
+          //             Amount: r.Amount,
+          //             DueDate: r.DueDate
+          //         }
+          //     )
+          // );
+      };
+
+      // ---- write -------------------------------------------------
+      // Takes scalars, not a record: record params on UDFs are unreliable.
+      // For many fields, stage a typed global (glFormDraft) and read it here.
+      funcSaveItem(key: Text, title: Text, status: Text, amount: Number): Void =
+      {
+          If(
+              IsBlank(LookUp(colItems, Key = key)),
+              Collect(
+                  colItems,
+                  {Key: key, Title: title, Status: status, Owner: User().Email, Amount: amount, DueDate: Today()}
+              ),
+              UpdateIf(
+                  colItems,
+                  Key = key,
+                  {Title: title, Status: status, Amount: amount}
+              )
+          );
+          // SWITCH DAY: Patch(MyList, …, {Status: {Value: status}});
+      };
+
+      funcDeleteItem(key: Text): Void =
+      {
+          RemoveIf(colItems, Key = key);
+      };
+
+      // ---- loading indicator: one pair, every operation -----------
+      funcStartLoading(): Void = Set(glBoolIsLoading, true);
+      funcStopLoading(): Void = Set(glBoolIsLoading, false);
+
+      // ============================================================
+      // ===== DATA ACCESS LAYER — END ==============================
+      // ============================================================
+
+      // ############ 8. REGISTRIES AND NAVIGATION ############
+      // MUST come last: these read globals and layer-7 formulas.
+      // Adding a screen is a ROW here, not a new Switch arm elsewhere.
+      constScreens = [
+          {
+              Screen: ListScreen,
+              DisplayName: "Items",
+              Icon: "AppsListDetail",
+              Entity: enumEntity.Items,
+              Type: enumScreenType.List,
+              Group: "Plan",
+              BackLabel: "Item list"
+          },
+          {
+              Screen: FormScreen,
+              DisplayName: "Item",
+              Icon: "AppsListDetail",
+              Entity: enumEntity.Items,
+              Type: enumScreenType.Form,
+              Group: "",
+              BackLabel: "Item"
+          }
+      ];
+
+      // ---- navigation stack --------------------------------------
+      constLastBack = Last(colBack);
+
+      funcAddBack(): Void =
+      {
+          Collect(colBack, {Screen: App.ActiveScreen, Label: "Back"});
+      };
+
+      funcGoBack(): Void =
+      {
+          Navigate(constLastBack.Screen);
+          RemoveIf(colBack, Screen = constLastBack.Screen);
+      };
+
+      // ############ 9. UI UTILITY UDFs ############
+      // ---- notifications -----------------------------------------
+      // Screens NEVER write colNotifications directly — they call this.
+      // One function owns the record shape, so cmp_Notification's contract
+      // has exactly one producer to agree with.
+      funcNotify(title: Text, description: Text, color: Color, icon: Text): Void =
+      {
+          Collect(
+              colNotifications,
+              {
+                  Title: title,
+                  Description: description,
+                  Icon: icon,
+                  Color: color,
+                  Priority: 1,
+                  Created: Now(),
+                  Duration: 2500
+              }
+          );
+      };
+
+      funcNotifySuccess(description: Text): Void =
+      {
+          funcNotify("Success", description, constSuccessColor.RGBA, "Checkmark");
+      };
+
+      funcNotifyError(description: Text): Void =
+      {
+          funcNotify("Error", description, constErrorColor.RGBA, "Warning");
+      };
+
+      funcAsCurrency(value: Number): Text =
+          // Explicit locale: locale-default formats render decimals
+          // inconsistently. Power Fx also treats % as a LITERAL — no x100.
+          Text(value, "[$-en-US]#,##0");
+
+      funcEllipsis(label: Text, maxLength: Number): Text =
+          If(
+              Len(label) <= maxLength,
+              label,
+              Left(label, maxLength - 1) & "…"
+          );
+    OnStart: |
+      =// Globals a UDF reads MUST be Set to a fully typed value here.
+      // Power Fx cannot infer a record type from Blank().
+      Set(glBoolIsLoading, false);
+      Set(glScopeFilter, "");
+      Set(glSelectedKey, "");
+      // cmp_Notification reads this to restart its countdown. It only works
+      // because that component sets AccessAppScope: true — without it the
+      // component gets its own private copy and this write is dead.
+      Set(glBoolNotificationStart, false);
+
+      // Framework collections: seed one typed row, then clear. Without the
+      // seed there is no schema and named formulas over them fail.
+      ClearCollect(colBack, Table({Screen: ListScreen, Label: ""}));
+      Clear(colBack);
+      ClearCollect(colSorts, Table({Table: "", ID: "", SortOrder: ""}));
+      Clear(colSorts);
+      // Shape must match funcNotify's record exactly, or the component's
+      // SortByColumns("Priority", ...) sorts by a column that isn't there.
+      ClearCollect(
+          colNotifications,
+          Table(
+              {
+                  Title: "",
+                  Description: "",
+                  Icon: "",
+                  Color: constPrimaryColor.RGBA,
+                  Priority: 1,
+                  Created: Now(),
+                  Duration: 2500
+              }
+          )
+      );
+      Clear(colNotifications);
+      ClearCollect(
+          colFilters,
+          Table({ID: "", Title: "", Operation: "", Value: "", DataType: ""})
+      );
+      Clear(colFilters);
+
+      funcStartLoading();
+      funcLoadItems();
+      funcStopLoading()
+    OnError: |
+      =// Never swallow. Route to one place so failures are visible.
+      Trace(
+          "Unhandled error",
+          TraceSeverity.Error,
+          {Kind: FirstError.Kind, Message: FirstError.Message, Source: FirstError.Source}
+      );
+      Notify("Something went wrong: " & FirstError.Message, NotificationType.Error)
+    StartScreen: =ListScreen

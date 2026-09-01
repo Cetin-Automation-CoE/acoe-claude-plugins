@@ -1,0 +1,365 @@
+# Toast stack. Shows the highest-priority, oldest notification from a collection,
+# runs a countdown bar, and raises OnCancel when it expires or is dismissed.
+#
+#   - cmp_Screen_Notification:
+#       Control: CanvasComponent
+#       ComponentName: cmp_Notification
+#       Properties:
+#         Notifications: =colNotifications
+#         OnCancel: =RemoveIf(colNotifications, Created = ThisRecord.Created)
+#         Visible: =!IsEmpty(colNotifications)
+#         Width: =400
+#         X: =Parent.Width - Self.Width - 24
+#         Y: =80
+#
+# Raise one with funcNotify(...) — never by writing the collection from a screen.
+#
+# ---------------------------------------------------------------------------
+# TWO THINGS TO KNOW BEFORE EDITING
+#
+# 1. PORTED BUG FIX — AccessAppScope was ABSENT in the original.
+#    Without it, the Set(glBoolNotificationStart, ...) below created a
+#    COMPONENT-SCOPED global, disjoint from the app global of the same name.
+#    The component still worked (it sets and reads its own copy), but every
+#    app-side Set of that name was a dead write that raised no error. If you
+#    remove AccessAppScope, that silent breakage comes back.
+#
+# 2. KNOWN WART — the First(SortByColumns(Notifications, ...)) expression is
+#    repeated. That violates rule 1 of this skill, and it is deliberate: the
+#    obvious fix is a Record output property, which is exactly the construct
+#    that caused a 247-error type-cycle cascade in the app this was ported
+#    from (see references/powerfx-limits.md). These components have NOT been
+#    compiled against the strict engine, so the tested-but-repetitive form
+#    was kept over an untested-but-tidy one. Fix it once you can compile.
+# ---------------------------------------------------------------------------
+#
+# Requires: constInkColor, constPaperColor, constStyle, constTransparent,
+#           constBackdropColor
+ComponentDefinitions:
+  cmp_Notification:
+    DefinitionType: CanvasComponent
+    AccessAppScope: true
+    CustomProperties:
+      AutoHeight:
+        PropertyKind: Output
+        DisplayName: AutoHeight
+        Description: Measured height of the rendered toast
+        DataType: Number
+      Duration:
+        PropertyKind: Input
+        DisplayName: Duration
+        Description: Fallback lifetime in ms when a notification carries none. 0 pins it open.
+        DataType: Number
+        Default: =2500
+      Notifications:
+        PropertyKind: Input
+        DisplayName: Notifications
+        Description: The queue. Shape is fixed by the default below — seed it identically.
+        RaiseOnReset: true
+        DataType: Table
+        Default: |-
+          =[
+              {
+                  Title: "Title",
+                  Description: "Description",
+                  Icon: "Info",
+                  Color: constInkColor.RGBA,
+                  Priority: 1,
+                  Created: Now(),
+                  Duration: 2500
+              }
+          ]
+      OnCancel:
+        PropertyKind: Event
+        DisplayName: OnCancel
+        Description: Raised on dismiss or expiry — remove the record from your collection here
+        ReturnType: None
+        Default: =
+        Parameters:
+          - ThisRecord:
+              Description: The notification being dismissed
+              DataType: Record
+              Default: |-
+                ={
+                    Title: "Title",
+                    Description: "Description",
+                    Icon: "Info",
+                    Color: constInkColor.RGBA,
+                    Priority: 1,
+                    Created: Now(),
+                    Duration: 2500
+                }
+    Properties:
+      AutoHeight: =con_Notification_Body.Height + 2
+      Height: =Coalesce(Self.AutoHeight, 95)
+      OnReset: |-
+        =Set(glBoolNotificationStart, false);
+        Reset(tmr_Notification_TimeLeft);
+        Set(glBoolNotificationStart, true);
+    Children:
+      - tmr_Notification_TimeLeft:
+          Control: Timer
+          Properties:
+            AutoPause: =false
+            BorderColor: =constTransparent.RGBA
+            BorderStyle: =BorderStyle.None
+            BorderThickness: =0
+            Color: =constTransparent.RGBA
+            DisabledBorderColor: =constTransparent.RGBA
+            DisabledColor: =constTransparent.RGBA
+            DisabledFill: =constTransparent.RGBA
+            Duration: |-
+              =Coalesce(
+                  First(
+                      SortByColumns(
+                          cmp_Notification.Notifications,
+                          "Priority",
+                          SortOrder.Ascending,
+                          "Created",
+                          SortOrder.Ascending
+                      )
+                  ).Duration,
+                  cmp_Notification.Duration
+              )
+            Fill: =constTransparent.RGBA
+            Height: =0
+            HoverBorderColor: =constTransparent.RGBA
+            HoverColor: =constTransparent.RGBA
+            HoverFill: =constTransparent.RGBA
+            OnTimerEnd: |-
+              =cmp_Notification.OnCancel(
+                  First(
+                      SortByColumns(
+                          cmp_Notification.Notifications,
+                          "Priority",
+                          SortOrder.Ascending,
+                          "Created",
+                          SortOrder.Ascending
+                      )
+                  )
+              );
+            PressedBorderColor: =constTransparent.RGBA
+            PressedColor: =constTransparent.RGBA
+            PressedFill: =constTransparent.RGBA
+            Reset: =!glBoolNotificationStart
+            Size: =1 # token-exempt: Timer.Size is a tick unit, not a font size
+            Start: |-
+              =cmp_Notification.Visible And glBoolNotificationStart And
+              With(
+                  First(
+                      SortByColumns(
+                          cmp_Notification.Notifications,
+                          "Priority",
+                          SortOrder.Ascending,
+                          "Created",
+                          SortOrder.Ascending
+                      )
+                  ) As ThisNotification,
+                  If(
+                      !IsBlank(ThisNotification.Duration),
+                      ThisNotification.Duration > 0,
+                      true
+                  )
+              )
+            Text: =""
+            Width: =0
+      - con_Notification_Body:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderColor: |-
+              =First(
+                  SortByColumns(
+                      cmp_Notification.Notifications,
+                      "Priority",
+                      SortOrder.Ascending,
+                      "Created",
+                      SortOrder.Ascending
+                  )
+              ).Color
+            BorderThickness: =2
+            DropShadow: =DropShadow.None
+            # The toast tints itself from the notification's own colour, so one
+            # component covers success / warning / error without variants.
+            Fill: |-
+              =ColorFade(
+                  First(
+                      SortByColumns(
+                          cmp_Notification.Notifications,
+                          "Priority",
+                          SortOrder.Ascending,
+                          "Created",
+                          SortOrder.Ascending
+                      )
+                  ).Color,
+                  95%
+              )
+            Height: =con_Notification_Info.Height + prg_Notification_TimeLeft.Height + Self.PaddingTop + Self.PaddingBottom + Self.LayoutGap
+            LayoutAlignItems: =LayoutAlignItems.Stretch
+            LayoutDirection: =LayoutDirection.Horizontal
+            LayoutJustifyContent: =LayoutJustifyContent.Center
+            LayoutWrap: =true
+            PaddingBottom: =constStyle.Spacing.S
+            PaddingLeft: =constStyle.Spacing.M
+            PaddingRight: =constStyle.Spacing.M
+            PaddingTop: =constStyle.Spacing.XS
+            RadiusBottomLeft: =constBorderRadius
+            RadiusBottomRight: =constBorderRadius
+            RadiusTopLeft: =constBorderRadius
+            RadiusTopRight: =constBorderRadius
+            Width: =Parent.Width - 2 * Self.X
+            X: =1
+            Y: =1
+          Children:
+            - ico_Notification_Body:
+                Control: Icon
+                Properties:
+                  AlignInContainer: =AlignInContainer.Start
+                  Height: =con_Notification_Info.Height
+                  Icon: |-
+                    =First(
+                        SortByColumns(
+                            cmp_Notification.Notifications,
+                            "Priority",
+                            SortOrder.Ascending,
+                            "Created",
+                            SortOrder.Ascending
+                        )
+                    ).Icon
+                  IconColor: |-
+                    =First(
+                        SortByColumns(
+                            cmp_Notification.Notifications,
+                            "Priority",
+                            SortOrder.Ascending,
+                            "Created",
+                            SortOrder.Ascending
+                        )
+                    ).Color
+                  IconStyle: ='Icon.IconStyle'.Filled
+                  Visible: |-
+                    =!IsBlank(
+                        First(
+                            SortByColumns(
+                                cmp_Notification.Notifications,
+                                "Priority",
+                                SortOrder.Ascending,
+                                "Created",
+                                SortOrder.Ascending
+                            )
+                        ).Icon
+                    )
+                  Width: =35
+            - con_Notification_Info:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  AlignInContainer: =AlignInContainer.Start
+                  BorderColor: =constTransparent.RGBA
+                  BorderStyle: =BorderStyle.None
+                  DropShadow: =DropShadow.None
+                  Height: =con_Notification_Header.Height + lbl_Notification_Description.Height + Self.PaddingTop + Self.PaddingBottom + Self.LayoutGap
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutMinHeight: =60
+                  PaddingLeft: =If(ico_Notification_Body.Visible, constStyle.Spacing.M, 0)
+                Children:
+                  - con_Notification_Header:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        AlignInContainer: =AlignInContainer.SetByContainer
+                        BorderColor: =constTransparent.RGBA
+                        BorderStyle: =BorderStyle.None
+                        DropShadow: =DropShadow.None
+                        FillPortions: =0
+                        Height: =35
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Horizontal
+                        LayoutGap: =constStyle.Spacing.M
+                      Children:
+                        - lbl_Notification_Title:
+                            Control: Text
+                            Properties:
+                              FillPortions: =1
+                              LayoutMinHeight: =30
+                              Size: =constStyle.BasicStyle.FontSize.Large
+                              Text: |-
+                                =First(
+                                    SortByColumns(
+                                        cmp_Notification.Notifications,
+                                        "Priority",
+                                        SortOrder.Ascending,
+                                        "Created",
+                                        SortOrder.Ascending
+                                    )
+                                ).Title
+                              VerticalAlign: =VerticalAlign.Middle
+                              Weight: ='TextCanvas.Weight'.Bold
+                        - btn_Notification_Close:
+                            Control: Button
+                            Properties:
+                              AccessibleLabel: ="Dismiss notification"
+                              Appearance: ='ButtonCanvas.Appearance'.Transparent
+                              BorderRadius: =constBorderRadius
+                              FontColor: =constInkColor.RGBA
+                              Icon: ="Dismiss"
+                              IconStyle: ='ButtonCanvas.IconStyle'.Filled
+                              Layout: ='ButtonCanvas.Layout'.IconOnly
+                              LayoutMinHeight: =35
+                              OnSelect: |-
+                                =cmp_Notification.OnCancel(
+                                    First(
+                                        SortByColumns(
+                                            cmp_Notification.Notifications,
+                                            "Priority",
+                                            SortOrder.Ascending,
+                                            "Created",
+                                            SortOrder.Ascending
+                                        )
+                                    )
+                                );
+                              TabIndex: =0
+                              Text: =""
+                              Width: =35
+                  - lbl_Notification_Description:
+                      Control: Text
+                      Properties:
+                        AutoHeight: =true
+                        Height: =45
+                        Size: =constStyle.BasicStyle.FontSize.Medium
+                        Text: |-
+                          =First(
+                              SortByColumns(
+                                  cmp_Notification.Notifications,
+                                  "Priority",
+                                  SortOrder.Ascending,
+                                  "Created",
+                                  SortOrder.Ascending
+                              )
+                          ).Description
+            - prg_Notification_TimeLeft:
+                Control: Progress
+                Properties:
+                  AccessibleLabel: ="Time remaining"
+                  AlignInContainer: =AlignInContainer.Start
+                  BasePaletteColor: =constPaperColor.RGBA
+                  Height: =8
+                  LayoutMinWidth: =200
+                  Max: |-
+                    =Coalesce(
+                        First(
+                            SortByColumns(
+                                cmp_Notification.Notifications,
+                                "Priority",
+                                SortOrder.Ascending,
+                                "Created",
+                                SortOrder.Ascending
+                            )
+                        ).Duration,
+                        cmp_Notification.Duration
+                    )
+                  Thickness: ='Progress.Thickness'.Large
+                  Value: =Self.Max - tmr_Notification_TimeLeft.Value
+                  Visible: =Self.Max > 0
+                  Width: =Parent.Width - Parent.PaddingLeft - Parent.PaddingRight - 10
