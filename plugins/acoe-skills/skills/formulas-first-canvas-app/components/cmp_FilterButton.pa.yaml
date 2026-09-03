@@ -28,9 +28,9 @@ ComponentDefinitions:
       Align:
         PropertyKind: Input
         DisplayName: Align
-        Description: Header text alignment — End for money columns
+        Description: "Left | Center | Right — Right for money columns"
         DataType: Text
-        Default: =Align.Center
+        Default: ="Center"
       AllowMultiple:
         PropertyKind: Input
         DisplayName: AllowMultiple
@@ -142,7 +142,13 @@ ComponentDefinitions:
                   ", sorted",
                   ""
               )
-            Align: =cmp_FilterButton.Align
+            Align: |-
+              =Switch(
+                  cmp_FilterButton.Align,
+                  "Left", Align.Left,
+                  "Right", Align.Right,
+                  Align.Center
+              )
             Appearance: ='ButtonCanvas.Appearance'.Primary
             BorderRadius: =0
             BorderThickness: =0

@@ -116,7 +116,7 @@ constStyle = {
         Radius: 10,
         Height: {Large: 40, Medium: 32, Small: 27},
         TextLabel: {
-            Align: 'TextCanvas.Align'.Start,
+            Align: Align.Left,
             VerticalAlign: VerticalAlign.Middle,
             PaddingLeft: 8,
             PaddingRight: 8,
@@ -124,7 +124,7 @@ constStyle = {
             PaddingBottom: 4
         },
         TextInput: {
-            Align: 'TextCanvas.Align'.Start,
+            Align: Align.Left,
             VerticalAlign: VerticalAlign.Middle,
             PaddingLeft: 0,
             PaddingRight: 0,
@@ -137,7 +137,7 @@ constStyle = {
         // Money and quantities are right-aligned. Grid cells are Labels, not
         // NumberInputs, so they do NOT inherit this — set it explicitly there.
         NumberInput: {
-            Align: 'TextCanvas.Align'.End,
+            Align: Align.Right,
             VerticalAlign: VerticalAlign.Middle,
             PaddingLeft: 8,
             PaddingRight: 8

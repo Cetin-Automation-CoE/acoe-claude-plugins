@@ -92,8 +92,12 @@ The same applies to any global a UDF reads: `Set()` it to a fully typed record a
 | `get_appchecker_errors` | Laxer | Different rule set; catches accessibility and performance findings compile ignores. Compare both. |
 | Studio document-server binder | Different again | The forward-reference limitation. Only visible in the user's studio, not in your tooling. |
 
-**What compile catches:** unknown control properties (`Color` vs `FontColor` on the
-classic `Text` control), unknown functions, bad UDF return types.
+**What compile catches:** unknown control properties, unknown functions, bad UDF return
+types. The commonest property trap is the two text generations: `Control: Text`
+(previous-generation modern) takes `FontColor`, `Weight` and `'TextCanvas.Align'.Start`;
+`Control: ModernText` takes `Color`, `FontWeight` and `Align.Left`. `Button` in this
+skill is the previous-generation modern button (`'ButtonCanvas.*'` enums, `FontColor`,
+`BorderRadius`, no `Fill`).
 
 **What compile misses:** every column referenced off a collection, every
 `SortByColumns` string, every arithmetic sign. Hence the guard scripts.

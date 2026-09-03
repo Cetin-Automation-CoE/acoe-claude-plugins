@@ -14,8 +14,8 @@
 #         Height: =Parent.Height
 #         Width: =Parent.Width
 #
-# Requires: constPaperColor, constPrimaryColor, constSecondaryColor,
-#           constStyle, constTransparent, constBackdropColor
+# Requires: constPaperColor, constSecondaryColor, constStyle, constTransparent,
+#           constBackdropColor, constBorderRadius
 ComponentDefinitions:
   cmp_Dialog:
     DefinitionType: CanvasComponent
@@ -49,13 +49,13 @@ ComponentDefinitions:
         DisplayName: OnCancel
         Description: Raised on dismiss
         ReturnType: None
-        Default: =
+        Default: =false
       OnSubmit:
         PropertyKind: Event
         DisplayName: OnSubmit
         Description: Raised on confirm
         ReturnType: None
-        Default: =
+        Default: =false
       ShowDatePicker:
         PropertyKind: Input
         DisplayName: ShowDatePicker
@@ -137,7 +137,8 @@ ComponentDefinitions:
                       Properties:
                         Align: ='TextCanvas.Align'.Start
                         AutoHeight: =true
-                        # NOTE: classic Text uses FontColor; ModernText uses Color.
+                        # NOTE: this previous-generation Text control uses FontColor / Weight /
+                        # 'TextCanvas.*' enums; ModernText uses Color / FontWeight / Align.*.
                         # Getting this wrong is one of the few things compile catches.
                         FontColor: =constStyle.BasicStyle.FontColor
                         Size: =constStyle.BasicStyle.FontSize.Medium

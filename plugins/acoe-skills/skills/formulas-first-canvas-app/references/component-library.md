@@ -90,9 +90,12 @@ were specific enough that porting them would have meant rewriting them.
 ## Verifying a port
 
 ```bash
-python3 scripts/check_references.py --src <Src> --extra-dirs Components \
-        --tokens-file <Src>/App.pa.yaml
+# tokens already inlined in <Src>/App.pa.yaml (what new_app.py produces):
+python3 scripts/check_references.py --src <Src>
 python3 scripts/check_tokens.py --src <Src>
+
+# tokens kept in a separate Power Fx fragment, not yet pasted:
+python3 scripts/check_references.py --src <Src> --tokens-file templates/design-tokens.pa.yaml
 ```
 
 The first catches a component referencing a token you have not pasted — which in

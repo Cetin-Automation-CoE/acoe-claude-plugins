@@ -1,0 +1,224 @@
+# Formulas-First Canvas Apps — user manual
+
+A Claude Code skill for building and maintaining Power Apps Canvas Apps that stay
+maintainable past the third screen. The idea in one line: **`App.Formulas` is the app,
+screens only display it.** Every colour, size, business rule and data-source name lives
+in exactly one place, and scripts check that it stays there.
+
+This file is for people. The file Claude reads is `SKILL.md`.
+
+---
+
+## What you need
+
+| Requirement | Why |
+|---|---|
+| Claude Code with the `acoe-skills` plugin installed | The skill loads automatically when you talk about canvas apps |
+| Python 3.9 or newer | The scaffolder and the five guard scripts are Python, no packages needed |
+| The `canvas-apps` plugin (Canvas Authoring MCP) | The only way to compile and push `.pa.yaml` source into a live app |
+| Power Apps Studio access | You create the blank app and keep its tab open while Claude pushes |
+
+You never need `pac canvas pack` or `pac canvas validate`. Both are broken for current
+apps and the skill tells Claude not to use them.
+
+---
+
+## How you use it
+
+You do not invoke the skill. Talk to Claude about a canvas app and it loads by itself.
+Any of these will do:
+
+- "Create a new canvas app for tracking vendor contracts."
+- "Add a Contacts screen to this app."
+- "Why does my app show forty 'unknown name' errors after I edited App.Formulas?"
+- "Review this canvas app before we hand it over."
+- "This app is a mess, help me refactor it without breaking it."
+- "Rebrand this app to the new colours."
+
+What Claude does next depends on which of the situations below you are in.
+
+---
+
+## 1. Start a new app
+
+**What you get:** a complete two-screen CRUD skeleton on disk, with the design tokens,
+a list screen, a form screen, eight reusable components and a mock data layer, all
+passing the guard scripts.
+
+**What happens**
+
+1. Claude runs the scaffolder:
+
+   ```bash
+   python3 scripts/new_app.py --name "Vendor Register" --brand "#0F6CBD" --out ./Src
+   ```
+
+   `--brand` is your primary colour as hex. Leave it out to keep the default palette.
+
+2. You create a **blank tablet app** in Power Apps Studio with the same name and leave
+   the tab open.
+
+3. Claude connects the Canvas Authoring MCP to it and pushes the `Src` folder with
+   `compile_canvas`. That push is also the first compile. Expect a short round of fixes
+   here: the components were ported from a production app but have never been through
+   the strict compiler in this form.
+
+4. Commit the moment it compiles green.
+
+**What is in the skeleton**
+
+| File | Contents |
+|---|---|
+| `App.pa.yaml` | Design tokens, vocabularies, enums, helper functions, a mock data-access layer, the screen registry, navigation stack, notification helpers |
+| `ListScreen.pa.yaml` | Header, collapsible navigation rail, search, status filter, command bar, three sortable and filterable column headers, a gallery with status colours and right-aligned money, empty state, toasts, spinner |
+| `FormScreen.pa.yaml` | Header with back button, a card with three fields, one validation formula shared by the error label and the Save button, Save, Cancel, Delete behind a confirm dialog |
+| `Components/` | The eight components below |
+| `_EditorState.pa.yaml` | Screen and component order for Studio |
+
+**Names are generic on purpose.** The skeleton uses `colItems`, `funcLoadItems`,
+`funcSaveItem`, `locItem` and so on. It is the pattern you copy once per entity, not a
+finished app about one thing. Only the header title takes your app name.
+
+---
+
+## 2. Connect real data
+
+The skeleton runs against a seeded mock collection. Wiring the real backend is a source
+edit, not a runtime switch, because Power Fx cannot compile a reference to a data
+source the app does not have yet.
+
+1. Add the SharePoint list, Dataverse table or connector in Studio.
+2. Everything to change sits between the two `DATA ACCESS LAYER` banners in
+   `App.pa.yaml`. Each `funcLoadX` has the real body already written underneath the
+   mock, commented and marked `// SWITCH DAY:`. Claude deletes the mock and uncomments.
+3. Choice fields, lookup records and composite keys are unwrapped there and nowhere
+   else. Screens keep reading flat scalar collections and never change.
+4. Run the guards, compile, commit.
+
+Ask Claude: *"Switch the vendor data layer from the mock to the `PP_Vendors` SharePoint
+list."*
+
+---
+
+## 3. Add an entity or a screen
+
+Adding a second business object is a repeatable recipe, and Claude follows it:
+
+- a new collection plus `funcLoad*` / `funcSave*` / `funcDelete*` inside the data-access
+  region
+- a row in the `constScreens` registry
+- a copy of the list and form templates, renamed for the new entity
+
+The navigation rail reads the registry, so the new screen appears in the menu without
+touching the rail. There is no `Switch` to extend anywhere.
+
+Ask Claude: *"Add a Contracts entity with a list and a form screen."*
+
+---
+
+## 4. Check an app's health
+
+Five scripts, all read-only except that four of them exit non-zero when they find a
+violation, so they drop straight into a pre-commit hook or CI.
+
+```bash
+python3 scripts/inventory.py                --src Src/                 # census, never fails
+python3 scripts/check_tokens.py             --src Src/                 # no colour / size / radius literal on screens
+python3 scripts/check_data_layer.py         --src Src/ --datasource-pattern 'PP_[A-Za-z]'
+python3 scripts/check_collection_columns.py --src Src/                 # every column you read exists
+python3 scripts/check_references.py         --src Src/                 # every name resolves, in a safe order
+```
+
+**Why bother when the app compiles?** The compiler does not check column names on
+collections, does not validate the string column names in `SortByColumns`, and the
+Studio binder rejects forward references that the compile service accepts. Each of
+those fails at runtime or shows up as dozens of unrelated errors. The scripts catch
+them in a second.
+
+Ask Claude: *"Run the guards on this app and tell me what is off."*
+
+---
+
+## 5. Refactor an existing app
+
+For an app that was not built this way, the skill switches to a six-rung ladder. The
+app compiles and is committable at the top of every rung, so you can stop anywhere.
+
+| Rung | What happens | You are asked to |
+|---|---|---|
+| 0 | Unpack to YAML and commit the untouched baseline | Provide the solution or app |
+| 1 | `inventory.py` census, read-only | Nothing |
+| 2 | Written findings with IDs, severities and proposed fixes, read-only | **Sign off the findings list.** Nothing is edited before you do. Ambiguous business rules come back to you as numbered questions, never guessed |
+| 3 | Real defects fixed first, one per commit | Review small commits |
+| 4 | Data-source access moved into one guarded region | Review |
+| 5 | Design tokens defined in one commit, screens repointed in the next | Review two commits that stay bisectable |
+| 6 | Duplicated blocks turned into registries and components | Review |
+
+Two rules Claude will hold to: one axis per pass (colour, or layout, or logic, never
+two), and Studio's own save-normalisation lands as its own `chore:` commit so it never
+hides a real change.
+
+Ask Claude: *"Refactor this app onto the formulas-first pattern. Start with the
+inventory."*
+
+---
+
+## 6. Rebrand
+
+The token block at the top of `App.Formulas` has nine values marked **TO REBRAND**.
+Change those and nothing else; every screen and component follows. The design-system
+reference carries the measured contrast ratios, so Claude re-checks that status text
+still passes WCAG AA on white after the change.
+
+Ask Claude: *"Change the brand colour to #005EB8 and check contrast."*
+
+---
+
+## 7. Use the components in your own app
+
+You can lift the components without the rest. Copy the files from `components/` into
+your `Src/Components/`, paste `templates/design-tokens.pa.yaml` at the top of your
+`App.Formulas`, and run `check_references.py` to confirm nothing is missing.
+
+| Component | What it is |
+|---|---|
+| `cmp_Header` | App chrome: back or menu button, title, refresh, notifications badge, help, loading bar |
+| `cmp_Navigation` | Icon rail that expands to a labelled menu, driven by the screen registry |
+| `cmp_CommandBar` | Row of round action buttons, each shown or hidden by a `Can*` input |
+| `cmp_FilterButton` | Column header that is also the sort and filter affordance |
+| `cmp_Notification` | Toast stack with countdown bar |
+| `cmp_Dialog` | Modal confirm dialog, optional date field |
+| `cmp_Empty` | Empty-state row for a gallery that returned nothing |
+| `cmp_Spinner` | Full-screen blocking overlay |
+
+Every component reads the app's tokens directly, so none of them carries its own
+colours or sizes.
+
+---
+
+## Known limits
+
+- **Nothing compiles offline.** The only validator that reflects reality is
+  `compile_canvas` in a live coauthoring session. That is what the guard scripts exist
+  to compensate for.
+- **The components have not been compiled in this form.** Treat the first push as a
+  debugging session, not a formality.
+- **The filter dialog is not included.** Column headers raise `OnSelect` with a metadata
+  record; you connect whatever filter UI you have, or start with sort only.
+- **The skeleton is a starting point.** Two screens, one entity, three fields, mock data.
+
+---
+
+## Folder map
+
+```
+formulas-first-canvas-app/
+  SKILL.md              what Claude reads: the six rules, naming, traps, references
+  README.md             this file
+  scripts/              new_app.py scaffolder + inventory.py + four check_*.py guards
+  templates/            App.pa.yaml, design-tokens.pa.yaml, ListScreen, FormScreen,
+                        inventory.md and findings.csv report templates
+  components/           the eight cmp_*.pa.yaml files
+  references/           layout order, Power Fx limits, data layer, design system,
+                        component library, the refactoring ladder
+```

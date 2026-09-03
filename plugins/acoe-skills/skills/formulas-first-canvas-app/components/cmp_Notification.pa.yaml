@@ -34,7 +34,7 @@
 # ---------------------------------------------------------------------------
 #
 # Requires: constInkColor, constPaperColor, constStyle, constTransparent,
-#           constBackdropColor
+#           constBorderRadius
 ComponentDefinitions:
   cmp_Notification:
     DefinitionType: CanvasComponent
@@ -74,7 +74,7 @@ ComponentDefinitions:
         DisplayName: OnCancel
         Description: Raised on dismiss or expiry — remove the record from your collection here
         ReturnType: None
-        Default: =
+        Default: =false
         Parameters:
           - ThisRecord:
               Description: The notification being dismissed

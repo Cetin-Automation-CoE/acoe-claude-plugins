@@ -19,11 +19,11 @@ catches duplication; the only thing standing between an app and 10,000 lines of
 copy-paste is the discipline of putting every value and every behaviour in exactly one
 place. Apps that skip it become unmaintainable at roughly the third screen.
 
-## Two entry paths
+## Entry paths
 
 | Situation | Path |
 |---|---|
-| **New app** | `python3 scripts/new_app.py --name "…" --entity … --out ./Src` — see below. |
+| **New app** | `python3 scripts/new_app.py --name "…" --out ./Src` — see below. |
 | New screen in a conforming app | Copy a screen out of `templates/`; it already consumes the components. |
 | Existing app that does not follow this | **`references/refactoring-legacy-apps.md`.** Rungs 1–2 are read-only and end in a human sign-off gate. Do not edit first. |
 | Unsure which | Run `scripts/inventory.py` over the source. Its literal counts answer it in ten seconds. |
@@ -31,15 +31,19 @@ place. Apps that skip it become unmaintainable at roughly the third screen.
 ## Starting a new app
 
 ```bash
-python3 scripts/new_app.py --name "Vendor Register" --entity Vendor \
-        --brand "#0F6CBD" --out ./Src
+python3 scripts/new_app.py --name "Vendor Register" --brand "#0F6CBD" --out ./Src
 ```
 
 Writes a complete tree: `App.pa.yaml` with the design tokens **inlined at the
 top** (so they cannot land below their first use), both screens already wired to
-the components, `Components/`, and `_EditorState.pa.yaml`. It renames the sample
-entity throughout, then runs every guard against what it just wrote and exits
-non-zero rather than leaving a broken tree behind.
+the components, `Components/`, and `_EditorState.pa.yaml`. It then runs every guard
+against what it just wrote and exits non-zero rather than leaving a broken tree behind.
+
+**Identifiers stay generic** — `colItems`, `funcLoadItems`, `funcSaveItem`, `locItem`,
+`gal_List_Items`, `enumEntity.Items`. Only the header title takes the app name. The
+scaffold is the pattern you copy once per entity; a second entity is a second
+`col*` / `funcLoad*` / `funcSave*` / `funcDelete*` set, a registry row and a copy of
+the two screens, named for that entity in its own commit.
 
 `--components none` scaffolds the formula layer alone, for when you will write
 your own screens.
@@ -64,8 +68,9 @@ by hand: `references/component-library.md`.
 No `RGBA(...)`, no `#hex`, no font sizes, no padding numbers, no list or table names.
 Screens read `constStyle.*` / `const*Color` and call `func*`. A screen that names a
 data source has welded the app to that backend; changing backends then means editing
-every screen instead of one region. `scripts/check_tokens.py` and
-`scripts/check_data_layer.py` enforce both.
+every screen instead of one region. `scripts/check_tokens.py` enforces colours, font
+sizes and radii; `scripts/check_data_layer.py` enforces data-source names. Spacing
+literals are only *reported*, by `scripts/inventory.py`.
 
 **3. Named formula vs UDF is decided by type limits, not taste.** See the table below.
 
@@ -129,7 +134,9 @@ with section banners: `references/app-formulas-layout.md`.
 
 ## Guard scripts
 
-Copy `scripts/` into the target repo and run all five alongside every compile.
+Copy `scripts/` into the target repo and run all five alongside every compile. The
+four `check_*` scripts and `inventory.py` are standalone; `new_app.py` reads
+`templates/` and `components/` relative to itself, so run it from the skill tree.
 
 ```bash
 python3 scripts/inventory.py           --src <Src/>   # read-only census (rung 1)
@@ -171,6 +178,10 @@ within two sprints, and the second time it rots nobody notices.
   (flexible — `Width`/`Height` then ignored); leaf controls default to `0`. A fixed
   child (`FillPortions: 0`) **must** carry an explicit `Height` — `LayoutMinHeight` is
   ignored for it and the ~200px control default wrecks the layout.
+- **Two text generations, two property vocabularies.** `Control: Text` takes
+  `FontColor` / `Weight` / `'TextCanvas.Align'.Start`; `Control: ModernText` takes
+  `Color` / `FontWeight` / `Align.Left`. Mixing them is a hard compile error, and the
+  skill's components use both (`Text` in the dialog and toast, `ModernText` elsewhere).
 - **`Ungroup(t, Rows)` takes an identifier, not `"Rows"`.** The quoted form fails with
   `Expected identifier name`. (`SortByColumns` still takes quoted strings — the
   inconsistency is real.)

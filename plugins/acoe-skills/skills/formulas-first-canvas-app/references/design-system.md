@@ -62,7 +62,7 @@ a stated business requirement. It is to **split fill from text**:
 | Fills and dots | `constSemaforColors.*` | — | keeps the literal traffic-light hues |
 
 Dots, chips and fills keep the vivid colours. Text takes the dark variants. Route it
-through one function — `funcStatusColor(status)`, `funcMoneyTextColor(value)` — so a
+through one function — `funcStatusTextColor(status)`, `funcMoneyTextColor(value)` — so a
 future palette change is one edit, not a sweep.
 
 ## Semantic overload of red

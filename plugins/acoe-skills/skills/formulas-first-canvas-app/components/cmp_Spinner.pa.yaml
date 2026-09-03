@@ -7,7 +7,7 @@
 #       Properties:
 #         Visible: =glBoolIsLoading
 #
-# Requires: constPrimaryColor, constScrimColor
+# Requires: constScrimColor
 ComponentDefinitions:
   cmp_Spinner:
     DefinitionType: CanvasComponent

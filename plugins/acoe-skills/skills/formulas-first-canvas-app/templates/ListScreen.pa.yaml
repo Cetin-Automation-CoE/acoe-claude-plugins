@@ -113,7 +113,6 @@ Screens:
                               Items: =constStatusChoices
                               SelectMultiple: =true
                               TabIndex: =0
-                              Value: ="Value"
                               Width: =200
                         # Each verb is gated on the SAME expression that guards
                         # the function behind it. A hidden button is not a
@@ -174,7 +173,7 @@ Screens:
                             Properties:
                               # Money headers align with money cells, or the
                               # column stops being scannable.
-                              Align: =Align.Right
+                              Align: ="Right"
                               DataType: ="number"
                               Field: ="Amount"
                               Height: =constStyle.List.HeaderHeight
@@ -230,7 +229,7 @@ Screens:
                               - lbl_Row_Title:
                                   Control: ModernText
                                   Properties:
-                                    FontColor: =constStyle.BasicStyle.FontColor
+                                    Color: =constStyle.BasicStyle.FontColor
                                     Size: =constStyle.BasicStyle.FontSize.Medium
                                     Text: =funcEllipsis(ThisItem.Title, 48)
                                     Width: =360
@@ -240,7 +239,7 @@ Screens:
                                     # One function owns status colour. Never a
                                     # Switch inline on a screen — that is the
                                     # same decision authored in N places.
-                                    FontColor: =funcStatusTextColor(ThisItem.Status)
+                                    Color: =funcStatusTextColor(ThisItem.Status)
                                     Size: =constStyle.BasicStyle.FontSize.Small
                                     Text: =ThisItem.Status
                                     Width: =140
@@ -248,7 +247,7 @@ Screens:
                                   Control: ModernText
                                   Properties:
                                     Align: =constStyle.Label.NumberInput.Align
-                                    FontColor: =funcMoneyTextColor(ThisItem.Amount)
+                                    Color: =funcMoneyTextColor(ThisItem.Amount)
                                     Size: =constStyle.BasicStyle.FontSize.Medium
                                     Text: =funcAsCurrency(ThisItem.Amount)
                                     Width: =160

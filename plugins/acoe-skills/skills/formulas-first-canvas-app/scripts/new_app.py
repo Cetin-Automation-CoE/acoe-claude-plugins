@@ -5,7 +5,10 @@ Assembles App.pa.yaml (with the design tokens INLINED at the top, so they can
 never land below their first use), the list and form screens already wired to
 the components, the components themselves, and _EditorState.pa.yaml.
 
-    python3 new_app.py --name "Vendor Register" --entity Vendor --out ./Src
+    python3 new_app.py --name "Vendor Register" --brand "#0F6CBD" --out ./Src
+
+Names stay generic on purpose (colItems, funcLoadItems, funcSaveItem, locItem):
+the scaffold is a pattern to copy per entity, not a one-entity app.
 
 Then verifies its own output with the guard scripts and refuses to leave a
 broken tree behind.
@@ -32,21 +35,6 @@ ALL_COMPONENTS = [
     "cmp_Notification", "cmp_Dialog", "cmp_Empty", "cmp_Spinner",
 ]
 
-# Identifiers this skill owns and may rename. Deliberately explicit: a substring
-# replace of "Item" would corrupt ThisItem, AllItems, SelectedItems,
-# DefaultSelectedItems and LayoutAlignItems — all Power Fx / control names.
-IDENT_RENAMES = {
-    "colItems": "col{P}",
-    "locItem": "loc{S}",
-    "constItemsInScope": "const{P}InScope",
-    "funcLoadItems": "funcLoad{P}",
-    "funcSaveItem": "funcSave{S}",
-    "funcDeleteItem": "funcDelete{S}",
-    "gal_List_Items": "gal_List_{P}",
-    "enumEntity.Items": "enumEntity.{P}",
-}
-
-
 def strip_header(text: str) -> str:
     """Drop the tokens file's usage header (the first // ==== ... ==== banner)."""
     lines = text.splitlines()
@@ -58,41 +46,15 @@ def strip_header(text: str) -> str:
     return text
 
 
-def hex_to_rgba(h: str) -> str:
+def hex_to_rgba(h: str):
+    """Return (RGBA(...) literal, normalised "#RRGGBB") for a hex colour."""
     h = h.strip().lstrip("#")
     if len(h) == 3:
         h = "".join(c * 2 for c in h)
     if not re.fullmatch(r"[0-9a-fA-F]{6}", h):
         raise SystemExit(f"error: --brand is not a 6-digit hex colour: {h}")
     r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
-    return f"RGBA({r}, {g}, {b}, 1)"
-
-
-def rename_prose(text: str, singular: str, plural: str) -> str:
-    """Rename the sample noun inside double-quoted strings only.
-
-    Safe because control property names (Items, ThisItem) never appear quoted,
-    while UI copy always does.
-    """
-    def one(m):
-        s = m.group(0)
-        s = re.sub(r"\bItems\b", plural, s)
-        s = re.sub(r"\bItem\b", singular, s)
-        s = re.sub(r"\bitems\b", plural.lower(), s)
-        s = re.sub(r"\bitem\b", singular.lower(), s)
-        return s
-    return re.sub(r'"[^"]*"', one, text)
-
-
-def rename(text: str, singular: str, plural: str) -> str:
-    for old, new in IDENT_RENAMES.items():
-        pat = re.escape(old).replace(r"\.", r"\.")
-        text = re.sub(rf"(?<![A-Za-z0-9_]){pat}(?![A-Za-z0-9_])",
-                      new.format(S=singular, P=plural), text)
-    # The enum member itself: `Items: "items",` inside enumEntity.
-    text = re.sub(r"(?<![A-Za-z0-9_])Items(\s*:\s*)\"items\"",
-                  f'{plural}\\1"{plural.lower()}"', text)
-    return rename_prose(text, singular, plural)
+    return f"RGBA({r}, {g}, {b}, 1)", "#" + h.upper()
 
 
 def run_guard(script, *args):
@@ -106,19 +68,12 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True, help="destination Src/ directory")
     ap.add_argument("--name", default="New App", help="app display name, used in the header title")
-    ap.add_argument("--entity", default="Item", help="singular sample entity, e.g. Vendor")
-    ap.add_argument("--entity-plural", default=None, help="override the plural (default: entity + 's')")
     ap.add_argument("--brand", default=None, help="primary brand colour as hex, e.g. '#0F6CBD'")
     ap.add_argument("--components", default="all",
                     help="'all' (default), 'none' for the formula layer only (no screens), "
                          "or a comma-separated subset of: " + ", ".join(ALL_COMPONENTS))
     ap.add_argument("--force", action="store_true", help="overwrite a non-empty --out")
     args = ap.parse_args()
-
-    singular = args.entity.strip()
-    plural = (args.entity_plural or singular + "s").strip()
-    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", singular) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", plural):
-        sys.exit("error: --entity/--entity-plural must be alphanumeric identifiers")
 
     if args.components == "all":
         chosen = list(ALL_COMPONENTS)
@@ -155,9 +110,9 @@ def main():
     # ---- App.pa.yaml: inline the tokens at the marker ------------------------
     tokens = strip_header((TEMPLATES / "design-tokens.pa.yaml").read_text(encoding="utf-8"))
     if args.brand:
-        rgba = hex_to_rgba(args.brand)
+        rgba, hexcol = hex_to_rgba(args.brand)
         tokens = re.sub(r"(constPrimaryColor\s*=\s*\{RGBA:\s*)RGBA\([^)]*\)(,\s*HEX:\s*\")[^\"]*(\")",
-                        rf"\g<1>{rgba}\g<2>{args.brand.upper()}\g<3>", tokens)
+                        rf"\g<1>{rgba}\g<2>{hexcol}\g<3>", tokens)
 
     app = (TEMPLATES / "App.pa.yaml").read_text(encoding="utf-8")
     if MARKER not in app:
@@ -165,13 +120,13 @@ def main():
     indent = " " * (len(app[:app.index(MARKER)].split("\n")[-1]))
     app = app.replace(MARKER, "\n".join(
         (indent + ln) if ln.strip() else "" for ln in tokens.splitlines()).lstrip())
-    app = rename(app, singular, plural)
     (out / "App.pa.yaml").write_text(app, encoding="utf-8")
 
     # ---- screens ------------------------------------------------------------
     for f in screens:
-        t = rename((TEMPLATES / f).read_text(encoding="utf-8"), singular, plural)
-        t = t.replace('DisplayName: ="' + plural + '"', f'DisplayName: ="{args.name}"', 1)
+        t = (TEMPLATES / f).read_text(encoding="utf-8")
+        # Only the header title is app-specific; every identifier stays generic.
+        t = t.replace('DisplayName: ="Items"', f'DisplayName: ="{args.name}"', 1)
         (out / f).write_text(t, encoding="utf-8")
 
     # ---- components ---------------------------------------------------------
@@ -193,8 +148,11 @@ def main():
 
     written = sorted(p.relative_to(out).as_posix() for p in out.rglob("*.pa.yaml"))
     if not screens:
-        print("--components none: scaffolding the formula layer only, no screens.\n")
-    print(f"Scaffolded {args.name!r} ({singular}/{plural}) into {out}")
+        print("--components none: scaffolding the formula layer only, no screens.\n"
+              "      App.pa.yaml still names ListScreen and FormScreen (constScreens,\n"
+              "      the colBack seed and StartScreen). Create screens with those names\n"
+              "      or edit those three places before the first compile.\n")
+    print(f"Scaffolded {args.name!r} into {out}")
     for w in written:
         print(f"  {w}")
 

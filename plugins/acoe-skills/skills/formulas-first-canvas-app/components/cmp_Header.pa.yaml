@@ -18,7 +18,8 @@
 # app. The INTERFACE is preserved so screens port unchanged; the domain-coupled
 # body is gone. Add your own scope control as an extra child if you need one.
 #
-# Requires: constPrimaryColor, constPaperColor, constStyle, constTransparent
+# Requires: constPrimaryColor, constSecondaryColor, constPaperColor, constStyle,
+#           constTransparent
 ComponentDefinitions:
   cmp_Header:
     DefinitionType: CanvasComponent
@@ -83,19 +84,19 @@ ComponentDefinitions:
         DisplayName: OnSelectHelp
         Description: Raised by the help action
         ReturnType: None
-        Default: =
+        Default: =false
       OnSelectNotifications:
         PropertyKind: Event
         DisplayName: OnSelectNotifications
         Description: Raised by the notifications action
         ReturnType: None
-        Default: =
+        Default: =false
       OnSelectRefresh:
         PropertyKind: Event
         DisplayName: OnSelectRefresh
         Description: Raised by the refresh action
         ReturnType: None
-        Default: =
+        Default: =false
       ShowCommandBar:
         PropertyKind: Input
         DisplayName: ShowCommandBar
@@ -212,7 +213,7 @@ ComponentDefinitions:
                 Control: ModernText
                 Properties:
                   AccessibleLabel: =""
-                  Align: ='TextCanvas.Align'.Center
+                  Align: =Align.Center
                   Color: =constPaperColor.RGBA
                   Fill: =constSecondaryColor.RGBA
                   FillPortions: =0

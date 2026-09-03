@@ -14,7 +14,8 @@
 # navigation from a list, so they carry Group = "" and stay out of the menu.
 #
 # Requires: constScreens, enumScreenType, constPrimaryColor, constPaperColor,
-#           constReactGray, constStyle, constTransparent, constBackdropColor
+#           constReactGray, constStyle, constTransparent, constBackdropColor,
+#           constBorderRadius
 ComponentDefinitions:
   cmp_Navigation:
     DefinitionType: CanvasComponent
@@ -37,7 +38,7 @@ ComponentDefinitions:
         DisplayName: OnBack
         Description: Raised by the back button — normally funcGoBack()
         ReturnType: None
-        Default: =
+        Default: =false
       OnClose:
         PropertyKind: Event
         DisplayName: OnClose
@@ -151,18 +152,18 @@ ComponentDefinitions:
                             Properties:
                               AccessibleLabel: =ThisItem.DisplayName
                               Align: =Align.Center
-                              # Active state compares the registry's LogicalName
-                              # to the live screen — no global to keep in sync.
+                              # Active state compares the registry's Screen to the
+                              # live screen — no global to keep in sync.
                               Appearance: |-
                                 =If(
-                                    ThisItem.LogicalName = App.ActiveScreen.Name,
+                                    ThisItem.Screen.Name = App.ActiveScreen.Name,
                                     'ButtonCanvas.Appearance'.Primary,
                                     'ButtonCanvas.Appearance'.Outline
                                 )
                               BorderRadius: =constBorderRadius
                               FontColor: |-
                                 =If(
-                                    ThisItem.LogicalName = App.ActiveScreen.Name,
+                                    ThisItem.Screen.Name = App.ActiveScreen.Name,
                                     constPaperColor.RGBA,
                                     constPrimaryColor.RGBA
                                 )
@@ -182,7 +183,7 @@ ComponentDefinitions:
                               AccessibleLabel: =Self.Text
                               Color: |-
                                 =If(
-                                    ThisItem.LogicalName = App.ActiveScreen.Name,
+                                    ThisItem.Screen.Name = App.ActiveScreen.Name,
                                     constPrimaryColor.RGBA,
                                     constStyle.BasicStyle.FontColor
                                 )

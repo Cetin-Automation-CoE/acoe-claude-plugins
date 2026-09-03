@@ -58,11 +58,11 @@ backend change currently is.
 |---|---|---|
 | | | |
 
-Three or more occurrences → extract to a `func*` or `const*`.
+Two or more occurrences → extract to a `func*` or `const*`.
 
-## Switch arms per discriminator
+## Switch discriminators
 
-| Discriminator | Arms | Sites |
+| Discriminator | Uses | Files |
 |---|---|---|
 | | | |
 
