@@ -176,10 +176,11 @@ for a report.
 
 - **Effort Estimation** — print all six sizes: `XS (0-1 MD)`, `S (1-5 MD)`, `M (5-10 MD)`,
   `L (10-20 MD)`, `XL (20-50 MD)`, `XXL (50+ MD)`. If the user answers with a bare number that
-  lands on a band edge (5, 10, 20, 50), make them choose which band. **This field must always
-  be set.** Jira defaults it to `XS (0-1 MD)` and silently inflates the whole score. That
-  default comes from a shared field configuration used by other teams and cannot be changed,
-  so never leave this field to the default, not even when the user skips the question.
+  lands on a band edge (5, 10, 20, 50), make them choose which band. **Optional like every other
+  field** — accept "nevím" and move on. But say once, plainly, what skipping costs: Jira applies
+  its own `XS (0-1 MD)` default, so the Idea will read as a trivial build and its ROI, Payback
+  and Idea Priority will all come out too high. Say it once, do not argue, and list it under the
+  unfilled fields at Step 4 so it can be corrected later.
 - **PR Potential** — how visible the delivery is outside the team: `Low`, `Medium`, `High`,
   `Flagship`. The CoE decides this, never the requestor, and **the user picks it themselves**.
   Show the four options with their one-line meanings and stop there. Do not propose a value,
@@ -284,8 +285,9 @@ Things that will silently produce a bad Idea if you get them wrong, so check the
 - **Business Case (`customfield_10089`)** must be ADF made of one `paragraph` per section with
   lines joined by `hardBreak` and bullets drawn as `•` characters. Headings, lists and bold all
   come out as literal wiki markup on screen, and one paragraph per line comes out double-spaced.
-- **Effort Estimation (`customfield_10080`)** must always be sent. Omitting it applies Jira's
-  `XS (0-1 MD)` default and inflates every downstream number.
+- **Effort Estimation (`customfield_10080`)** is omitted only when the user actually skipped it.
+  Jira then applies `XS (0-1 MD)`, so report afterwards that the Idea is scored as a trivial
+  build until somebody sets a real size. Never guess a size to avoid the default.
 - **Never send Priority Override (`customfield_11263`).** Jira defaults it to `Standard`,
   which is what intake wants, and the ranking band is the backlog owner's control applied in the
   UI afterwards.

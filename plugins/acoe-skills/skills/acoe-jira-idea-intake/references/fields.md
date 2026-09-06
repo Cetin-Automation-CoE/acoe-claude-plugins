@@ -77,7 +77,8 @@ Jira computes them from the inputs above. Writing to them corrupts the backlog r
 
 **Never ask the user about it and never put it in the payload.** It is the backlog owner's
 ranking control, applied in the Jira UI after intake, not something an intake conversation
-decides. This is the opposite of Effort Estimation, whose default is actively wrong.
+decides. Effort Estimation also has a default, but that one is misleading rather than correct,
+so a skip there gets flagged to the user (see below).
 
 ### Team — always set it
 
@@ -119,15 +120,17 @@ Send the reference exactly as the user gives it, as a bare string:
 Its Jira display name carries a **trailing space** (`"External ID "`). That affects nothing
 when writing by field ID, but it is worth knowing when matching field names from a response.
 
-### Effort Estimation has a default, and it is dangerous
+### Effort Estimation has a default, and it is misleading
 
 `customfield_10080` defaults to **`XS (0-1 MD)`** when omitted. Omitting it does not leave the
-field blank, it silently claims the cheapest possible build and inflates ROI, Payback and Idea
-Priority.
+field blank, it records the cheapest possible build and inflates ROI, Payback and Idea Priority.
+The default comes from a shared field configuration used by other teams and cannot be changed.
 
-The default is a shared field configuration used by other teams and **cannot be changed**, so
-the guard is entirely on our side: **always send an explicit value.** There is no case where
-omitting this field is acceptable.
+The field is **optional**, like every other benefit field. Ask for it, accept a skip, and never
+invent a size to dodge the default. What you must not do is let the skip pass silently: tell the
+user once that the Idea will be stored as `XS (0-1 MD)` and will therefore score as a trivial
+build, list it among the unfilled fields, and repeat it in the post-creation report so it can be
+corrected in the UI.
 
 ### PR Potential has no default and no `None`
 
@@ -304,7 +307,8 @@ references `11260`, it is stale.
 `XS (0-1 MD)` · `S (1-5 MD)` · `M (5-10 MD)` · `L (10-20 MD)` · `XL (20-50 MD)` · `XXL (50+ MD)`
 
 Our implementation estimate after a quick analysis. S is roughly half a sprint, M one sprint,
-L two sprints. Defaults to XS if omitted, so always send it.
+L two sprints. Optional, but a skip stores `XS (0-1 MD)` rather than an empty field, so tell the
+user that once.
 
 ### PR Potential — `customfield_11262`
 
@@ -560,8 +564,8 @@ Atlassian Rovo:createJiraIssue
 ```
 
 Omit any key whose value is empty. Do not send `null` or `""` on create, it can trip
-validation on select fields. The one exception is Effort Estimation, which must always carry
-an explicit value because of its XS default.
+validation on select fields. Omitting Effort Estimation is allowed when the user skipped it,
+but flag the resulting `XS (0-1 MD)` default rather than letting it pass unnoticed.
 
 ---
 
@@ -576,7 +580,7 @@ an explicit value because of its XS default.
 | `Field cannot be set, it is not on the appropriate screen`, naming `customfield_10001` | Team blocked on the create screen | re-create without it, then set Team via `editJiraIssue` (§1) |
 | `Field cannot be set, it is not on the appropriate screen`, naming `customfield_10062` | External ID removed from the screen again | drop it, put the reference in the Description |
 | `Team with id '<n>' not found.` | Team passed as a name instead of a UUID | pass the bare UUID string |
-| Effort Estimation came out XS when nobody chose XS | field omitted, Jira applied its default | always send `customfield_10080` explicitly |
+| Effort Estimation came out XS when nobody chose XS | field omitted, Jira applied its default | expected when the user skipped it. Say so in the report, or set a real size with `editJiraIssue` |
 | Idea Priority looks absurdly high or low | a calculated field was written directly, or a team total went into Monthly Runs per Person | never write calculated fields; re-check §2 and §3 |
 | Idea created outside `Backlog` | workflow initial status changed | call `transitionJiraIssue` with `{"id": "2"}` on the new key (§7) |
 | `transition` rejected on create | `New` is no longer an initial status, so the New→Backlog transition is not valid there | drop `transition` from the create call entirely (§7) |
