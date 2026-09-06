@@ -28,7 +28,7 @@ the conversation already shows where things came from.
 | Minutes per Run | … |
 | Monthly Run Cost | … CZK/měsíc |
 | Other Cash Saved / Month | … CZK/měsíc |
-| Effort Estimation | M (5-10 MD) |
+| Effort Estimation | M (5-10 MD) — *pokud prázdné, Jira uloží XS (0-1 MD)* |
 | PR Potential | Low / Medium / High / Flagship — *nechat prázdné, dokud si uživatel nevybere* |
 
 Under the second table, show the derived saving on one line so the user can check it before
