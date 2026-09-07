@@ -41,6 +41,15 @@ looks bare in a screenshot may have a Business Case somebody wrote three months 
 If the key does not exist or is not an Idea, say so and stop. Do not create a new Idea as a
 substitute for one the user thinks already exists.
 
+**Check Delivery Type (`customfield_11396`) in the response before going any further.** If it
+is anything other than `New Functionalities`, stop. Do not edit a single field, do not draft
+anything, and tell the user this skill only handles `New Functionalities` Ideas because the
+business case is tracked only for those. An `Internal Operations`, `Support & Maintenance` or
+`Ad-Hoc` Idea is edited directly in Jira.
+
+If Delivery Type is empty on an old Idea, ask the user whether it is a `New Functionalities`
+Idea rather than assuming it. If they confirm, set it as part of the update.
+
 ## Step U2 — Sort every field into three buckets
 
 | Bucket | Meaning | Consequence |
@@ -133,6 +142,9 @@ Everything from `references/fields.md` still applies, in particular:
 - **To clear a field, pass explicit `null`.** Only ever on an explicit request to clear it.
 - **Do not touch status.** See `references/fields.md` §7.
 - **Team** is already set on an existing Idea. Leave it. Only set it if it is empty.
+- **Delivery Type** is never changed. The skill refuses Ideas that are not
+  `New Functionalities`, so there is never a reason to rewrite this field. The one exception is
+  filling it in when it is empty and the user has confirmed the Idea is `New Functionalities`.
 - **External ID** often arrives later than the Idea itself, so an empty one is the common case
   to fill. If it already holds a different reference, that is a destructive change and needs
   the usual old-against-new approval.

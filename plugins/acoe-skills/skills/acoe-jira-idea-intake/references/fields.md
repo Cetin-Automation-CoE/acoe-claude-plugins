@@ -46,6 +46,7 @@ Fixed for every ACOE Idea: `projectKey: "ACOE"`, `issueTypeName: "Idea"`.
 | Other Cash Saved / Month | Other Cash Saved / Month | `customfield_10090` | number (CZK/month) |
 | Effort Estimation | Effort Estimation | `customfield_10080` | select → `{"value": "M (5-10 MD)"}` |
 | PR Potential | PR Potential | `customfield_11262` | select → `{"value": "Low"}` |
+| Delivery Type | Delivery Type | `customfield_11396` | select, **always** `{"value": "New Functionalities"}` |
 | Team | Team | `customfield_10001` | bare UUID string, always Automation CoE |
 | External ID | External ID | `customfield_10062` | plain text string, e.g. `WP3560` |
 | Due date | Due date | `duedate` | date `YYYY-MM-DD` |
@@ -79,6 +80,42 @@ Jira computes them from the inputs above. Writing to them corrupts the backlog r
 ranking control, applied in the Jira UI after intake, not something an intake conversation
 decides. Effort Estimation also has a default, but that one is misleading rather than correct,
 so a skip there gets flagged to the user (see below).
+
+### Delivery Type — always `New Functionalities`, and the scope boundary
+
+`customfield_11396` classifies what kind of work an Idea represents. It has **no default**, so
+it must be sent explicitly. The skill always sends exactly one value:
+
+```
+"customfield_11396": { "value": "New Functionalities" }
+```
+
+Never ask the user which type to use, and never send any other value. The other three exist in
+Jira but are **outside this skill's scope entirely**:
+
+| Value | Covers | This skill |
+|---|---|---|
+| `New Functionalities` | new RPA automation, Power App, Power BI report, AI use case, new feature or enhancement of an existing solution | **the only value ever sent** |
+| `Internal Operations` | team ceremonies, sprint planning, retrospectives, internal meetings, team administration, internal documentation | refuse |
+| `Support & Maintenance` | production incidents, bug fixes, troubleshooting, user support, technical maintenance, platform updates | refuse |
+| `Ad-Hoc` | feasibility analysis, technical investigation, workshops, consultations, stakeholder meetings, PoC assessment | refuse |
+
+The reason is not arbitrary. **A business case is only tracked for `New Functionalities`**, and
+the business case is what this entire skill exists to build. An Idea of any other type has no
+Affected People, no runs, no minutes and no ROI, so every question the skill asks would be
+meaningless and the scoring model would produce a number nobody should act on.
+
+**What to do when asked for another type.** Say plainly that this skill only handles
+`New Functionalities` Ideas, because business case tracking applies only to those, and that
+Internal Operations, Support & Maintenance and Ad-Hoc issues should be created directly in Jira.
+Do not create the issue and then tell the user to change the type afterwards. Do not create it
+as `New Functionalities` "so it can be corrected later".
+
+**This applies to update mode too.** Read the Delivery Type before editing anything. If an
+existing Idea is not `New Functionalities`, do not edit it, not even one field, and say why.
+
+Note the fourth option is stored as `Ad-Hoc`, not "Ad-Hoc & Advisory". The longer wording is
+only the on-screen description.
 
 ### Team — always set it
 
@@ -332,13 +369,19 @@ business case.
 
 ### Components — `components`
 
-`AI` · `Excel` · `Power BI` · `Power Platform` · `RPA`
+`AI` · `Code` · `Excel` · `Power BI` · `Power Platform` · `RPA`
 
-Five options only. The older granular values (`RPA - Ui Path`, `Power Platform - Canvas Power
+Six options only. The older granular values (`RPA - Ui Path`, `Power Platform - Canvas Power
 App`, `M365 - SharePoint`, `Microsoft Excel - VBA`, `DWH SandBox` and the rest) no longer
 exist. If the source names a specific product, map it up: UiPath and n8n → `RPA`; Canvas /
 Model-Driven / Power Automate / Dataverse / Forms / Power Pages → `Power Platform`; VBA and
 Power Query → `Excel`; Copilot Studio and custom agents → `AI`.
+
+**`Code` is for solutions that are written as code rather than assembled in a platform**: a
+React or other web app running in Azure, an API or service, PowerShell or Python scripts,
+anything where the deliverable is a codebase. Use it whenever the work is programming proper.
+It combines freely with the others, so a React front end over a Power BI dataset is `Code` plus
+`Power BI`.
 
 Format is `[{"name": "RPA"}]`, using `name` rather than `value`.
 
@@ -347,11 +390,14 @@ Format is `[{"name": "RPA"}]`, using `name` rather than `value`.
 **Not cached. Fetch it live every time** (§5) — the org structure moves, sub-departments get
 renamed, and a stale value here silently misattributes where demand comes from.
 
-The list has roughly twenty top-level units, most with sub-departments. Ask for the top level
-first, then narrow. The stored value for a sub-department is the **full concatenated string**,
-for example `"IT - IT Platforms"` or `"Network Deployment & Maintenance - FLM"`. A bare
-top-level value is also valid where the list has one. Note there is no bare `CEO` option, only
-the three `CEO - …` entries.
+The list is **flat**: around fifteen organisational units with no sub-departments. Ask once,
+match against the fetched list, and submit the value exactly as stored.
+
+The sub-department entries that used to exist (`IT - IT Platforms`,
+`Network Deployment & Maintenance - FLM` and the rest) were removed on 2026-09-06, and several
+unit names were shortened at the same time. Do not construct a concatenated
+`Unit - Sub` string, it will be rejected. If the user names a sub-department, map it to its
+parent unit and record the detail in the Description instead.
 
 ### Used Applications — `customfield_10106`
 
@@ -554,6 +600,7 @@ Atlassian Rovo:createJiraIssue
     "customfield_11261": 1500,
     "customfield_10090": 0,
     "customfield_11262": { "value": "Medium" },
+    "customfield_11396": { "value": "New Functionalities" },
     "customfield_10001": "99e75e3e-d31e-4aae-941a-f60e8e548378",
     "customfield_10062": "WP3560",
     "customfield_10106": [ { "value": "DMSP8" }, { "value": "ODOS" },
@@ -584,6 +631,7 @@ but flag the resulting `XS (0-1 MD)` default rather than letting it pass unnotic
 | Idea Priority looks absurdly high or low | a calculated field was written directly, or a team total went into Monthly Runs per Person | never write calculated fields; re-check §2 and §3 |
 | Idea created outside `Backlog` | workflow initial status changed | call `transitionJiraIssue` with `{"id": "2"}` on the new key (§7) |
 | `transition` rejected on create | `New` is no longer an initial status, so the New→Backlog transition is not valid there | drop `transition` from the create call entirely (§7) |
+| Department value rejected | a concatenated `Unit - Sub` string was sent, or a renamed unit | re-fetch (§5) and send a flat unit value exactly as stored |
 | `issuetype` invalid | wrong name | it is `Idea`, id `10016`, hierarchy level 2 |
 | whole call fails, cause unclear | several fields at once | create with Summary + Description only, then `editJiraIssue` field by field to isolate |
 
