@@ -128,6 +128,12 @@ ComponentDefinitions:
                       Control: Text
                       Properties:
                         Align: ='TextCanvas.Align'.Start
+                        # AutoHeight: without it (or an explicit Height), a
+                        # leaf control in an auto-layout container has no
+                        # sizing info at all and collapses to its control
+                        # default — check_layout.py's Rule 3. Its sibling
+                        # lbl_Dialog_Description already carries this.
+                        AutoHeight: =true
                         Size: =constStyle.BasicStyle.FontSize.Large
                         Text: =cmp_Dialog.Title
                         VerticalAlign: =VerticalAlign.Middle
@@ -149,6 +155,11 @@ ComponentDefinitions:
                       Control: ModernDatePicker
                       Properties:
                         AccessibleLabel: ="Date"
+                        # ModernDatePicker has no AutoHeight — without an
+                        # explicit Height it has no sizing info at all as a
+                        # leaf of this auto-layout container and collapses to
+                        # its control default (check_layout.py's Rule 3).
+                        Height: =constStyle.Label.TextInput.Height.SingleLine
                         RadiusBottomLeft: =constStyle.Button.BorderRadius
                         RadiusBottomRight: =constStyle.Button.BorderRadius
                         RadiusTopLeft: =constStyle.Button.BorderRadius

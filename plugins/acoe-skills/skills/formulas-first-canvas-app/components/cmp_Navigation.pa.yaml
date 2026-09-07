@@ -198,6 +198,13 @@ ComponentDefinitions:
                               Height: =Parent.Height
                               LayoutMinWidth: =96
                               Size: =constStyle.BasicStyle.FontSize.Small
-                              Text: =ThisItem.DisplayName
-                              Visible: =cmp_Navigation.Navigation
+                              # Blank the text rather than toggle Visible:
+                              # this is a FLEXIBLE (FillPortions: =1) child —
+                              # Power Apps drops an invisible child from
+                              # auto-layout entirely, which collapses the gap
+                              # it held instead of just hiding its content
+                              # (check_layout.py's Rule 4). btn_Navigation's
+                              # own AccessibleLabel already carries the name
+                              # when collapsed, so blanking here loses nothing.
+                              Text: =If(cmp_Navigation.Navigation, ThisItem.DisplayName, "")
                               Width: =96

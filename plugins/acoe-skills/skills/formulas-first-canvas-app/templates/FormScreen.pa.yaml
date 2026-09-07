@@ -70,6 +70,11 @@ Screens:
                   - lbl_Form_TitleLabel:
                       Control: ModernText
                       Properties:
+                        # AutoHeight: without it (or an explicit Height), a
+                        # leaf control in an auto-layout container has no
+                        # sizing info at all and collapses to its control
+                        # default — check_layout.py's Rule 3.
+                        AutoHeight: =true
                         Size: =constStyle.BasicStyle.FontSize.Small
                         Text: ="Title"
                         FontWeight: =FontWeight.Semibold
@@ -87,6 +92,7 @@ Screens:
                   - lbl_Form_StatusLabel:
                       Control: ModernText
                       Properties:
+                        AutoHeight: =true
                         Size: =constStyle.BasicStyle.FontSize.Small
                         Text: ="Status"
                         FontWeight: =FontWeight.Semibold
@@ -105,6 +111,7 @@ Screens:
                   - lbl_Form_AmountLabel:
                       Control: ModernText
                       Properties:
+                        AutoHeight: =true
                         Size: =constStyle.BasicStyle.FontSize.Small
                         Text: ="Amount"
                         FontWeight: =FontWeight.Semibold

@@ -50,9 +50,15 @@ ComponentDefinitions:
             - ico_Empty:
                 Control: Icon
                 Properties:
+                  # Explicit size: without FillPortions or Width/Height, a
+                  # leaf control in an auto-layout container has no sizing
+                  # info at all and collapses to its control default
+                  # (check_layout.py's Rule 3).
+                  Height: =40
                   Icon: =cmp_Empty.Icon
                   IconColor: =constPrimaryColor.RGBA
                   IconStyle: ='Icon.IconStyle'.Filled
+                  Width: =40
             - lbl_Empty:
                 Control: ModernText
                 Properties:

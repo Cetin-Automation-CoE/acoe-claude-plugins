@@ -26,7 +26,7 @@ template's entity-agnostic middle layers. See templates/App.pa.yaml's
 model-driven build come from model.yaml (`app_name`, `brand`), not the CLI.
 
 Either way, the command then verifies its own output — first that every
-written file parses as YAML, then the five check_*.py guard scripts — and
+written file parses as YAML, then the six check_*.py guard scripts — and
 refuses to leave a broken tree behind.
 
 There is no local path to an importable .msapp: `pac canvas pack` is deprecated
@@ -75,6 +75,32 @@ ALL_COMPONENTS = [
     # a target app, not required by it.
     "cmp_FieldText", "cmp_FieldChoice", "cmp_FieldDate", "cmp_FieldNumber",
 ]
+
+# model.py already validates model.yaml's `frame:` field against these three
+# values (headermain being the implicit default there) — this is the CLI-side
+# equivalent for a --name build, which has no model.yaml to read it from.
+FRAME_CHOICES = ("headermain", "headermainfooter", "headerrailmain")
+FRAME_SCREEN_NAMES = {
+    "headermainfooter": "FrameHeaderMainFooter",
+    "headerrailmain": "FrameHeaderRailMain",
+}
+
+
+def write_frame(out, frame):
+    """Copy the reference frame layout for `frame` (one of FRAME_CHOICES) into
+    the output tree as Frame.pa.yaml, and return the Screen name it defines —
+    or None for "headermain", which needs no extra file: the stock screens
+    (and emit_screens.py's own output) already ARE a header+main layout.
+
+    Hand-authoring reference, not wired into emit_screens.py — the same
+    library pattern as the four field components (Controller Ruling 3): the
+    app author adapts the copied file by hand, this call only places it.
+    """
+    if frame == "headermain":
+        return None
+    text = (TEMPLATES / ("frame-%s.pa.yaml" % frame)).read_text(encoding="utf-8")
+    (out / "Frame.pa.yaml").write_text(text, encoding="utf-8")
+    return FRAME_SCREEN_NAMES[frame]
 
 def strip_header(text: str) -> str:
     """Drop the tokens file's usage header (the first // ==== ... ==== banner)."""
@@ -256,7 +282,13 @@ def main():
     ap.add_argument("--components", default="all",
                     help="'all' (default), 'none' for the formula layer only (no screens), "
                          "or a comma-separated subset of: " + ", ".join(ALL_COMPONENTS)
-                         + " (--name only — a --model build always writes all eight)")
+                         + " (--name only — a --model build always writes all twelve)")
+    ap.add_argument("--frame", default=None, choices=FRAME_CHOICES,
+                    help="reference chrome layout copied in as Frame.pa.yaml: "
+                         "'headermain' (default — no extra file, the stock "
+                         "screens already are this shape), 'headermainfooter' "
+                         "or 'headerrailmain'. --name only — a --model build's "
+                         "frame comes from model.yaml's own frame: field.")
     ap.add_argument("--force", action="store_true", help="overwrite a non-empty --out")
     args = ap.parse_args()
 
@@ -264,6 +296,11 @@ def main():
         sys.exit("error: --model and --name are mutually exclusive — a model-driven "
                   "build takes its app name from model.yaml's app_name field. Drop "
                   "--name (or drop --model).")
+
+    if args.model and args.frame is not None:
+        sys.exit("error: --frame and --model are mutually exclusive — a model-driven "
+                  "build takes its frame from model.yaml's own frame: field. Drop "
+                  "--frame (or drop --model).")
 
     # Ruling 1: load the model FIRST, before touching the filesystem at all,
     # so a bad model.yaml writes nothing.
@@ -325,14 +362,19 @@ def main():
             (out / (entity.form_screen + ".pa.yaml")).write_text(
                 emit_screens.emit_form_screen(entity, model), encoding="utf-8")
 
-        # ---- components: all eight, as today ------------------------------
+        # ---- components: all twelve, as today ------------------------------
         for c in chosen:
             shutil.copyfile(COMPONENTS / f"{c}.pa.yaml", out / "Components" / f"{c}.pa.yaml")
+
+        # ---- frame: reference layout named by model.yaml's own frame: field
+        frame_screen = write_frame(out, model.frame)
 
         # ---- _EditorState: every generated screen, entity by entity -------
         editor = ["EditorState:", "  ScreensOrder:"]
         for entity in model.entities:
             editor += ["    - %s" % entity.list_screen, "    - %s" % entity.form_screen]
+        if frame_screen:
+            editor.append("    - %s" % frame_screen)
         editor.append("  ComponentDefinitionsOrder:")
         editor += ["    - %s" % c for c in chosen]
         (out / "_EditorState.pa.yaml").write_text("\n".join(editor) + "\n", encoding="utf-8")
@@ -356,10 +398,16 @@ def main():
         for c in chosen:
             shutil.copyfile(COMPONENTS / f"{c}.pa.yaml", out / "Components" / f"{c}.pa.yaml")
 
+        # ---- frame: reference layout named by --frame (default: none) -----------
+        frame_screen = write_frame(out, args.frame or "headermain")
+
         # ---- _EditorState -------------------------------------------------------
         editor = ["EditorState:"]
-        if screens:
-            editor += ["  ScreensOrder:", "    - ListScreen", "    - FormScreen"]
+        screen_names = ["ListScreen", "FormScreen"] if screens else []
+        if frame_screen:
+            screen_names.append(frame_screen)
+        if screen_names:
+            editor += ["  ScreensOrder:"] + [f"    - {s}" for s in screen_names]
         if chosen:
             editor.append("  ComponentDefinitionsOrder:")
             editor += [f"    - {c}" for c in chosen]
@@ -408,6 +456,7 @@ def main():
         # collection directly.
         ("check_data_layer.py", ["--src", str(out), "--datasource-pattern", "__NO_DATASOURCE__"]),
         ("check_control_props.py", ["--src", str(out)]),
+        ("check_layout.py", ["--src", str(out)]),
     ]
     failed = 0
     for script, argv in checks:
@@ -423,8 +472,8 @@ def main():
         sys.exit(1)
 
     print(f"""
-All 5 local guards pass. That means: architecture, tokens, data layer, collection
-columns and control contracts are clean.
+All 6 local guards pass. That means: architecture, tokens, data layer, collection
+columns, control contracts and auto-layout sizing are clean.
 
 It does NOT mean the app compiles. There is no offline compile for Canvas Apps —
 `pac canvas pack` is deprecated and crashes, and `pac canvas validate` rejects every

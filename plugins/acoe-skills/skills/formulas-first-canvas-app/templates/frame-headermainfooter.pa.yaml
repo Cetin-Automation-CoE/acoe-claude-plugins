@@ -1,0 +1,58 @@
+# Header / Main / Footer frame — `--frame headermainfooter` (or model.yaml's
+# `frame: headermainfooter`). Reference layout, copied to Frame.pa.yaml: adapt
+# the header/footer content for your app, but keep the SIZING formula — that
+# is the part this file exists to get right.
+#
+# Sizing, top to bottom:
+#   - con_Frame_Header and con_Frame_Footer are PINNED (FillPortions: =0) —
+#     each carries an explicit Height, or it collapses to its control
+#     default the moment it sits in this auto-layout container
+#     (check_layout.py's Rule 1 — LayoutMinHeight would NOT substitute here).
+#   - con_Frame_Main is the ONE flexible region (FillPortions: =1). Its own
+#     Height is computed as Parent.Height MINUS the header's and footer's own
+#     Height properties — never a re-typed literal, so the frame stays
+#     correct if either chrome piece's height token changes later.
+#
+# Not wired into emit_screens.py — Controller Ruling 3's hand-authoring
+# library pattern applies here too: this is a starting point to adapt, not a
+# generator output.
+Screens:
+  FrameHeaderMainFooter:
+    Properties:
+      Fill: =constReactGray.RGBA
+    Children:
+      - con_Frame_Header:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderStyle: =BorderStyle.None
+            Fill: =constPrimaryColor.RGBA
+            FillPortions: =0
+            Height: =constStyle.Header.Height
+            LayoutAlignItems: =LayoutAlignItems.Center
+            LayoutDirection: =LayoutDirection.Horizontal
+            Width: =Parent.Width
+
+      - con_Frame_Main:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderStyle: =BorderStyle.None
+            FillPortions: =1
+            Height: =Parent.Height - con_Frame_Header.Height - con_Frame_Footer.Height
+            LayoutAlignItems: =LayoutAlignItems.Stretch
+            LayoutDirection: =LayoutDirection.Vertical
+            LayoutOverflowY: =LayoutOverflow.Scroll
+            Width: =Parent.Width
+
+      - con_Frame_Footer:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderStyle: =BorderStyle.None
+            Fill: =constPaperColor.RGBA
+            FillPortions: =0
+            Height: =constStyle.Spacing.XXL
+            LayoutAlignItems: =LayoutAlignItems.Center
+            LayoutDirection: =LayoutDirection.Horizontal
+            Width: =Parent.Width
