@@ -159,6 +159,7 @@ ComponentDefinitions:
                   DisplayMode.Edit
               )
             FontColor: =constPaperColor.RGBA
+            FontSize: =constStyle.BasicStyle.FontSize.Small
             FontWeight: =FontWeight.Bold
             Height: =Parent.Height
             # State is carried by the icon as well as by colour: colour alone
@@ -179,7 +180,6 @@ ComponentDefinitions:
             OnSelect: =cmp_FilterButton.OnSelect()
             PaddingLeft: =constStyle.Spacing.S
             PaddingRight: =constStyle.Spacing.S
-            Size: =constStyle.BasicStyle.FontSize.Small
             TabIndex: =0
             Text: =cmp_FilterButton.Label
             Width: =Parent.Width
