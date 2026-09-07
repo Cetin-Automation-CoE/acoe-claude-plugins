@@ -578,7 +578,21 @@ def emit_list_screen(entity, model):
                 # IsEmpty(SelectedItems) never returns true, and the gallery
                 # stays empty until the first reset. (Baseline comment,
                 # translated; confirmed live 2026-09-07 — the grid read "0 of 16".)
-                ("DefaultSelectedItems", "=FirstN(%s, 0)" % entity.choices_table(f)),
+                #
+                # Ruling 6: this rationale must reach the GENERATED APP, not
+                # just this generator — a maker who opens the property in
+                # Studio and sees a bare `=FirstN(...)` with no explanation
+                # will delete it as redundant. So the SAME rationale is also
+                # embedded as a `//` Power Fx comment INSIDE the formula
+                # value itself, baseline-style (Activities.pa.yaml lines
+                # 156-161) — the Python comment above documents the
+                # generator; the formula comment below is what a maker
+                # actually sees.
+                ("DefaultSelectedItems",
+                 "=// Empty but TYPED default selection. Without it an untouched\n"
+                 "// ModernCombobox has no defined selection state, IsEmpty(SelectedItems)\n"
+                 "// never returns true, and the gallery stays empty until the first reset.\n"
+                 "FirstN(%s, 0)" % entity.choices_table(f)),
                 ("FillPortions", "=0"),
                 ("Height", "=constStyle.Combobox.Height.Medium"),
                 ("InputTextPlaceholder", "=%s" % _quote(f.label)),

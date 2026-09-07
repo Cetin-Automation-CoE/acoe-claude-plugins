@@ -425,23 +425,59 @@ class TestListScreenMatchesBaselineSkeleton(unittest.TestCase):
         self.text = es.emit_list_screen(self.e, small_model())
 
     def _props_of(self, control_name):
+        """Properties of one control, as {name: value}. A block-scalar
+        property (`k: |-` followed by indented lines — e.g.
+        DefaultSelectedItems once it carries an embedded `//` rationale,
+        Ruling 6) is returned with its FULL multi-line body joined by "\\n",
+        not just the `|-` marker: a helper that cannot see block scalars is
+        a blind spot for every future test that needs to inspect an
+        embedded-comment formula, not just this one."""
         lines = self.text.splitlines()
         start = next(i for i, l in enumerate(lines) if l.strip() == "- %s:" % control_name)
         indent = len(lines[start]) - len(lines[start].lstrip())
+        prop_indent = indent + 6
         props = {}
-        for l in lines[start + 1:]:
+        i = start + 1
+        while i < len(lines):
+            l = lines[i]
             if l.strip().startswith("- ") and (len(l) - len(l.lstrip())) <= indent:
                 break
             if l.strip() == "Children:":
                 break
-            if ":" in l and (len(l) - len(l.lstrip())) == indent + 6:
+            if ":" in l and (len(l) - len(l.lstrip())) == prop_indent:
                 k, _, v = l.strip().partition(":")
-                props[k] = v.strip()
+                v = v.strip()
+                if v in ("|-", "|"):
+                    body = []
+                    j = i + 1
+                    while j < len(lines) and (
+                            lines[j].strip() == ""
+                            or (len(lines[j]) - len(lines[j].lstrip())) > prop_indent):
+                        body.append(lines[j].strip())
+                        j += 1
+                    props[k] = "\n".join(body)
+                    i = j
+                    continue
+                props[k] = v
+            i += 1
         return props
 
     def test_no_horizontal_main_wrapper(self):
-        """The wrapper is what made the nav flex to half the screen."""
-        self.assertNotIn("con_%sList_Main" % self.e.plural, self.text)
+        """Structural, not textual (Ruling 7): a future regression that
+        renests nav+list under a DIFFERENTLY NAMED horizontal wrapper — not
+        literally `con_<Plural>List_Main` — must still fail here. Parse the
+        real YAML and require both controls to be DIRECT entries of the
+        screen's own Children list, not nested one level inside some other
+        container, named or not. (A `grep`-style textual check of the old
+        wrapper's literal name would pass even if a regression renamed it.)
+        """
+        data = yaml.safe_load(self.text)
+        children = data["Screens"][self.e.list_screen]["Children"]
+        direct_names = set()
+        for child in children:
+            direct_names.update(child.keys())
+        self.assertIn("cmp_%sList_Navigation" % self.e.plural, direct_names)
+        self.assertIn("con_%sList_List" % self.e.plural, direct_names)
 
     def test_nav_is_a_direct_screen_child_with_self_sizing_width(self):
         p = self._props_of("cmp_%sList_Navigation" % self.e.plural)
@@ -458,13 +494,36 @@ class TestListScreenMatchesBaselineSkeleton(unittest.TestCase):
 
     def test_every_filter_combobox_has_typed_empty_default_and_placeholder(self):
         """An untouched ModernCombobox has no defined selection state, so
-        IsEmpty(SelectedItems) never returns true and the grid reads 0 of N."""
+        IsEmpty(SelectedItems) never returns true and the grid reads 0 of N.
+
+        Ruling 6: DefaultSelectedItems is now a block scalar carrying the
+        rationale as an embedded `//` Power Fx comment (baseline-style) —
+        the deliverable is the GENERATED APP, and a maker opening this
+        property in Studio must see WHY it exists, not just a bare
+        `=FirstN(...)` that looks deletable. Assert the formula CONTAINS
+        the call and the rationale text, not exact equality, since the
+        comment lines are part of the value now."""
         for f in self.e.filter_fields:
             p = self._props_of("com_%sList_%sFilter" % (self.e.plural, f.name))
-            self.assertEqual(p["DefaultSelectedItems"],
-                             "=FirstN(%s, 0)" % self.e.choices_table(f), f.name)
+            default_selected = p["DefaultSelectedItems"]
+            self.assertIn("FirstN(%s, 0)" % self.e.choices_table(f),
+                          default_selected, f.name)
+            self.assertIn("IsEmpty(SelectedItems)", default_selected, f.name)
             self.assertEqual(p["InputTextPlaceholder"], '="%s"' % f.label, f.name)
+            # Minor: emitted but previously untested.
+            self.assertEqual(p["IsSearchable"], "=false", f.name)
             self.assertEqual(p["ItemDisplayText"], "=ThisItem.Value", f.name)
+
+    def test_header_width_matches_cell_width_per_grid_field(self):
+        """Minor: guaranteed by construction today, since both the header
+        and the cell call the SAME `_column_dims(field)` — locked here so a
+        future change to either call site cannot let them silently drift
+        apart (a header wider or narrower than its own column's cells is a
+        visibly broken grid, not just a cosmetic mismatch)."""
+        for f in self.e.grid_fields:
+            head = self._props_of(self.e.head_control(f))
+            cell = self._props_of(self.e.cell_control(f))
+            self.assertEqual(head["Width"], cell["Width"], f.name)
 
     def test_no_flex_column_and_min_widths_everywhere(self):
         """A FillPortions=1 header crushes fixed siblings on a narrow canvas."""
