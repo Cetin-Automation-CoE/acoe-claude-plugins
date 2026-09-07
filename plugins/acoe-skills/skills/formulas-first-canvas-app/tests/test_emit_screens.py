@@ -553,5 +553,21 @@ class TestFlexColumnBecomesWideFixed(unittest.TestCase):
             self.assertEqual(es._column_px(f[0]), 240)
 
 
+class TestGallerySortUsesUdfs(unittest.TestCase):
+    def test_no_raw_lookup_on_colsorts_in_items(self):
+        text = es.emit_list_screen(entity(), small_model())
+        # [-1], not [1]: entity() has a Status filter field, so the toolbar's
+        # combobox emits its own "DefaultSelectedItems: |-" property FIRST —
+        # a substring match on "Items: |-" fires there too (it ends in
+        # exactly that text), so [1] captures the span between that filter
+        # property and the gallery's OWN Items line, not the gallery's Items
+        # body. The gallery's Items is always the LAST such match: every
+        # filter combobox is toolbar chrome that renders before the table.
+        items = text.split("Items: |-")[-1].split("TemplateSize")[0]
+        self.assertNotIn("LookUp(colSorts", items)
+        self.assertIn("funcTableSortColumn(enumEntity.", items)
+        self.assertIn('funcTableSortOrder(enumEntity.', items)
+
+
 if __name__ == "__main__":
     unittest.main()

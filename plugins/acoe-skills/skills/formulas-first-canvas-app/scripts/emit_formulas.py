@@ -24,10 +24,16 @@ Scope: this module owns the layers that are driven by the entity model —
 enums (`enumScreenType`, `enumEntity`), one choices table per choice field,
 the per-entity data-access layer (scope formula, load/save/delete UDFs), and
 the `constScreens` registry. Colour tokens, the style object, scalar
-constants, pure helper UDFs and derived values (the template's combined
-"1-4" banner, plus its numbered 5 and 6) are entity-agnostic and are not
-part of this module's contract — see `templates/design-tokens.pa.yaml`,
-which `scripts/new_app.py` already inlines into `App.pa.yaml` separately.
+constants and derived values (the template's combined "1-4" banner, plus its
+numbered 6) are entity-agnostic and are not part of this module's contract —
+see `templates/design-tokens.pa.yaml`, which `scripts/new_app.py` already
+inlines into `App.pa.yaml` separately. The one deliberate exception is
+`funcTableSortColumn`/`funcTableSortOrder` (`_sort_udf_specs`): also
+entity-agnostic and emitted only once, but scoped to THIS module (not
+`templates/App.pa.yaml`'s static banner 5) because the model-driven gallery
+`emit_screens.py` generates is their only caller — a `--name` scaffold's
+generic screen keeps calling `LookUp(colSorts, ...)` directly, unchanged,
+as it always has.
 Emitted banner numbers match `templates/App.pa.yaml`'s real scheme (read
 there before changing them): this module's vocabularies fall inside its
 "1-4" banner, its data-access layer is "7", its registry is "8".
@@ -91,8 +97,11 @@ _DATA_END_BANNER = (
 # there, don't guess): the template bundles colour tokens, the style object,
 # vocabularies AND scalar constants under ONE combined "1-4" banner; pure
 # helper UDFs are 5; derived values are 6; the data-access layer is 7;
-# registries are 8; UI utility UDFs are 9. This module only ever emits
-# vocabularies (enums + choices tables, part of "1-4"), the data-access
+# registries are 8; UI utility UDFs are 9. This module emits vocabularies
+# (enums + choices tables, part of "1-4"), the two entity-agnostic sort-
+# helper UDFs (part of "5" — the template's OWN static helpers, funcDays-
+# Between/funcStartLoading/funcStopLoading, occupy the rest of that banner,
+# unchanged, immediately after this module's splice point), the data-access
 # layer (7) and the registry (8) — so those are the only banners below.
 # Task 5 splices this module's output into that template; renumbering here
 # without checking there would produce two different "7." sections.
@@ -104,6 +113,14 @@ _LAYER_HEADER = {
              "      // Every dropdown, filter and validation reads these tables. A\n"
              "      // value that exists in the UI but not here is a value nothing\n"
              "      // can validate.",
+    "helpers": "      // ############ 5. PURE HELPER UDFs ############\n"
+               "      // Scalar in, scalar out, entity-agnostic — emitted ONCE per\n"
+               "      // app, not once per entity. The gallery calls these instead\n"
+               "      // of a raw LookUp(colSorts, ...): that goes blank the moment\n"
+               "      // an entity has no colSorts row, and SortByColumns on a\n"
+               "      // blank column name errors with no message. The template's\n"
+               "      // OWN helpers (funcDaysBetween, funcStartLoading/\n"
+               "      // funcStopLoading) follow immediately after, unchanged.",
     "data": "      // ############ 7. DATA ACCESS LAYER ############\n" + _DATA_BEGIN_BANNER,
     "registry": "      // ############ 8. REGISTRIES AND NAVIGATION ############\n"
                 "      // MUST come last: these read layer-7 formulas and the enum\n"
@@ -178,6 +195,37 @@ def _choices_spec(entity, field):
         "      );"
     ) % (entity.entity, field.name, name)
     return ("vocab", name, text)
+
+
+def _sort_udf_specs():
+    """Baseline pattern (reference app's App.pa.yaml, `funcTableSortColumn`/
+    `funcTableSortOrder` near line 2254). A raw LookUp(colSorts, Table =
+    pTable).ID is blank whenever `pTable`'s entity has no row in colSorts
+    yet, and SortByColumns on a blank column name errors — the gallery
+    renders nothing, with no message. Coalesce to a column every entity has
+    (Key, model.py's reserved key column) and to ascending order, so the
+    gallery's SortByColumns never receives a blank.
+
+    Entity-agnostic and emitted exactly ONCE per app, never once per entity:
+    every gallery calls the SAME two UDFs, passing its own entity's
+    enumEntity member as pTable. Layered as "helpers" (banner 5) — before
+    the data layer and the registry — purely for tidiness: nothing in this
+    module's own output actually forward-references these by name (a
+    `func*` block is never itself a dependency-graph hazard here, per
+    `check_references.py`'s own order check), but declaring them early
+    mirrors the baseline and keeps them next to the app's other pure
+    helpers rather than buried after the per-entity data layer.
+    """
+    col = (
+        "      funcTableSortColumn(pTable: Text): Text =\n"
+        "          Coalesce(LookUp(colSorts, Table = pTable).ID, \"Key\");"
+    )
+    order = (
+        "      funcTableSortOrder(pTable: Text): Text =\n"
+        "          Coalesce(LookUp(colSorts, Table = pTable).SortOrder, \"asc\");"
+    )
+    return [("helpers", "funcTableSortColumn", col),
+            ("helpers", "funcTableSortOrder", order)]
 
 
 def _scope_spec(entity):
@@ -424,6 +472,7 @@ def _all_specs(model, rows, today):
     for entity in model.entities:
         for field in entity.choice_fields:
             specs.append(_choices_spec(entity, field))
+    specs.extend(_sort_udf_specs())
     for entity in model.entities:
         specs.extend(_entity_data_layer_specs(entity, rows, today))
     specs.append(_registry_spec(model))
@@ -442,7 +491,8 @@ def _known_names(model):
     dependency the moment one is introduced — the same fragility this fix
     round exists to close.
     """
-    names = {"enumScreenType", "enumEntity", "constScreens"}
+    names = {"enumScreenType", "enumEntity", "constScreens",
+              "funcTableSortColumn", "funcTableSortOrder"}
     for entity in model.entities:
         for field in entity.choice_fields:
             names.add(entity.choices_table(field))

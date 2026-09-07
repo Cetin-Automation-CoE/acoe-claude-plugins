@@ -285,5 +285,28 @@ class TestGeneratedKeyOnCreate(unittest.TestCase):
         self.assertNotIn("IsBlank(LookUp(", self.text)
 
 
+class TestSortUdfs(unittest.TestCase):
+    def setUp(self):
+        self.text = ef.emit_all(two_entity_model(), rows=4, today=TODAY)
+
+    def test_both_udfs_emitted_once(self):
+        self.assertEqual(self.text.count("funcTableSortColumn(pTable: Text): Text ="), 1)
+        self.assertEqual(self.text.count("funcTableSortOrder(pTable: Text): Text ="), 1)
+
+    def test_sort_column_defaults_when_colsorts_has_no_row(self):
+        """A blank column name makes SortByColumns error and the grid go empty."""
+        body = self.text.split("funcTableSortColumn(pTable: Text): Text =")[1].split(";")[0]
+        self.assertIn("Coalesce(", body)
+        self.assertIn('"Key"', body)
+
+    def test_sort_order_defaults_to_asc(self):
+        body = self.text.split("funcTableSortOrder(pTable: Text): Text =")[1].split(";")[0]
+        self.assertIn('Coalesce(', body)
+        self.assertIn('"asc"', body)
+
+    def test_udf_parameter_uses_p_prefix(self):
+        self.assertNotIn("(TableName: Text)", self.text)
+
+
 if __name__ == "__main__":
     unittest.main()
