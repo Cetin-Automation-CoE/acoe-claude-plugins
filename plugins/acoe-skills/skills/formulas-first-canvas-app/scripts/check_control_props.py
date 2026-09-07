@@ -498,7 +498,12 @@ def main():
     if token_text:
         resolver = make_resolver(parse_tokens(token_text))
 
-    comp_dirs = [src, src / "Components", SKILL / "components"]
+    # C4 (Ruling 16): the skill's own bundled components/ are a FALLBACK — a
+    # target app's own copy of, say, cmp_Header must win. Precedence is
+    # decided by dict.update() overwrite order: list the skill's fallback
+    # copies FIRST so anything the target repo defines under Components/ or
+    # directly under --src is applied afterwards and wins.
+    comp_dirs = [SKILL / "components", src / "Components", src]
     comp_paths = []
     for d in comp_dirs:
         if d.exists():
