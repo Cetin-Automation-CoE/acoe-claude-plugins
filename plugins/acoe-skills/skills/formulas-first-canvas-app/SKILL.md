@@ -134,9 +134,18 @@ with section banners: `references/app-formulas-layout.md`.
 
 ## Guard scripts
 
-Copy `scripts/` into the target repo and run all five alongside every compile. The
-four `check_*` scripts and `inventory.py` are standalone; `new_app.py` reads
-`templates/` and `components/` relative to itself, so run it from the skill tree.
+| Script | Checks |
+|---|---|
+| `check_tokens.py` | No colour, font-size or radius literal on a screen — everything routes through `constStyle` / `const*Color`. |
+| `check_data_layer.py` | No data-source name outside the data-access region. |
+| `check_collection_columns.py` | Every column a gallery or form reads off a collection actually exists on it. |
+| `check_references.py` | Every name resolves, and `App.Formulas` declaration order is safe for the Studio binder. |
+| `check_control_props.py` | Control properties match `references/control-contracts.yaml` — property names, renamed-away names, and enum namespaces, resolved through design tokens and component declarations. |
+
+Copy `scripts/` into the target repo and run all six alongside every compile: the
+five `check_*.py` guards plus `inventory.py`. All six are standalone; `new_app.py`
+reads `templates/` and `components/` relative to itself, so run it from the skill
+tree.
 
 ```bash
 python3 scripts/inventory.py           --src <Src/>   # read-only census (rung 1)
@@ -144,15 +153,30 @@ python3 scripts/check_tokens.py        --src <Src/>   # no literals outside the 
 python3 scripts/check_data_layer.py    --src <Src/> --datasource-pattern 'PP_[A-Za-z]'
 python3 scripts/check_collection_columns.py --src <Src/>
 python3 scripts/check_references.py    --src <Src/>   # names resolve; declaration order is safe
+python3 scripts/check_control_props.py --src <Src/> --tokens-file <Src/>/App.pa.yaml
 ```
 
-`new_app.py` runs all four on its own output, so a fresh scaffold starts clean.
+`new_app.py` runs all five `check_*.py` guards on its own output, so a fresh
+scaffold starts clean.
 
 Each takes `--help`. `check_*` exit non-zero on violation, so they drop straight into
 CI or a pre-commit hook.
 
 **Write the guard before the sweep it protects.** A convention with no script rots back
 within two sprints, and the second time it rots nobody notices.
+
+## The verification loop
+
+There is no offline compile. Local guards are the only pre-push signal, so run them
+all, then close the loop against a live session:
+
+    draft model → generate → local guards → push (compile_canvas)
+                                   ↑                    ↓
+                                   └──── fix ──── parse errors
+
+The five `check_*.py` guards catch architecture, tokens, data layer, collection
+columns and control contracts. Each prints what it does NOT cover. Everything else
+needs `compile_canvas`.
 
 ## Traps that cost real days
 
@@ -214,6 +238,8 @@ within two sprints, and the second time it rots nobody notices.
 | `references/design-system.md` | Token layer, AA contrast, type scale, spacing grid |
 | `references/component-library.md` | The eight components: contracts, what changed, what is missing |
 | `references/refactoring-legacy-apps.md` | **Brownfield ladder — six rungs with gates** |
+| `references/control-dialects.md` | The two control generations, their diverging property names and enum namespaces, and how to tell which one a tree is using |
+| `references/control-contracts.yaml` | Machine-readable control contracts `check_control_props.py` checks against — evidence-backed against a compiled app, not inferred |
 
 **Visual spec sheet** — swatches, live-computed contrast, type scale and control specs,
 rendered: https://claude.ai/code/artifact/cdff9a80-7b84-4f56-9ce2-beaa4152424d

@@ -14,7 +14,7 @@ This file is for people. The file Claude reads is `SKILL.md`.
 | Requirement | Why |
 |---|---|
 | Claude Code with the `acoe-skills` plugin installed | The skill loads automatically when you talk about canvas apps |
-| Python 3.9 or newer | The scaffolder and the five guard scripts are Python, no packages needed |
+| Python 3.9 or newer | The scaffolder, `inventory.py` and the five `check_*.py` guard scripts are Python, no packages needed |
 | The `canvas-apps` plugin (Canvas Authoring MCP) | The only way to compile and push `.pa.yaml` source into a live app |
 | Power Apps Studio access | You create the blank app and keep its tab open while Claude pushes |
 
@@ -118,8 +118,8 @@ Ask Claude: *"Add a Contracts entity with a list and a form screen."*
 
 ## 4. Check an app's health
 
-Five scripts, all read-only except that four of them exit non-zero when they find a
-violation, so they drop straight into a pre-commit hook or CI.
+Six scripts, all read-only except that the five `check_*.py` guards exit non-zero
+when they find a violation, so they drop straight into a pre-commit hook or CI.
 
 ```bash
 python3 scripts/inventory.py                --src Src/                 # census, never fails
@@ -127,13 +127,17 @@ python3 scripts/check_tokens.py             --src Src/                 # no colo
 python3 scripts/check_data_layer.py         --src Src/ --datasource-pattern 'PP_[A-Za-z]'
 python3 scripts/check_collection_columns.py --src Src/                 # every column you read exists
 python3 scripts/check_references.py         --src Src/                 # every name resolves, in a safe order
+python3 scripts/check_control_props.py      --src Src/ --tokens-file Src/App.pa.yaml  # control properties match their control's contract
 ```
 
 **Why bother when the app compiles?** The compiler does not check column names on
 collections, does not validate the string column names in `SortByColumns`, and the
 Studio binder rejects forward references that the compile service accepts. Each of
-those fails at runtime or shows up as dozens of unrelated errors. The scripts catch
-them in a second.
+those fails at runtime or shows up as dozens of unrelated errors. `check_control_props.py`
+adds a fourth class: a property name that belongs to the *other* control generation,
+or a design-token value from the wrong dialect, both of which read fine in the YAML
+and fail only at compile. None of the six scripts replaces a live compile — they
+narrow what a `compile_canvas` push still needs to catch.
 
 Ask Claude: *"Run the guards on this app and tell me what is off."*
 
@@ -215,10 +219,15 @@ colours or sizes.
 formulas-first-canvas-app/
   SKILL.md              what Claude reads: the six rules, naming, traps, references
   README.md             this file
-  scripts/              new_app.py scaffolder + inventory.py + four check_*.py guards
+  scripts/              new_app.py scaffolder + inventory.py + five check_*.py guards,
+                        including check_control_props.py
   templates/            App.pa.yaml, design-tokens.pa.yaml, ListScreen, FormScreen,
                         inventory.md and findings.csv report templates
   components/           the eight cmp_*.pa.yaml files
   references/           layout order, Power Fx limits, data layer, design system,
-                        component library, the refactoring ladder
+                        component library, the refactoring ladder, control dialects
+                        (control-dialects.md) and the machine-readable contracts
+                        check_control_props.py checks against (control-contracts.yaml)
+  tests/                unittest suite for the guards — run with
+                        `python3 -m unittest discover -s tests`
 ```
