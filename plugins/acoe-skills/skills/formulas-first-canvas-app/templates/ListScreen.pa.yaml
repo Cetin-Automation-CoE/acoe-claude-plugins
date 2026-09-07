@@ -101,7 +101,6 @@ Screens:
                               FillPortions: =0
                               Height: =constStyle.Label.TextInput.Height.SingleLine
                               Placeholder: ="Search"
-                              TabIndex: =0
                               Width: =280
                         - com_List_StatusFilter:
                             Control: ModernCombobox
@@ -112,7 +111,6 @@ Screens:
                               # The vocabulary, not a re-typed list of strings.
                               Items: =constStatusChoices
                               SelectMultiple: =true
-                              TabIndex: =0
                               Width: =200
                         # Each verb is gated on the SAME expression that guards
                         # the function behind it. A hidden button is not a
@@ -267,7 +265,6 @@ Screens:
                                       =Set(glSelectedKey, ThisItem.Key);
                                       funcAddBack();
                                       Navigate(FormScreen)
-                                    TabIndex: =0
                                     Text: ="Open"
 
                   # ---- empty state: same base as the gallery ----------------

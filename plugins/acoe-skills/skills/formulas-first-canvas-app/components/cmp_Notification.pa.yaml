@@ -319,7 +319,6 @@ ComponentDefinitions:
                                         )
                                     )
                                 );
-                              TabIndex: =0
                               Text: =""
                               Width: =35
                   - lbl_Notification_Description:

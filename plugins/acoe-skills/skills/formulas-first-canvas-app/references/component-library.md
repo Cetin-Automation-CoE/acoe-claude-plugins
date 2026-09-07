@@ -61,7 +61,8 @@ Every difference, so you can diff against your own copy if you have one:
 | `cmp_Dialog` | Date picker now opt-in via `ShowDatePicker` (default `false`) | A generic dialog should not carry one screen's requirement. |
 | `cmp_Navigation` | Removed dead commented blocks and a hardcoded Czech label; tokenised | — |
 | `cmp_FilterButton` | Accessible label now announces filtered/sorted state | Colour and icon alone do not reach a screen reader. |
-| All | `AccessibleLabel` and `TabIndex` on every interactive control | This is normally the largest single app-checker finding count, and it is mechanical. |
+| All | `AccessibleLabel` on every interactive control | This is normally the largest single app-checker finding count, and it is mechanical. |
+| All | **Not** `TabIndex` | Removed 2026-09-07 after a live `compile_canvas` run rejected it as an unknown property on `ModernTextInput`/`ModernCombobox`/`ModernDatePicker`/`Button` — see `references/control-contracts.yaml`'s provenance comment. |
 
 ## Known wart
 

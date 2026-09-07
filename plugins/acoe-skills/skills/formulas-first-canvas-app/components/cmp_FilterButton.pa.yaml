@@ -180,6 +180,5 @@ ComponentDefinitions:
             OnSelect: =cmp_FilterButton.OnSelect()
             PaddingLeft: =constStyle.Spacing.S
             PaddingRight: =constStyle.Spacing.S
-            TabIndex: =0
             Text: =cmp_FilterButton.Label
             Width: =Parent.Width

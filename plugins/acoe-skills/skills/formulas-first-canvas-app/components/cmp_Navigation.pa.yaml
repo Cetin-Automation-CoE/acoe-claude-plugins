@@ -101,7 +101,6 @@ ComponentDefinitions:
                         IconStyle: ='ButtonCanvas.IconStyle'.Filled
                         Layout: ='ButtonCanvas.Layout'.IconOnly
                         OnSelect: =cmp_Navigation.OnBack()
-                        TabIndex: =0
                         Text: ="Back"
                         Width: =32
                   - lbl_Navigation_Back:
@@ -131,7 +130,6 @@ ComponentDefinitions:
                   Items: =Filter(cmp_Navigation.Screens, Type = enumScreenType.List)
                   LayoutMinWidth: =Parent.Width
                   LoadingSpinner: =LoadingSpinner.None
-                  TabIndex: =0
                   TemplatePadding: =0
                   TemplateSize: =50
                 Children:
@@ -180,7 +178,6 @@ ComponentDefinitions:
                               OnSelect: |-
                                 =cmp_Navigation.OnClose();
                                 Navigate(ThisItem.Screen)
-                              TabIndex: =0
                               Text: =ThisItem.DisplayName
                               Width: =32
                         - lbl_Navigation_DisplayName:

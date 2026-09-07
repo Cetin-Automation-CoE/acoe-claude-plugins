@@ -462,7 +462,6 @@ def emit_list_screen(entity, model):
             ("OnSelect", "=Set(glSelectedKey, ThisItem.Key);\n"
                          "funcAddBack();\n"
                          "Navigate(%s)" % entity.form_screen),
-            ("TabIndex", "=0"),
             ("Text", "=%s" % _quote("Open")),
         ])
     row_children.append(open_btn)
@@ -525,7 +524,6 @@ def emit_list_screen(entity, model):
             ("FillPortions", "=0"),
             ("Height", "=constStyle.Label.TextInput.Height.SingleLine"),
             ("Placeholder", "=%s" % _quote("Search")),
-            ("TabIndex", "=0"),
             ("Width", "=280"),
         ])]
     for f in entity.filter_fields:
@@ -540,7 +538,6 @@ def emit_list_screen(entity, model):
                 ("Height", "=constStyle.Combobox.Height.Medium"),
                 ("Items", "=%s" % entity.choices_table(f)),
                 ("SelectMultiple", "=true"),
-                ("TabIndex", "=0"),
                 ("Width", "=200"),
             ]))
     toolbar_children.append(_block(
@@ -701,7 +698,6 @@ def _boolean_form_input(entity, field, dirty_setter):
         ("Items", "=%s" % yes_no),
         ("OnChange", dirty_setter),
         ("SelectMultiple", "=false"),
-        ("TabIndex", "=0"),
     ]
 
 
@@ -719,7 +715,6 @@ def _form_input_block(entity, field, item_indent):
             ("Height", "=constStyle.Label.TextInput.Height.%s"
              % ("MultiLine" if field.type == "longtext" else "SingleLine")),
             ("OnChange", dirty_setter),
-            ("TabIndex", "=0"),
         ]
         if field.type == "longtext":
             props.append(("Type", "=TextInputType.Multiline"))
@@ -735,7 +730,6 @@ def _form_input_block(entity, field, item_indent):
             ("Default", "=Text(%s)" % loc_ref),
             ("Height", "=constStyle.Label.TextInput.Height.SingleLine"),
             ("OnChange", dirty_setter),
-            ("TabIndex", "=0"),
         ]
     elif field.type == "choice":
         control_type = "ModernCombobox"
@@ -747,7 +741,6 @@ def _form_input_block(entity, field, item_indent):
             ("Items", "=%s" % entity.choices_table(field)),
             ("OnChange", dirty_setter),
             ("SelectMultiple", "=false"),
-            ("TabIndex", "=0"),
         ]
     elif field.type == "date":
         control_type = "ModernDatePicker"
@@ -761,7 +754,6 @@ def _form_input_block(entity, field, item_indent):
             # same card use for a single-line field.
             ("Height", "=constStyle.Label.TextInput.Height.SingleLine"),
             ("OnChange", dirty_setter),
-            ("TabIndex", "=0"),
         ]
     elif field.type == "boolean":
         control_type, props = _boolean_form_input(entity, field, dirty_setter)
@@ -890,7 +882,6 @@ def emit_form_screen(entity, model):
             ("BasePaletteColor", "=constSecondaryColor.RGBA"),
             ("Height", "=constStyle.Button.Height.Medium"),
             ("OnSelect", "=UpdateContext({locConfirmDelete: true})"),
-            ("TabIndex", "=0"),
             ("Text", "=%s" % _quote("Delete")),
             ("Visible", "=!IsBlank(glSelectedKey)"),
         ])
@@ -900,7 +891,6 @@ def emit_form_screen(entity, model):
             ("AccessibleLabel", "=%s" % _quote("Discard changes and go back")),
             ("Height", "=constStyle.Button.Height.Medium"),
             ("OnSelect", "=funcGoBack()"),
-            ("TabIndex", "=0"),
             ("Text", "=%s" % _quote("Cancel")),
         ])
     save_btn = _block(
@@ -925,7 +915,6 @@ def emit_form_screen(entity, model):
              "UpdateContext({locDirty: false});\n"
              "funcNotifySuccess(\"%s saved.\");\n"
              "funcGoBack()" % (entity.func_save, ",\n    ".join(save_args), entity.entity)),
-            ("TabIndex", "=0"),
             ("Text", "=%s" % _quote("Save")),
         ])
     actions_block = _block(

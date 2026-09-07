@@ -86,6 +86,21 @@ class TestContractsWellFormed(unittest.TestCase):
         self.assertNotIn("Color", c["Button"]["properties"])
         self.assertNotIn("Fill", c["Button"]["properties"])
 
+    def test_tabindex_is_absent_everywhere_live_compile_2026_09_07(self):
+        """A live `compile_canvas` run rejected `TabIndex` with "Unknown
+        property 'TabIndex'" on ModernTextInput, ModernCombobox,
+        ModernDatePicker and Button — 52 of 59 errors in that run. It had
+        been carried in this file's `properties` lists since the original
+        Microsoft-Learn seeding and was never corpus-verified (zero
+        occurrences in the provably-compiled reference app). Must be absent
+        from every control's `properties` and curated as a hard-error
+        `absent` entry everywhere it used to appear."""
+        c = self.data["controls"]
+        for name in ("ModernText", "Text", "ModernTextInput", "ModernCombobox",
+                     "ModernDatePicker", "Button", "ModernButton@1.0.0", "Gallery"):
+            self.assertNotIn("TabIndex", c[name]["properties"], name)
+            self.assertIn("TabIndex", c[name].get("absent") or [], name)
+
 
 if __name__ == "__main__":
     unittest.main()

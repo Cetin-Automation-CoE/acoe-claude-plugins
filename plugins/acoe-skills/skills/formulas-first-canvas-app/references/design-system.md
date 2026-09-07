@@ -123,7 +123,11 @@ Canvas apps are usually fixed-frame, so responsive rules do not apply, but these
 - **`AccessibleLabel` on every icon-only button.** This is normally the largest single
   finding count in the app checker, and it is mechanical to fix — a sweep can take a
   finding count from the hundreds to single digits in one pass.
-- **`TabIndex`** deliberate on interactive controls; `-1` on decorative ones.
+- **Do NOT set `TabIndex`** on `ModernTextInput`, `ModernCombobox`, `ModernDatePicker`,
+  or `Button` — a live `compile_canvas` run (2026-09-07) rejected it on all four with
+  "Unknown property 'TabIndex'" (see `references/control-contracts.yaml`'s provenance
+  comment and `references/compile-error-playbook.md`). Tab order is document order;
+  there is no substitute property.
 - **Never colour alone** for state. Pair the dot with a word.
 - Re-run `get_appchecker_errors` after the sweep — it uses a laxer engine than compile
   and is the only place these findings surface.

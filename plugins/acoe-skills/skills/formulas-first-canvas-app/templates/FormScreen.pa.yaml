@@ -87,7 +87,6 @@ Screens:
                         Height: =constStyle.Label.TextInput.Height.SingleLine
                         OnChange: |-
                           =UpdateContext({locDirty: true})
-                        TabIndex: =0
 
                   - lbl_Form_StatusLabel:
                       Control: ModernText
@@ -106,7 +105,6 @@ Screens:
                         OnChange: |-
                           =UpdateContext({locDirty: true})
                         SelectMultiple: =false
-                        TabIndex: =0
 
                   - lbl_Form_AmountLabel:
                       Control: ModernText
@@ -127,7 +125,6 @@ Screens:
                         Height: =constStyle.Label.TextInput.Height.SingleLine
                         OnChange: |-
                           =UpdateContext({locDirty: true})
-                        TabIndex: =0
 
             # ---- validation summary: one source of truth ------------------
             - lbl_Form_Errors:
@@ -176,7 +173,6 @@ Screens:
                         # confirmation; this button only opens it.
                         OnSelect: |-
                           =UpdateContext({locConfirmDelete: true})
-                        TabIndex: =0
                         Text: ="Delete"
                         Visible: =!IsBlank(glSelectedKey)
                   - btn_Form_Cancel:
@@ -185,7 +181,6 @@ Screens:
                         AccessibleLabel: ="Discard changes and go back"
                         Height: =constStyle.Button.Height.Medium
                         OnSelect: =funcGoBack()
-                        TabIndex: =0
                         Text: ="Cancel"
                   - btn_Form_Save:
                       Control: Button
@@ -218,7 +213,6 @@ Screens:
                           UpdateContext({locDirty: false});
                           funcNotifySuccess("Item saved.");
                           funcGoBack()
-                        TabIndex: =0
                         Text: ="Save"
 
 

@@ -191,7 +191,6 @@ ComponentDefinitions:
                               BorderRadius: =constStyle.Button.BorderRadius
                               Height: =constStyle.Button.Height.Medium
                               OnSelect: =Reset(dp_Dialog_DatePicker); cmp_Dialog.OnCancel()
-                              TabIndex: =0
                               Text: =cmp_Dialog.CancelLabel
                               Width: =100
                         - btn_Dialog_Submit:
@@ -202,6 +201,5 @@ ComponentDefinitions:
                               BorderRadius: =constStyle.Button.BorderRadius
                               Height: =constStyle.Button.Height.Medium
                               OnSelect: =Reset(dp_Dialog_DatePicker); cmp_Dialog.OnSubmit()
-                              TabIndex: =0
                               Text: =cmp_Dialog.SubmitLabel
                               Width: =100
