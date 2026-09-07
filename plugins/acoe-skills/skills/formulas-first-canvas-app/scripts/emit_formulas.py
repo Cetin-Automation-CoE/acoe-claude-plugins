@@ -276,12 +276,32 @@ def _save_spec(entity):
     # to Collect() as the literal Key, so EVERY created record got
     # `Key: ""` — the second create then silently overwrote the first
     # (LookUp(col, Key = "") found it), and the blank-keyed row could never
-    # be opened again. A generated key removes the collision at its root:
-    # CountRows(collection) strictly increases on every Collect below, so
-    # successive creates in the same session always get distinct keys, even
-    # across intervening deletes.
-    new_key_expr = "%s & \"|\" & Text(CountRows(%s) + 1)" % (
-        _quote(_key_prefix_literal(entity)), entity.collection)
+    # be opened again.
+    #
+    # Ruling 25: a first fix generated the suffix from CountRows(collection)
+    # + 1, and the comment here claimed that was safe "even across
+    # intervening deletes" — it was not. CountRows() reflects how many rows
+    # are LEFT, not how many have ever existed, so create -> delete ANY row
+    # -> create reissues the same suffix the first create just used (16
+    # rows -> create -> 17 rows, suffix 17; delete one -> 16 rows again;
+    # create -> suffix 17 AGAIN, colliding with the still-live row from the
+    # first create). The guarantee an increasing counter actually needs is
+    # "never reuse a suffix that is still live in the collection right now",
+    # which means deriving it from the MAXIMUM suffix among the rows
+    # currently present, not their count. Every row's Key is "<PREFIX>|<n>"
+    # (mock rows included — emit_mock always renders that shape), so the
+    # suffix is the text after the last "|", parsed back to a number; the
+    # `Coalesce(..., 0)` only matters for a hypothetically empty collection
+    # (this generator's collections always start seeded), so a create
+    # against one still gets a valid first key instead of an error or a
+    # blank. This DOES guarantee no two rows present in the collection at
+    # the same time ever share a suffix; it does NOT guard against two
+    # concurrent sessions creating from independently-loaded copies of the
+    # collection at once — this is still mock data, and SWITCH DAY replaces
+    # this whole UDF body with a real Patch() against a real data source.
+    new_key_expr = (
+        "%s & \"|\" & Text(Coalesce(Max(%s, Value(Last(Split(Key, \"|\")).Value)), 0) + 1)"
+    ) % (_quote(_key_prefix_literal(entity)), entity.collection)
     # Parenthesised, not bare: tests (and a human scanning App.pa.yaml)
     # distinguish a MOCK row's Key literal ('{Key: "...') from this UDF's
     # own Key field by whether a quote immediately follows "Key: " — a bare

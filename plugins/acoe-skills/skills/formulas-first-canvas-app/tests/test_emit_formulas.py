@@ -157,56 +157,122 @@ class TestPerEntityLayer(unittest.TestCase):
         self.assertIn("// SWITCH DAY", self.text)
 
 
+def _balanced(text, open_idx):
+    """The substring from an opening paren at `open_idx` to its true
+    matching close, counting nesting depth — a naive non-greedy regex
+    (`\\(.*?\\)`) stops at the FIRST `)` that happens to precede a comma,
+    which is wrong the moment the expression nests parens of its own (as
+    Ruling 25's Max(...)/Split(...) expression does). Mirrors
+    check_collection_columns.py's own `balanced()` helper."""
+    depth = 0
+    for i in range(open_idx, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return text[open_idx:i + 1]
+    raise ValueError("unbalanced parens from index %d" % open_idx)
+
+
 class TestGeneratedKeyOnCreate(unittest.TestCase):
     """Ruling 21/I4: every created record used to get Key: "" (the screen's
     "Add" action always passes glSelectedKey, which is ""), so the SECOND
     create's LookUp(col, Key = "") found the first blank-keyed row and
     silently overwrote it — and that row could never be opened again.
 
+    Ruling 25: the FIRST fix derived the suffix from CountRows(collection),
+    which is how many rows are LEFT, not how many have ever existed —
+    create -> delete ANY row -> create reissued the same suffix the first
+    create just used, colliding with that still-live row. The current
+    formula derives the suffix from the MAXIMUM suffix among rows PRESENT
+    right now (Max(collection, Value(Last(Split(Key, "|")).Value)) + 1),
+    which cannot be reset by an unrelated delete.
+
     There is no local Power Fx evaluator (there is no offline compile for
-    Canvas Apps), so distinctness is proven the way the emitted UDF's own
-    formula guarantees it: Key: (<prefix> & "|" & Text(CountRows(collection)
-    + 1)) is strictly increasing every time CountRows(collection) grows —
-    which it always does, by exactly 1, on every prior Collect. Simulating
-    two successive creates means evaluating that same expression once at the
-    existing mock row count and again one higher, exactly what the second
-    creates's CountRows() call would actually see after the first Collect.
+    Canvas Apps), so `_next_key` below is a Python MODEL of the formula's
+    specified semantics, not an execution of it — it is used to reason
+    about the algorithm's behavior across a sequence of creates/deletes.
+    The tests that guard against silently regressing back to the old,
+    delete-unsafe formula instead inspect the ACTUAL emitted text (see
+    `test_create_branch_key_expression_is_max_based_not_count_based`).
     """
 
     def setUp(self):
         self.model = two_entity_model()
         self.entity = self.model.entities[0]  # Asset
         self.mock_rows = emit_mock.mock_rows(self.entity, n=16, today=TODAY)
+        self.text = ef.emit_all(self.model, rows=16, today=TODAY)
 
-    def _generated_key(self, row_count):
+    def _create_key_expr(self):
+        """The full, correctly paren-balanced Key expression from
+        funcSaveAsset's create-branch Collect() call, read out of the
+        ACTUAL emitted text (self.text) — not re-derived from Python."""
+        marker = "Collect(\n                  colAssets,\n                  {Key: ("
+        start = self.text.index(marker)
+        open_idx = start + len(marker) - 1  # index of the "(" itself
+        full = _balanced(self.text, open_idx)
+        return full[1:-1]  # strip the outer, test-added-for-disambiguation parens
+
+    def _max_suffix(self, keys):
+        """Parse the numeric suffix off each "PREFIX|n" key — mock keys and
+        generated keys both use this shape — mirroring what the emitted
+        Value(Last(Split(Key, "|")).Value) formula computes per row."""
+        suffixes = [int(k.rsplit("|", 1)[1]) for k in keys]
+        return max(suffixes) if suffixes else 0
+
+    def _next_key(self, existing_keys):
+        """Python model of the CURRENT formula: suffix is one past the
+        MAXIMUM suffix among rows present right now, never the row count."""
         prefix = ef._key_prefix_literal(self.entity)
-        return "%s|%d" % (prefix, row_count + 1)
+        return "%s|%d" % (prefix, self._max_suffix(existing_keys) + 1)
 
     def test_two_successive_creates_get_distinct_keys(self):
-        existing = len(self.mock_rows)
-        first = self._generated_key(existing)
-        second = self._generated_key(existing + 1)  # after the first Collect
+        existing = [row["Key"].strip('"') for row in self.mock_rows]
+        first = self._next_key(existing)
+        second = self._next_key(existing + [first])  # after the first Collect
         self.assertNotEqual(first, second)
-        mock_keys = {row["Key"].strip('"') for row in self.mock_rows}
-        self.assertNotIn(first, mock_keys)
-        self.assertNotIn(second, mock_keys)
+        self.assertNotIn(first, existing)
+        self.assertNotIn(second, existing)
+
+    def test_ruling_25_create_delete_a_different_row_then_create_stays_distinct(self):
+        """The exact repro from the re-review: 16 mock rows, create (suffix
+        16), delete some OTHER row (not the one just created), create again
+        — the second create must not reissue the first create's key. A
+        CountRows(collection)-based suffix fails this (16 rows -> create ->
+        17 rows, suffix 16 [0-based+1]; delete one -> 16 rows again; create
+        -> CountRows is 16 again -> suffix 16 AGAIN, colliding with the
+        still-live first create)."""
+        existing = [row["Key"].strip('"') for row in self.mock_rows]
+        first = self._next_key(existing)
+        after_first_create = existing + [first]
+        after_delete = after_first_create[1:]  # drop one pre-existing row; keep `first`
+        second = self._next_key(after_delete)
+        self.assertNotEqual(first, second,
+                            "a delete between two creates must not let the second "
+                            "create reissue the first create's key (Ruling 25)")
+
+    def test_create_branch_key_expression_is_max_based_not_count_based(self):
+        """The regression guard that does not depend on this file's own
+        Python model being right: inspects the ACTUAL emitted Power Fx
+        text. A future regression back to a CountRows(collection)-based
+        suffix — the exact defect Ruling 25 reported — fails this even if
+        `_next_key` above were (wrongly) left unchanged to match it."""
+        key_expr = self._create_key_expr()
+        self.assertIn("Max(colAssets,", key_expr)
+        self.assertIn('Split(Key, "|")', key_expr)
+        self.assertNotIn("CountRows(colAssets)", key_expr,
+                         "the create-branch key must not be derived from the "
+                         "CURRENT row count — that reissues a suffix the moment "
+                         "any row is deleted between two creates (Ruling 25)")
 
     def test_save_udf_create_branch_never_emits_a_blank_or_bare_pkey_as_key(self):
-        text = ef.emit_all(self.model, rows=8, today=TODAY)
-        match = re.search(
-            r"funcSaveAsset\([^)]*\): Void =.*?Collect\(\s*colAssets,\s*"
-            r"\{Key: \((.*?)\),", text, re.S)
-        self.assertIsNotNone(match, "could not locate funcSaveAsset's Collect() Key field")
-        key_expr = match.group(1)
+        key_expr = self._create_key_expr()
         self.assertNotIn('""', key_expr,
                          "the create branch must never emit a blank Key literal")
         self.assertNotEqual(key_expr.strip(), "pKey",
                             "the create branch must never emit the bare (blank) "
                             "pKey parameter as the new row's Key")
-        self.assertIn("CountRows(colAssets)", key_expr,
-                     "the generated key must depend on a quantity that changes "
-                     "on every Collect, which is what guarantees uniqueness "
-                     "across successive creates")
 
     def test_save_udf_branches_on_isblank_pkey_not_a_lookup(self):
         """The original bug routed create-vs-update through
@@ -215,9 +281,8 @@ class TestGeneratedKeyOnCreate(unittest.TestCase):
         instead, silently overwriting it. Branching on IsBlank(pKey) directly
         removes the possibility entirely: blank always creates, non-blank
         always updates."""
-        text = ef.emit_all(self.model, rows=8, today=TODAY)
-        self.assertIn("If(\n              IsBlank(pKey),", text)
-        self.assertNotIn("IsBlank(LookUp(", text)
+        self.assertIn("If(\n              IsBlank(pKey),", self.text)
+        self.assertNotIn("IsBlank(LookUp(", self.text)
 
 
 if __name__ == "__main__":
