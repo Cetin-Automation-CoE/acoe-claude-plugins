@@ -22,6 +22,10 @@ ComponentDefinitions:
         PropertyKind: Input
         DataType: Number
         Default: =140
+      Height:
+        PropertyKind: Input
+        DataType: Text
+        Default: ="auto"
       OnSort:
         PropertyKind: Event
 """
@@ -95,15 +99,31 @@ class TestInstanceChecking(unittest.TestCase):
             errors(self._check(instance("Align", '=If(x, "Left", "Right")'))), [])
 
     def test_undeclared_universal_property_is_unchecked(self):
-        """Ruling 10: Height is a universal control property, not a custom input —
+        """Ruling 10: Visible is a universal control property, not a custom input —
         cmp_FilterButton never declares it, and that must not be an error."""
-        self.assertEqual(errors(self._check(instance("Height", "=40"))), [])
+        self.assertEqual(errors(self._check(instance("Visible", "=true"))), [])
+
+    def test_declared_property_wins_over_the_allowlist(self):
+        """Regression guard for Ruling 10's ordering. Height is deliberately BOTH
+        a universal allowlist name AND a declared DataType: Text custom input in
+        this fixture. If `_check_instance` ever consulted the allowlist before the
+        declaration, Height would short-circuit as "universal, skip" and this bare
+        enum would sail through unchecked — silently reintroducing the bug the
+        ruling exists to prevent. A declared property must always be checked
+        against its own declaration first, allowlist or not."""
+        f = errors(self._check(instance("Height", "=Align.Center")))
+        self.assertEqual(len(f), 1)
+        self.assertIn("Text", f[0].message)
 
     def test_undeclared_non_universal_property_still_errors(self):
         """The allowlist is a narrow fallback, not a blanket exemption — an
-        undeclared property outside it must still be reported."""
-        f = errors(self._check(instance("Nonexistent", "=1")))
-        self.assertEqual(len(f), 1)
+        undeclared property outside it must still be reported. OnSelect and Color
+        are the two names Ruling 10 deliberately did NOT allowlist (they are real
+        declared Event/Input properties on this skill's shipped components and
+        must keep resolving through the declaration, not a blanket exemption)."""
+        for prop in ("Nonexistent", "OnSelect", "Color"):
+            f = errors(self._check(instance(prop, "=1")))
+            self.assertEqual(len(f), 1, "%s should have produced exactly 1 error" % prop)
 
 
 class TestRealTreeIsClean(unittest.TestCase):

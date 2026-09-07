@@ -125,6 +125,18 @@ def parse_component_defs_text(text):
 
     Only PropertyKind Input/Output properties carry a DataType; Events do not and
     are recorded with DataType None so an instance may still set them.
+
+    COVERAGE LIMIT: relies on an implicit invariant of this skill's own
+    ComponentDefinitions shape — a bare `Name:` line (nothing after the colon)
+    is a property/field name, while every value-bearing line (an instance
+    assignment, or a `PropertyKind:`/`DisplayName:`/`Description:`/`Default:`
+    field) carries something after the colon. That invariant has been verified
+    against all 8 shipped `components/cmp_*.pa.yaml` files, including
+    cmp_FilterButton's custom property literally named `DataType` (its own
+    nested `DataType: Text` field resolves correctly because indentation, not
+    the key's name, decides what it belongs to). It has NOT been exercised
+    against component shapes outside this repo — a `ComponentDefinitions` block
+    with a different formatting convention could defeat it silently.
     """
     defs = {}
     current = None
