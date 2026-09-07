@@ -282,6 +282,53 @@ def _filter_clause(entity, filter_ctrls):
     return " Or\n    ".join(parts)
 
 
+def _footer_block(entity, item_indent):
+    """The footer aggregate strip (Ruling 12): a filtered/total count that
+    reads the SAME scope formula the gallery and filter chips read — the
+    whole point of `entity.scope_formula` existing is that this count cannot
+    silently disagree with what the grid shows — plus one `Sum()` total per
+    `money: true` field, formatted through `funcAsCurrency` so currency
+    formatting stays owned by one function.
+
+    A fixed-height, `FillPortions: =0` sibling of the gallery (which keeps
+    `FillPortions: =1`): the same leaf-control-collapse rule that requires
+    the gallery's own `FillPortions` applies here too.
+    """
+    count_text = ('="Showing " & CountRows(%s) & " of " & CountRows(%s)'
+                  % (entity.scope_formula, entity.collection))
+    cells = [_block(
+        "lbl_%sList_Count" % entity.plural, item_indent + 6, "ModernText",
+        [
+            ("Color", "=constStyle.BasicStyle.FontColor"),
+            ("FillPortions", "=0"),
+            ("Size", "=constStyle.BasicStyle.FontSize.Small"),
+            ("Text", count_text),
+        ])]
+    for f in entity.fields:
+        if f.type != "number" or not f.money:
+            continue
+        total_text = ('="%s: " & funcAsCurrency(Sum(%s, %s))'
+                      % (f.label, entity.scope_formula, f.name))
+        cells.append(_block(
+            "lbl_%sList_%sTotal" % (entity.plural, f.name), item_indent + 6, "ModernText",
+            [
+                ("Color", "=constStyle.BasicStyle.FontColor"),
+                ("FillPortions", "=0"),
+                ("Size", "=constStyle.BasicStyle.FontSize.Small"),
+                ("Text", total_text),
+            ]))
+    return _block(
+        "con_%sList_Footer" % entity.plural, item_indent, "GroupContainer",
+        [
+            ("BorderStyle", "=BorderStyle.None"),
+            ("FillPortions", "=0"),
+            ("Height", "=constStyle.Label.Height.Medium"),
+            ("LayoutAlignItems", "=LayoutAlignItems.Center"),
+            ("LayoutDirection", "=LayoutDirection.Horizontal"),
+            ("LayoutGap", "=constStyle.Spacing.L"),
+        ], variant="AutoLayout", children=cells)
+
+
 def emit_list_screen(entity, model):
     """The list screen for `entity`: search, per-field filter/sort headers,
     a gallery of row cells, an empty state, and the standard chrome (header,
@@ -360,6 +407,8 @@ def emit_list_screen(entity, model):
             ("Visible", "=IsEmpty(%s.AllItems)" % entity.gallery),
         ], component_name="cmp_Empty")
 
+    footer_block = _footer_block(entity, 18)
+
     # ---- toolbar: search box, one filter combobox per choice filter field,
     # command bar ------------------------------------------------------------
     toolbar_children = [_block(
@@ -435,7 +484,7 @@ def emit_list_screen(entity, model):
             ("PaddingRight", "=constStyle.Spacing.XL"),
             ("PaddingTop", "=constStyle.Spacing.L"),
         ], variant="AutoLayout",
-        children=[toolbar_block, headers_block, gallery_block, empty_block])
+        children=[toolbar_block, headers_block, gallery_block, empty_block, footer_block])
 
     nav_block = _block(
         "cmp_%sList_Navigation" % entity.plural, 12, "CanvasComponent",

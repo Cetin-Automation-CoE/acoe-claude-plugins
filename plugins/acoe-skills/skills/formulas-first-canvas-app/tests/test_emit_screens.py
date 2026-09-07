@@ -3,6 +3,8 @@ import pathlib
 import sys
 import unittest
 
+import yaml
+
 SKILL = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKILL / "scripts"))
 
@@ -21,6 +23,20 @@ def entity():
             {"name": "Amount", "type": "number", "grid": 118, "money": True},
             {"name": "Due", "type": "date", "grid": 112, "semantics": "due"},
             {"name": "Notes", "type": "longtext", "grid": "hidden"},
+        ],
+    })
+
+
+def entity_without_money():
+    """Same shape as `entity()` but with no `money: true` field anywhere —
+    the footer must still show a count and must not emit a stray `Sum()`."""
+    return m.Entity({
+        "entity": "Asset", "plural": "Assets",
+        "fields": [
+            {"name": "Tag", "type": "text", "grid": 100, "search": True},
+            {"name": "Status", "type": "choice", "grid": 120, "filter": True,
+             "vocab": ["Open", "Shut"]},
+            {"name": "Due", "type": "date", "grid": 112, "semantics": "due"},
         ],
     })
 
@@ -106,6 +122,46 @@ class TestNoGenericLeakage(unittest.TestCase):
         for text in (es.emit_list_screen(e, mo), es.emit_form_screen(e, mo)):
             for leaked in ("colItems", "locItem", "gal_List_Items"):
                 self.assertNotIn(leaked, text, leaked)
+
+
+class TestFooterAggregates(unittest.TestCase):
+    """Ruling 12: the list screen's footer must show a filtered/total count
+    against the SAME scope formula the gallery reads (so it cannot silently
+    disagree with the grid), plus one Sum() per money field."""
+
+    def test_count_references_the_scope_formula_not_the_raw_collection(self):
+        e = entity()
+        text = es.emit_list_screen(e, small_model())
+        self.assertIn("CountRows(%s)" % e.scope_formula, text)
+
+    def test_money_field_produces_a_sum_over_the_scope_formula(self):
+        e = entity()
+        text = es.emit_list_screen(e, small_model())
+        self.assertIn("Sum(%s, Amount)" % e.scope_formula, text)
+        self.assertIn("funcAsCurrency(Sum(%s, Amount))" % e.scope_formula, text)
+
+    def test_entity_without_a_money_field_still_gets_a_count_and_no_stray_sum(self):
+        e = entity_without_money()
+        text = es.emit_list_screen(e, small_model())
+        self.assertIn("CountRows(%s)" % e.scope_formula, text)
+        self.assertNotIn("Sum(", text)
+
+
+class TestEmittedYamlIsValid(unittest.TestCase):
+    """check_control_props.py is a line-oriented regex parser, not a real
+    YAML parser — it can (and, during development of this module, did) pass
+    output that yaml.safe_load rejects outright. Round-tripping through a
+    real parser is a cheap, mechanical way to catch that class of bug."""
+
+    def test_both_screens_parse_as_yaml(self):
+        e, mo = entity(), small_model()
+        for name, text in (("list", es.emit_list_screen(e, mo)),
+                           ("form", es.emit_form_screen(e, mo))):
+            try:
+                data = yaml.safe_load(text)
+            except yaml.YAMLError as exc:
+                self.fail("%s screen is not valid YAML: %s" % (name, exc))
+            self.assertIn("Screens", data, name)
 
 
 if __name__ == "__main__":
