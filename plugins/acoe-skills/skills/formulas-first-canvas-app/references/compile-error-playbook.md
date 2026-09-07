@@ -10,11 +10,16 @@ either.
 
 ## How precisely each row is sourced
 
-There is no offline compile for Canvas Apps, and this generator's own output
-has not yet been pushed through a live `compile_canvas` session — see
-`SKILL.md` and the project ledger. So the rows below split into two kinds,
-marked in the **Sourcing** column:
+There is no offline compile for Canvas Apps. This generator's own output was
+first pushed through a live `compile_canvas` session on 2026-09-07 — a
+two-entity app that passed all six static guards and 226 tests came back with
+59 errors, all attributable to exactly two root causes (see the two **LIVE
+2026-09-07** entries below). So the rows below split into three kinds, marked
+in the **Sourcing** column:
 
+- **LIVE (date)** — the quoted text is reproduced verbatim from an actual
+  `compile_canvas` transcript against a real pushed app, on the date given.
+  The highest-confidence sourcing this file can carry.
 - **EXACT** — the quoted text is reproduced from `references/powerfx-limits.md`,
   which states it was "confirmed against the strict Power Fx engine in the
   Canvas Authoring coauthoring service." Match on it directly.
@@ -74,6 +79,13 @@ the exact wording is not yet captured here — paste it in on first sighting.
 | `ShowScrollbar` | *(no replacement — omit it)* | `Gallery` has no `ShowScrollbar`; that is classic-only | PATTERN (`control-dialects.md`) |
 | Any `Align` enum literal from the wrong namespace (`Align.Right` on a `ModernText`) | Use `'TextCanvas.Align'.{Start\|Center\|End}` on both text generations; only `Button` takes the plain `Align.{Left\|Center\|Right}` | `ModernText`, `Text`, `ModernTextInput` vs `Button` | PATTERN (`control-dialects.md`; guard-caught in `test_direct_wrong_namespace_enum`, `test_8_wrong_namespace_via_token`) — `Align.Center` is the one member both namespaces share, so it compiles while `Align.Right`/`Align.End` on the wrong control does not |
 | A leaf `Gallery` with no explicit size, inside an auto-layout container | Add `FillPortions: =1` or an explicit `Height` | `Gallery` | PATTERN (`control-dialects.md`; guard-caught in `test_6_gallery_without_fillportions`) — `Gallery` is a leaf control and defaults to `FillPortions: =0`, collapsing to the ~200px control default |
+| `Unknown property 'TabIndex' for control type 'ModernTextInput'.` (also seen for `'ModernCombobox'`, `'ModernDatePicker'`, `'Button'`) | `TabIndex` is **not** a rename target — it never existed on these controls. It was seeded into `references/control-contracts.yaml` from a documentation source and never corpus-verified; it appears ZERO times in the provably-compiled reference app. | LIVE (2026-09-07) — 52 of 59 errors in the first real `compile_canvas` run against this generator's output | Remove the `TabIndex: =0` line. Do not substitute another property — tab order reverts to document order, which is what the reference app relies on. `references/control-contracts.yaml` curates `TabIndex` as an `absent` (hard-error) property on all 8 controls that used to list it, so `check_control_props.py` now catches this before a push. |
+
+## Duplicate control names (control names are global, not per-screen/component)
+
+| Error text | Sourcing | Cause | Remedy |
+|---|---|---|---|
+| `An entity with name 'con_Field' already exists. Other definition located at Components/cmp_FieldText.pa.yaml(73,9).` (also seen for `txt_Field_Input`, `Components/cmp_FieldNumber.pa.yaml(91,15)` vs `Components/cmp_FieldText.pa.yaml(90,15)`) | LIVE (2026-09-07) — 7 of 59 errors in the same run | **Control names are unique across the WHOLE APP**, not scoped to the screen or component that declares them — a real Power Apps constraint no guard in this repo knew about until this run. This skill's four field components (`cmp_FieldText`, `cmp_FieldChoice`, `cmp_FieldDate`, `cmp_FieldNumber`) all used the same generic inner names (`con_Field`, `lbl_Field_Label`, `txt_Field_Input`). | Give every control a name unique across the entire app — e.g. prefix inner field-component controls with the component's own name (`con_FieldText`, `lbl_FieldText_Label`, `txt_FieldText_Input`, and the equivalents for Choice/Date/Number). `check_control_props.py`'s `find_duplicate_controls()` now walks every `*.pa.yaml` file under `--src` and hard-errors on a name declared twice anywhere in the tree, naming both definition sites the way the compiler does (`tests/test_defect_regression.py`'s `TestDuplicateControlNamesAcrossFiles`). Two files sharing a name is fine ONLY when they are true alternatives that never ship together in the same app — e.g. this skill's `templates/frame-headermainfooter.pa.yaml` and `frame-headerrailmain.pa.yaml`, of which `scripts/new_app.py` copies exactly one into any given app. |
 
 ## Named-formula ordering (whole-blob failure)
 
