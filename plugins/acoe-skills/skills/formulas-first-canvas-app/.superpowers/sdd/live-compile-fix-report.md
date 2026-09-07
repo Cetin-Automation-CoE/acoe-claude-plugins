@@ -353,3 +353,192 @@ the brace-body check for `Void` UDFs, backed by 8 new regression tests — and
 run's evidence required it (root causes A, C, and D are UDF-declaration and
 component-authoring defects; root cause B is an omission the contract file
 has no mechanism to express, by design, per the task's constraint).
+
+# Third live compile fix (2026-09-07, third run — first with a genuine coauthoring session)
+
+## Reframing: sessionless validation is not trustworthy
+
+The first two live runs both warned "No active coauthoring canvas designer
+session detected. Validation results may be inaccurate." Both were still
+treated as usable, and both found real defects (first run: 59 errors, two
+root causes; second run: 34 errors, four root causes). That created a false
+sense that the warning was cosmetic.
+
+This third round pushed the *identical* tree twice: once with no active
+session (0 errors reported) and immediately after with a live coauthoring
+session open in Power Apps Studio (7 errors, all real, on defects that had
+been sitting in the tree unchanged). A clean sessionless result is therefore
+**not evidence of anything** — it can silently pass code a live session
+hard-fails. Documented prominently at the top of
+`references/compile-error-playbook.md` and folded into `SKILL.md`'s push/
+validate-loop sections as a precondition, not a footnote.
+
+## The 7 errors, one root cause
+
+```
+error: [Control 'cmp_AssetsList_HeadCategory', Property 'Choices'] The table passed in has none of
+the expected columns: SampleBooleanField, SampleNumberField, SampleStringField.
+error: [Control 'cmp_AssetsList_Navigation', Property 'Screens'] (same)
+```
+
+5 errors on `cmp_*_Head*.Choices` (all `cmp_FilterButton` instances), 2 on
+`cmp_*_Navigation.Screens` (`cmp_Navigation` instances). Same defect class
+already fixed once this project (`cmp_FieldChoice.Choices`, second run): a
+`DataType: Table` component input whose `Default` does not establish a
+concrete schema falls back to the Studio's placeholder schema
+(`SampleBooleanField`/`SampleNumberField`/`SampleStringField`); a caller
+passing a real table with different columns then fails to type-match it.
+
+Two distinct bad shapes, both now confirmed live:
+
+- **Blank** (`Default: =`, nothing after the `=`) — `cmp_FilterButton.Choices`.
+- **Bare app-scope name reference** (`Default: =constScreens`) —
+  `cmp_Navigation.Screens`. Not resolvable at component-declaration time,
+  unlike a blank default this is a NEW bad shape not previously documented.
+
+### Fixes
+
+`components/cmp_FilterButton.pa.yaml`, `Choices`:
+
+```yaml
+Default: |-
+  =Table({Value: ""})
+```
+
+`components/cmp_Navigation.pa.yaml`, `Screens`:
+
+```yaml
+Default: |-
+  =Table(
+      {
+          Screen: App.ActiveScreen,
+          DisplayName: "",
+          Icon: "",
+          Entity: "",
+          Type: "",
+          Group: "",
+          BackLabel: ""
+      }
+  )
+```
+
+The awkward column was `Screen` — a screen reference, not text. Confirmed
+(via `scripts/emit_formulas.py`) that `enumScreenType`/`enumEntity` are
+named-formula **records of string literals** (`{List: "list", Form: "form"}`),
+not real Power Fx enum/optionset types, so `Entity`/`Type`/`Group`/
+`BackLabel`/`DisplayName`/`Icon` are all plain `Text` at runtime — blank
+string literals type-match them. Only `Screen` needed a real screen-typed
+placeholder; used `App.ActiveScreen` per the task's suggestion (always
+available at runtime, carries no app-specific meaning, and this component
+library is generic across apps so it cannot reference a fixed screen name
+like `ListScreen`). **Not independently re-verified against a live
+`compile_canvas` push** — the task author holds the only live session and
+will re-push after this report. Flag if the next push disagrees.
+
+### Sweep of every `DataType: Table` custom property in `components/`
+
+| Component.Property | Default before | Action |
+|---|---|---|
+| `cmp_FieldChoice.Choices` | `=Table({Value: ""})` | Already typed (prior round) — comment corrected (see below), no functional change |
+| `cmp_FilterButton.Choices` | `=` (blank) | **Fixed** — `=Table({Value: ""})` |
+| `cmp_FilterButton.Items` | `=` (blank) | **Fixed pre-emptively** — `=Table({Value: ""})`. Same blank-default defect, same `Value` output record (`Items: Self.Items`) as `Choices`; no template currently sets `Items` on a real instance so it has not yet errored live, but the next caller to set it would hit the identical failure. |
+| `cmp_Navigation.Screens` | `=constScreens` (bare reference) | **Fixed** — inline typed `Table(...)` literal, see above |
+| `cmp_Notification.Notifications` | `=[ {Title: "Title", …} ]` (typed bracket literal) | Already typed — no change |
+
+No other `DataType: Table` custom properties exist in `components/` (checked
+all 12 shipped `cmp_*.pa.yaml` files with a script scan for `DataType:
+Table` under `CustomProperties`).
+
+### Correction to a prior claim
+
+`cmp_FieldChoice.pa.yaml`'s `Choices` comment (written during the second-run
+fix) asserted that `cmp_FilterButton`'s blank `Table` default was "fine"
+because that component's `Choices` is "never resolved into an output." That
+claim was wrong — `Self.Choices` (and `Self.Items`) flow directly into
+`cmp_FilterButton`'s own `Value` output record — and this round's 5 errors
+prove it. The comment is corrected in place; the matching stale claim in
+`references/compile-error-playbook.md`'s existing `cmp_FieldChoice` row is
+struck through and annotated rather than silently rewritten, so the
+correction itself stays visible history rather than looking like it was
+always right.
+
+## Guard added
+
+`scripts/check_control_props.py` gained `find_bad_table_defaults()` (plus
+its own parser, `parse_component_table_defaults()`, extending the
+`ComponentDefinitions` walk `parse_component_defs_text()` already does to
+additionally capture each property's `PropertyKind` and `Default`). It flags
+exactly the two proven-bad shapes on any Input property typed `DataType:
+Table`:
+
+- blank (`Default: =` or empty after stripping the leading `=`), and
+- a bare identifier/dotted-name reference (`=constScreens`, `=App.Foo`) —
+  not a literal `Table(...)`/`[...]` construction.
+
+Anything else (any literal `Table(...)` or `[...]` construction, regardless
+of row count or column shape) passes unchecked — this guard does not
+type-check columns, only whether the Default is a literal at all, matching
+`check_control_props.py`'s existing "absence is not evidence of validity"
+stance. Wired into `main()` alongside the existing per-file checks, so it
+runs automatically under every `check_control_props.py --src <tree>`
+invocation, including the six-guard sweep `new_app.py` runs on its own
+output (which copies `components/*.pa.yaml` into every generated
+`Components/` directory).
+
+Tests: `tests/test_table_default_guard.py`, 11 new tests — both directions
+(blank and bare-reference are caught; single-line, block-scalar, bracket,
+and multi-row literal defaults all pass), non-Table and non-Input properties
+are never checked, and a standing assertion that every shipped
+`components/cmp_*.pa.yaml` passes the guard clean (the regression proof that
+this round's fixes stuck).
+
+## Playbook and SKILL.md
+
+`references/compile-error-playbook.md`:
+- New section at the very top: sessionless `compile_canvas` results are not
+  trustworthy, with the concrete 0-errors-vs-7-errors evidence.
+- "How precisely each row is sourced" now describes the third run and its
+  single root cause.
+- "Component input with no typed schema" section: added two new rows for
+  this run's exact error text (`cmp_FilterButton.Choices` /
+  `cmp_Navigation.Screens`), both marked `LIVE (2026-09-07, third run)`; the
+  existing second-run `cmp_FieldChoice` row has its now-false claim about
+  `cmp_FilterButton` struck through and corrected in place; and a closing
+  note documents the new static guard and what it can/cannot catch.
+
+`SKILL.md`: the "no local path to an importable `.msapp`" paragraph and the
+"verification loop" section both now state the coauthoring-session
+precondition explicitly — an app open in Power Apps Studio with coauthoring
+enabled, not just a successful `connect()` — and that a sessionless clean
+result must not be believed, with the same concrete evidence. The previously
+stale "the generator's own output has not yet been validated" line (already
+false after the first two rounds) was also corrected while in the area.
+
+## Verification
+
+1. `python3 -m unittest discover -s tests` — **252 tests, all green** (241
+   baseline + 11 new, all in `test_table_default_guard.py`).
+2. `python3 scripts/new_app.py --model templates/model.example.yaml --out /tmp/live6`
+   — exit 0, all 6 local guards PASS.
+3. `python3 scripts/new_app.py --name "Legacy" --brand "#300091" --out /tmp/live7`
+   — exit 0, all 6 local guards PASS.
+4. Manually ran the new `find_bad_table_defaults()` against every shipped
+   `components/cmp_*.pa.yaml`: 0 findings after the fixes (confirmed 2 before,
+   on `cmp_FilterButton.Choices`/`.Items` and `cmp_Navigation.Screens`
+   respectively — 3 total flagged pre-fix across the two files).
+
+No guard was weakened. One was strengthened — `check_control_props.py`
+gained `find_bad_table_defaults()`, backed by 11 new regression tests — and
+`references/control-contracts.yaml` was **not** touched: nothing in this
+run's evidence concerned control property names/contracts, only component
+custom-property defaults, which that file does not model.
+
+**Unverified**: the two fixes above have not been re-pushed against a live
+`compile_canvas` session by this agent — the task author holds the only live
+coauthoring session and will re-push after reading this report. The
+`cmp_Navigation.Screens` fix in particular rests on reasoning
+(`enumScreenType`/`enumEntity` being plain string-valued records, not real
+enum types, verified by reading `scripts/emit_formulas.py`'s generation
+code) rather than a live compile confirming it — flagged explicitly per the
+task's instruction to report exactly what was tried rather than assume it
+works.
