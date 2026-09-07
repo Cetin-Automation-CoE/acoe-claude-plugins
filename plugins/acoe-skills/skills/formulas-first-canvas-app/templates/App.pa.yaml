@@ -58,8 +58,14 @@ App:
       // ---- loading indicator: one pair, every operation -----------
       // Entity-agnostic, so emit_formulas.py does not own it — it stays
       // here, unchanged, for BOTH a --name scaffold and a --model build.
-      funcStartLoading(): Void = Set(glBoolIsLoading, true);
-      funcStopLoading(): Void = Set(glBoolIsLoading, false);
+      funcStartLoading(): Void =
+      {
+          Set(glBoolIsLoading, true);
+      };
+      funcStopLoading(): Void =
+      {
+          Set(glBoolIsLoading, false);
+      };
 
       // ############ 6. DERIVED VALUES ############
       // Named formulas, because these return TABLES — a UDF cannot.
