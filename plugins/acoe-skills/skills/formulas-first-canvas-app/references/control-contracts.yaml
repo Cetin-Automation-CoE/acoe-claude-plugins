@@ -10,12 +10,20 @@
 #
 # 2026-09-07: check_control_props.py's first real run against templates/ and
 # components/ surfaced several properties the guard rejected as invalid that are
-# in fact used repeatedly, on the exact same control type, in the compiled
-# reference app: LayoutMinWidth/LayoutMinHeight and the four Padding sides on
-# several controls, Button.FontWeight, and VerticalAlign on ModernText and Button
-# (not only on previous-generation Text, as this file previously claimed). Each
-# was re-verified by counting enclosing-control occurrences in the compiled app
-# before being added.
+# in fact used on the compiled app's exact same control type: LayoutMinWidth/
+# LayoutMinHeight and some Padding sides on several controls, Button.FontWeight,
+# and VerticalAlign on ModernText and Button (not only on previous-generation
+# Text, as this file previously claimed).
+#
+# Discipline for this list and any future one like it: a property is added only
+# when it was directly counted against a Control: block of that exact type in
+# the compiled app — never inferred by symmetry with a sibling property (e.g.
+# "PaddingLeft is valid, so the other three Padding sides must be too") or with
+# a sibling control. A first pass here over-generalized exactly that way and had
+# to be corrected after review; some Padding/LayoutMin entries that looked
+# plausible were removed for having zero counted occurrences. If a property
+# looks likely on symmetry grounds but hasn't been counted, that is a ruling to
+# ask for, not something to add on your own judgment.
 #
 # COVERAGE LIMIT: absence from this file means "not verified", not "invalid".
 # check_control_props.py reports properties on unlisted controls as unchecked.
@@ -55,6 +63,7 @@ controls:
       FontWeight: FontWeight
       Align: TextCanvas.Align
       BorderStyle: BorderStyle
+      VerticalAlign: VerticalAlign
     renamed_from:
       FontColor: Color
       FontSize: Size
@@ -96,7 +105,6 @@ controls:
       - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
       - AccessibleLabel, OnChange, OnSelect, DisplayMode, BasePaletteColor
       - AlignInContainer, FillPortions, Height, Width, X, Y, Visible, TabIndex
-      - LayoutMinWidth, LayoutMinHeight
     enums:
       Type: TextInputType
       TriggerOutput: TriggerOutput
@@ -120,7 +128,6 @@ controls:
       - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
       - AccessibleLabel, TabIndex, OnChange, DisplayMode, Visible
       - AlignInContainer, FillPortions, Height, Width, X, Y
-      - LayoutMinWidth, LayoutMinHeight
     enums:
       Appearance: Appearance
       DisplayMode: DisplayMode
@@ -134,7 +141,6 @@ controls:
       - DefaultDate, SelectedDate, Format, DateTimeZone, StartDate, EndDate
       - StartOfWeek, IsEditable, Placeholder, Appearance
       - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
-      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
       - ValidationState, AccessibleLabel, OnChange, DisplayMode, Visible
       - AlignInContainer, FillPortions, Height, Width, X, Y, TabIndex
       - LayoutMinWidth, LayoutMinHeight
@@ -161,6 +167,7 @@ controls:
       Align: Align
       DisplayMode: DisplayMode
       FontWeight: FontWeight
+      VerticalAlign: VerticalAlign
     absent: [Color, Fill]
 
   ModernButton@1.0.0:
