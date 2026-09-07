@@ -213,7 +213,7 @@ ComponentDefinitions:
                 Control: ModernText
                 Properties:
                   AccessibleLabel: =""
-                  Align: =Align.Center
+                  Align: ='TextCanvas.Align'.Center
                   Color: =constPaperColor.RGBA
                   Fill: =constSecondaryColor.RGBA
                   FillPortions: =0
