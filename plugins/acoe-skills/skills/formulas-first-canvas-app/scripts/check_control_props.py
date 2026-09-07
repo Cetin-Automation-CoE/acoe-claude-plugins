@@ -112,6 +112,62 @@ def make_resolver(mapping):
     return resolve
 
 
+RE_CMP_NAME = re.compile(r"^(\s*)(cmp_[\w]+):\s*$")
+RE_PROP_NAME = re.compile(r"^(\s*)([A-Za-z_]\w*):\s*$")
+RE_DATATYPE = re.compile(r"^\s*DataType:\s*(\w+)\s*$")
+
+# Bare enum literals that are NOT valid in a Text-typed component input.
+RE_BARE_ENUM = re.compile(r"^=\s*'?([A-Za-z][\w.]*?)'?\.([A-Za-z]\w*)\s*$")
+
+
+def parse_component_defs_text(text):
+    """Map component name -> {input property name: DataType}.
+
+    Only PropertyKind Input/Output properties carry a DataType; Events do not and
+    are recorded with DataType None so an instance may still set them.
+    """
+    defs = {}
+    current = None
+    cmp_indent = None
+    prop = None
+    prop_indent = None
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        m = RE_CMP_NAME.match(raw)
+        if m:
+            current = m.group(2)
+            cmp_indent = indent
+            defs.setdefault(current, {})
+            prop = None
+            continue
+        if current is None:
+            continue
+        if indent <= cmp_indent:
+            current = None
+            continue
+        m = RE_DATATYPE.match(raw)
+        if m and prop:
+            defs[current][prop] = m.group(1)
+            continue
+        m = RE_PROP_NAME.match(raw)
+        if m and m.group(2) not in ("CustomProperties", "Properties", "Children"):
+            if prop_indent is None or indent == prop_indent:
+                prop_indent = indent
+                prop = m.group(2)
+                defs[current].setdefault(prop, None)
+    return defs
+
+
+def parse_component_defs(paths):
+    defs = {}
+    for path in paths:
+        defs.update(parse_component_defs_text(
+            pathlib.Path(path).read_text(encoding="utf-8")))
+    return defs
+
+
 def iter_properties(text, filename):
     """Yield a PropSite per property line, tracking the enclosing control.
 
@@ -187,11 +243,15 @@ def iter_properties(text, filename):
                        component_name, key, value)
 
 
-def check_text(text, filename, contracts, resolver=None):
+def check_text(text, filename, contracts, resolver=None, components=None):
     """Return a list of Findings for one file's text.
 
     `resolver`, when given, maps a token reference like
     `constStyle.Label.NumberInput.AlignModern` to its literal value (Task 6).
+
+    `components`, when given, maps a component name to its declared
+    `{property: DataType}` inputs, so CanvasComponent instances are checked
+    against their own contract instead of the control-property one (Task 7).
     """
     findings = []
     seen_props = collections.defaultdict(set)
@@ -201,7 +261,9 @@ def check_text(text, filename, contracts, resolver=None):
         if not site.control_type:
             continue
         if site.control_type == "CanvasComponent":
-            continue  # Layer 3 (Task 7) handles these.
+            if components and site.component_name in components:
+                findings.extend(_check_instance(site, components[site.component_name]))
+            continue
         spec = contracts["controls"].get(site.control_type)
         if spec is None:
             continue  # Unknown control: unchecked, not failed.
@@ -287,6 +349,50 @@ def _check_enum(site, spec, contracts, resolver):
            actual_ns, member))]
 
 
+TEXTY = {"Text": ("a quoted string",), "Number": ("a number",),
+         "Boolean": ("true/false",)}
+
+# Ruling 10: universal placement/layout properties every CanvasComponent instance
+# carries regardless of its own CustomProperties — these are control properties, not
+# custom inputs, so a component that never declares them is not "missing" them. Do
+# not delete this as redundant: measured directly against the compiled reference app
+# (occurrence counts across component instances there: Height 20, Width 19,
+# LayoutMinWidth 10, LayoutMinHeight 10, LayoutMaxHeight 10, Visible 6, Y 5).
+# This is a FALLBACK for properties the component does NOT declare — a component
+# that explicitly declares one of these (e.g. a custom `Width: DataType: Number`
+# input) is checked against that declaration instead; see `_check_instance` below.
+# Deliberately excluded: OnSelect, Color — on this skill's components those are
+# real declared Event/Input properties and must keep resolving through the
+# declaration, not this allowlist.
+UNIVERSAL_INSTANCE_PROPS = {
+    "X", "Y", "Width", "Height", "Visible", "FillPortions", "AlignInContainer",
+    "LayoutMinWidth", "LayoutMinHeight", "LayoutMaxWidth", "LayoutMaxHeight",
+    "TabIndex", "DisplayMode",
+}
+
+
+def _check_instance(site, declared):
+    """Check one CanvasComponent instance property against its declaration."""
+    if site.prop not in declared:
+        if site.prop in UNIVERSAL_INSTANCE_PROPS:
+            return []  # Universal control property, not a custom input — unchecked.
+        return [Finding(
+            "error", site.file, site.line, site.control, site.prop,
+            "component %s declares no %s input (declared: %s)"
+            % (site.component_name, site.prop,
+               ", ".join(sorted(declared)) or "none"))]
+    datatype = declared[site.prop]
+    if datatype != "Text":
+        return []
+    m = RE_BARE_ENUM.match(site.value)
+    if m:
+        return [Finding(
+            "error", site.file, site.line, site.control, site.prop,
+            "%s.%s is DataType Text — pass the string \"%s\", not the enum %s.%s"
+            % (site.component_name, site.prop, m.group(2), m.group(1), m.group(2)))]
+    return []
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -313,10 +419,18 @@ def main():
     if token_text:
         resolver = make_resolver(parse_tokens(token_text))
 
+    comp_dirs = [src, src / "Components", SKILL / "components"]
+    comp_paths = []
+    for d in comp_dirs:
+        if d.exists():
+            comp_paths.extend(sorted(d.glob("cmp_*.pa.yaml")))
+    components = parse_component_defs(comp_paths)
+
     findings = []
     for path in files:
         findings.extend(check_text(path.read_text(encoding="utf-8"),
-                                   str(path), contracts, resolver=resolver))
+                                   str(path), contracts, resolver=resolver,
+                                   components=components))
 
     errs = [f for f in findings if f.severity == "error"]
     warns = [f for f in findings if f.severity == "warn"]
