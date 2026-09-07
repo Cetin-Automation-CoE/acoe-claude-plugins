@@ -144,3 +144,212 @@ No guard was weakened. Two were strengthened: `TabIndex` moved from
 "unverified" (warning-only) to a curated `absent` hard error on 8 controls,
 and a brand-new cross-file duplicate-control-name check was added where none
 existed before.
+
+# Second live compile run — 2026-09-07
+
+After both root causes above were fixed, a second `compile_canvas` push of
+the same generator's output (233 tests, all six local guards green) returned
+34 errors and 2 warnings against a live environment, attributable to exactly
+four root causes. All four fixed; one is guardable statically and is now
+guarded, one is an intentionally un-guardable class (documented as such,
+not worked around), and two are component-authoring defects fixed at the
+source.
+
+## Root cause A — Void UDFs must be behavior UDFs with braces (16/34 errors)
+
+`templates/App.pa.yaml`'s `funcStartLoading` and `funcStopLoading` were
+declared as one-line bare-expression bodies:
+
+```
+funcStartLoading(): Void = Set(glBoolIsLoading, true);
+funcStopLoading(): Void = Set(glBoolIsLoading, false);
+```
+
+A `Void`-returning UDF is only valid as a **behavior** UDF, and a behavior
+UDF requires the body wrapped in `{ }` — even for one statement. Every other
+`Void` UDF in the same file (`funcLoadItems`, `funcSaveItem`, `funcNotify`,
+`funcNotifySuccess`, `funcNotifyError`, `funcAddBack`, `funcGoBack`,
+`funcDeleteItem`) already used the brace form and compiled fine; only this
+one hand-authored pair, present since Phase 1, lacked it. The declaration
+failure cascaded into 14 "unknown function" errors at every call site
+across `App.OnStart` and every screen/component that calls either function.
+
+Fixed: wrapped both bodies in braces.
+
+```
+funcStartLoading(): Void =
+{
+    Set(glBoolIsLoading, true);
+};
+funcStopLoading(): Void =
+{
+    Set(glBoolIsLoading, false);
+};
+```
+
+**Swept the whole tree for the same pattern.** Checked every `: Void =`
+declaration in `templates/`, `components/`, `scripts/emit_formulas.py`'s
+generated text, and the test fixtures: `templates/App.pa.yaml` lines 61–62
+were the *only* two missing braces anywhere. `emit_formulas.py`'s three
+`Void`-UDF templates (load/save/delete) already emit the brace form.
+
+## Root cause B — every ModernCombobox must set ItemDisplayText (11/34 errors)
+
+`scripts/emit_screens.py` emitted no `ItemDisplayText` property at all on
+any generated `ModernCombobox` — grepping the generated tree confirmed the
+property appeared nowhere. Left unset, the control's own factory default
+apparently references a `Value1` column that does not exist on this app's
+choices tables, so the control's *default* failed to resolve on all 11
+comboboxes across both screens and both entities. The reference app
+(`/Users/krystofpe/powerapps-work/canvas-src`) sets `ItemDisplayText:
+=ThisItem.Value` explicitly on every combobox it has.
+
+Fixed — added `ItemDisplayText: =ThisItem.Value` to:
+- `scripts/emit_screens.py`: all three `ModernCombobox` emission sites (the
+  list-toolbar filter combobox, the boolean Yes/No form field, and the
+  choice-field form input).
+- `templates/FormScreen.pa.yaml` and `templates/ListScreen.pa.yaml`: the
+  hand-authored equivalents had the identical omission.
+- `components/cmp_FieldChoice.pa.yaml`: same omission on its inner
+  `com_FieldChoice_Input` combobox.
+
+**This is a defect class no static guard in this repo can catch.** An
+omitted property is not a wrong value `check_control_props.py` can compare
+against `control-contracts.yaml` — the property simply never appears in the
+emitted text for the guard to check. Catching this class statically would
+need a list of mandatory properties per control (which properties MUST be
+present, not just which ARE valid if present) — a materially bigger design
+question than this fix, and not authorized as part of this task. No guard
+was added for this root cause; `references/compile-error-playbook.md`'s new
+"Omitted-property errors" section says so explicitly.
+
+## Root cause C — undeclared DisplayMode input on four field components (4/34 errors)
+
+`components/cmp_FieldText.pa.yaml`, `cmp_FieldChoice.pa.yaml`,
+`cmp_FieldDate.pa.yaml`, and `cmp_FieldNumber.pa.yaml` each wrote
+`DisplayMode: =cmp_FieldX.DisplayMode` on their inner input control, but
+none of the four declared `DisplayMode` as a `CustomProperties` input on the
+component itself — an unresolved reference on all four.
+
+Checked the reference app for how it types a caller-controlled display-mode
+input before deciding whether to declare it or drop it, per the task's
+instruction. Every `DisplayMode` usage in the reference corpus
+(`Activities.pa.yaml`, `Activity Form.pa.yaml`,
+`Components/cmp_Filter.pa.yaml`, `cmp_FilterButton.pa.yaml`,
+`cmp_Header.pa.yaml`) is an inline `If(glX, DisplayMode.Edit,
+DisplayMode.View)` expression assigned directly to a control's own
+`DisplayMode` property — no component anywhere in that app, or in this
+skill's own components, declares `DisplayMode` (or any enum-flavored value)
+as a `CustomProperties` `DataType`. The only `DataType`s used for custom
+properties across both corpora are `Text`, `Number`, `Boolean`,
+`DateAndTime`, `Color`, `Table`, `Record`, `Screen` — no enum type exists to
+type it correctly. With no corpus precedent, dropped the `DisplayMode:` line
+from all four components rather than inventing a `DataType` no evidence
+supports. A caller who genuinely needs one of these fields read-only can
+still set `DisplayMode` on the component *instance* at the call site, the
+same way the reference app gates its own controls.
+
+## Root cause D — cmp_FieldChoice's combobox has no schema (3/34 errors)
+
+`cmp_FieldChoice`'s `Choices` custom property (a `Table`-typed input) had a
+blank `Default: =`. With no default row, the `ModernCombobox` built from
+`Items: =cmp_FieldChoice.Choices` has no column schema, so `Output`
+(`=com_FieldChoice_Input.Selected.Value`) and `DefaultSelectedItems`'s
+`Value = …` filter cannot resolve a `Value` column — the third error
+(`Incompatible types for comparison: Error, Text`) is the same unresolved
+column cascading into a comparison against an `Error` value.
+
+Checked `cmp_FilterButton`'s identical-looking blank `Choices`/`Items`
+defaults first — those match the reference app exactly and are fine,
+because that component never resolves `Choices` into a typed output. The
+difference is in consumption, not a blanket rule against blank `Table`
+defaults, so only `cmp_FieldChoice` needed a fix.
+
+Fixed: gave `Choices` a typed default with the right column —
+`Default: =Table({Value: ""})`, wrapped in the file's usual `|-` block
+scalar form since the value contains a colon (`Value: ""`). Verified this
+affects only the standalone `cmp_FieldChoice` component; the generated
+screens build their own typed `constXChoices` tables directly wherever a
+choice field appears and were never affected.
+
+## Expected warnings — left as is
+
+Both warnings in this run:
+
+```
+warning: [App, Formulas] This predicate is a literal value and does not reference the input table.
+```
+
+are the `Filter(colX, true)` scope-formula placeholder (Ruling 6) — the
+generic model has no scope concept yet, so the predicate is a literal `true`
+until a real per-entity scope condition exists. Confirmed a **warning**, not
+an error; the push still succeeds. Left the code exactly as written, and
+recorded the reasoning in the playbook so a future run does not "fix" it.
+
+## New guard: Void UDF without a brace body
+
+Root cause A is statically detectable, so it is now guarded.
+`scripts/check_references.py` already parses every `App.Formulas`
+declaration for its forward-reference check, so the new check rides the
+same pass rather than a second parser:
+
+- `VOID_UDF_PATTERN`: matches `func*(params): Void = <first-non-whitespace-char>`.
+- `find_braceless_void_udfs(block)`: returns every `func*` name whose
+  captured first character is not `{` — i.e. a `Void` UDF whose body is a
+  bare expression instead of a behavior UDF's `{ ... }` block.
+- Wired into `main()`: a non-empty result is a hard `FAIL`, printed with the
+  exact remedy (`funcX(): Void = { <statement>; };`) and the explanation
+  that the declaration failure is what makes every call site look broken,
+  matching this file's existing convention for the forward-reference and
+  duplicate-component checks.
+
+Tests added in `tests/test_check_references_void_udf.py` (8 tests, both
+directions): a single-line bare-expression body is caught; a multi-line
+bare-expression body (the `=` and body's first token on different lines) is
+also caught, so the check isn't fooled by a line break; a non-`Void` UDF is
+never flagged; single-line, multi-line, and multi-parameter brace bodies all
+pass; the real fixed `templates/App.pa.yaml` has zero braceless `Void` UDFs;
+and `check_references.py` run as a subprocess against a freshly generated
+`--name`-only scaffold exits 0.
+
+No guard was added for root causes B, C, or D: B is the documented
+un-guardable class above; C and D are component-authoring defects in
+hand-written `.pa.yaml`, not systematic generator output the way A's pattern
+could recur across any future `Void` UDF anyone adds to a template.
+
+## Playbook
+
+`references/compile-error-playbook.md`: updated the sourcing intro to
+mention the second run's 34 errors and four root causes; added a new row to
+the "User-defined function declaration limits" table for root cause A's
+exact error text; added three new sections — "Omitted-property errors (a
+defect class no static guard can catch)" for root cause B, "Undeclared
+component custom-property references" for root cause C, and "Component
+input with no typed schema (Table-typed custom property, blank default)"
+for root cause D; and a new "Expected warnings (not errors — leave the code
+as is)" section for the two literal-predicate warnings. All five entries are
+marked `LIVE (2026-09-07, second run)` with the exact error/warning text
+quoted verbatim from the task's transcript.
+
+## Verification
+
+1. `python3 -m unittest discover -s tests` — **241 tests, all green** (233
+   baseline + 8 new, all in `test_check_references_void_udf.py`).
+2. `python3 scripts/new_app.py --model templates/model.example.yaml --out /tmp/live4`
+   — exit 0, all 6 local guards PASS.
+3. `python3 scripts/new_app.py --name "Legacy" --brand "#300091" --out /tmp/live5`
+   — exit 0, all 6 local guards PASS.
+4. Grepped both generated trees: every `ModernCombobox` block has exactly
+   one `ItemDisplayText` (counts matched control-for-control in every
+   screen and in `cmp_FieldChoice.pa.yaml`); every `: Void =` declaration in
+   both `App.pa.yaml`s is immediately followed by a `{` on the next line;
+   zero `cmp_Field*.DisplayMode` references remain anywhere in either tree;
+   `check_references.py` run directly against both trees reports PASS with
+   no `Void`-UDF failures.
+
+No guard was weakened. One was strengthened — `check_references.py` gained
+the brace-body check for `Void` UDFs, backed by 8 new regression tests — and
+`references/control-contracts.yaml` was **not** touched: nothing in this
+run's evidence required it (root causes A, C, and D are UDF-declaration and
+component-authoring defects; root cause B is an omission the contract file
+has no mechanism to express, by design, per the task's constraint).
