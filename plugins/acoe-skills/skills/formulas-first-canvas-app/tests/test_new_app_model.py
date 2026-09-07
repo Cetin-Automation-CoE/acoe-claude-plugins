@@ -83,7 +83,9 @@ class TestGenerateTwoEntityApp(unittest.TestCase):
                 self.assertNotIn(leaked, text, "%s in %s" % (leaked, p.name))
 
     def test_all_eight_components_are_written(self):
-        self.assertEqual(len(list((self.out / "Components").glob("cmp_*.pa.yaml"))), 8)
+        # 8 original + 4 per-type field components (Task 6, hand-authoring
+        # library — a --model build always writes every ALL_COMPONENTS entry).
+        self.assertEqual(len(list((self.out / "Components").glob("cmp_*.pa.yaml"))), 12)
 
 
 class TestBadModelFailsBeforeWriting(unittest.TestCase):

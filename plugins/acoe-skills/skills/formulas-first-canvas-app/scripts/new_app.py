@@ -68,6 +68,12 @@ DATA_LAYER_HEADER = "      // ############ 7. DATA ACCESS LAYER ############"
 ALL_COMPONENTS = [
     "cmp_Header", "cmp_Navigation", "cmp_CommandBar", "cmp_FilterButton",
     "cmp_Notification", "cmp_Dialog", "cmp_Empty", "cmp_Spinner",
+    # Hand-authoring library (Controller Ruling 3): four per-type field
+    # components, not wired into emit_screens.py. Nothing in the stock
+    # templates instantiates these, so adding them here is safe for the
+    # --components pre-flight check below — they are available to copy into
+    # a target app, not required by it.
+    "cmp_FieldText", "cmp_FieldChoice", "cmp_FieldDate", "cmp_FieldNumber",
 ]
 
 def strip_header(text: str) -> str:

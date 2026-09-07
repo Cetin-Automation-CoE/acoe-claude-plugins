@@ -1,0 +1,101 @@
+# One-line text field: a label over a ModernTextInput. HAND-AUTHORING LIBRARY —
+# emit_screens.py emits its form fields inline and is not wired to this. Drop
+# an instance onto a form screen yourself when you want the reusable version.
+#
+#   - cmp_Form_TitleField:
+#       Control: CanvasComponent
+#       ComponentName: cmp_FieldText
+#       Properties:
+#         Label: ="Title"
+#         Value: =locRecord.Title
+#         Required: =true
+#         Placeholder: ="Enter a title"
+#         OnChange: =UpdateContext({locDirty: true})
+#         Width: =Parent.Width
+#
+# Read cmp_FieldText.Output for the current value — never re-read the inner
+# txt_Field_Input control by name from outside, it is a private implementation
+# detail.
+#
+# ONE scalar output (Text) of a known type. Do NOT fold this and its three
+# siblings (cmp_FieldChoice, cmp_FieldDate, cmp_FieldNumber) into a single
+# generic cmp_Field switching over control types and returning a Record — that
+# is exactly the whole-record output shape that caused a 247-error type-cycle
+# cascade (see references/powerfx-limits.md, "Whole-record output resolution").
+#
+# Requires: constStyle
+ComponentDefinitions:
+  cmp_FieldText:
+    DefinitionType: CanvasComponent
+    AccessAppScope: true
+    CustomProperties:
+      Label:
+        PropertyKind: Input
+        DisplayName: Label
+        Description: Text shown above the input
+        DataType: Text
+        Default: ="Label"
+      Value:
+        PropertyKind: Input
+        DisplayName: Value
+        Description: Initial text — the input owns live edits after that
+        DataType: Text
+        Default: =""
+      Required:
+        PropertyKind: Input
+        DisplayName: Required
+        Description: Shows a required marker on the label and flags the input
+        DataType: Boolean
+        Default: =false
+      Placeholder:
+        PropertyKind: Input
+        DisplayName: Placeholder
+        Description: Hint text inside the empty input
+        DataType: Text
+        Default: =""
+      OnChange:
+        PropertyKind: Event
+        DisplayName: OnChange
+        Description: Raised on blur, matching ModernTextInput's own OnChange
+        ReturnType: None
+        Default: =false
+      Output:
+        PropertyKind: Output
+        DisplayName: Output
+        Description: The current text value. Anchored to one control's .Text
+          — never resolve this component as a whole record (powerfx-limits.md).
+        DataType: Text
+    Properties:
+      Height: =constStyle.Label.Height.Small + constStyle.Label.TextInput.Height.SingleLine + constStyle.Spacing.XS
+      Output: =txt_Field_Input.Text
+      Width: =280
+    Children:
+      - con_Field:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderStyle: =BorderStyle.None
+            Height: =Parent.Height
+            LayoutDirection: =LayoutDirection.Vertical
+            LayoutGap: =constStyle.Spacing.XS
+            Width: =Parent.Width
+          Children:
+            - lbl_Field_Label:
+                Control: ModernText
+                Properties:
+                  AutoHeight: =true
+                  FontWeight: =FontWeight.Semibold
+                  Size: =constStyle.BasicStyle.FontSize.Small
+                  Text: =cmp_FieldText.Label & If(cmp_FieldText.Required, " *", "")
+            - txt_Field_Input:
+                Control: ModernTextInput
+                Properties:
+                  AccessibleLabel: =cmp_FieldText.Label
+                  Appearance: =constStyle.Label.TextInput.Appearance
+                  Default: =cmp_FieldText.Value
+                  DisplayMode: =cmp_FieldText.DisplayMode
+                  Height: =constStyle.Label.TextInput.Height.SingleLine
+                  OnChange: =cmp_FieldText.OnChange()
+                  Placeholder: =cmp_FieldText.Placeholder
+                  Required: =cmp_FieldText.Required
+                  TabIndex: =0

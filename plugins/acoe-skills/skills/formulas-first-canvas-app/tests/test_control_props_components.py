@@ -52,10 +52,12 @@ class TestComponentDefParsing(unittest.TestCase):
         self.assertEqual(defs["cmp_FilterButton"]["Width"], "Number")
 
     def test_parses_every_shipped_component(self):
+        # 8 original + 4 per-type field components (Task 6): cmp_FieldText,
+        # cmp_FieldChoice, cmp_FieldDate, cmp_FieldNumber.
         paths = sorted((SKILL / "components").glob("cmp_*.pa.yaml"))
-        self.assertEqual(len(paths), 8)
+        self.assertEqual(len(paths), 12)
         defs = ccp.parse_component_defs(paths)
-        self.assertEqual(len(defs), 8)
+        self.assertEqual(len(defs), 12)
         self.assertIn("Align", defs["cmp_FilterButton"])
 
 

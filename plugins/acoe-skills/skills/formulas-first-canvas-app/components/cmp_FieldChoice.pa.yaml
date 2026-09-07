@@ -1,0 +1,113 @@
+# Single-select choice field: a label over a ModernCombobox. HAND-AUTHORING
+# LIBRARY — emit_screens.py emits its form fields inline and is not wired to
+# this. Drop an instance onto a form screen yourself when you want it.
+#
+#   - cmp_Form_StatusField:
+#       Control: CanvasComponent
+#       ComponentName: cmp_FieldChoice
+#       Properties:
+#         Label: ="Status"
+#         Value: =locRecord.Status
+#         Choices: =constStatusChoices
+#         Required: =true
+#         Placeholder: ="Choose a status"
+#         OnChange: =UpdateContext({locDirty: true})
+#         Width: =Parent.Width
+#
+# Read cmp_FieldChoice.Output for the current value. `Choices` rows must carry
+# a `Value` column, matching this skill's constXxxChoices convention (see
+# templates/App.pa.yaml).
+#
+# ONE scalar output (Text) of a known type. Do NOT fold this and its three
+# siblings (cmp_FieldText, cmp_FieldDate, cmp_FieldNumber) into a single
+# generic cmp_Field switching over control types and returning a Record — that
+# is exactly the whole-record output shape that caused a 247-error type-cycle
+# cascade (see references/powerfx-limits.md, "Whole-record output resolution").
+# ModernCombobox itself has no .Value output (see control-contracts.yaml) — the
+# scalar here is anchored with .Selected.Value, a fixed-return projection onto
+# ONE field, not the whole .Selected record, for the same reason.
+#
+# Requires: constStyle
+ComponentDefinitions:
+  cmp_FieldChoice:
+    DefinitionType: CanvasComponent
+    AccessAppScope: true
+    CustomProperties:
+      Label:
+        PropertyKind: Input
+        DisplayName: Label
+        Description: Text shown above the input
+        DataType: Text
+        Default: ="Label"
+      Value:
+        PropertyKind: Input
+        DisplayName: Value
+        Description: Initial selected value — matched against Choices by Value
+        DataType: Text
+        Default: =""
+      Choices:
+        PropertyKind: Input
+        DisplayName: Choices
+        Description: Closed vocabulary table; each row needs a Value column
+        DataType: Table
+        Default: =
+      Required:
+        PropertyKind: Input
+        DisplayName: Required
+        Description: Shows a required marker on the label
+        DataType: Boolean
+        Default: =false
+      Placeholder:
+        PropertyKind: Input
+        DisplayName: Placeholder
+        Description: Hint text inside the empty input
+        DataType: Text
+        Default: =""
+      OnChange:
+        PropertyKind: Event
+        DisplayName: OnChange
+        Description: Raised when the selection changes, matching ModernCombobox's own OnChange
+        ReturnType: None
+        Default: =false
+      Output:
+        PropertyKind: Output
+        DisplayName: Output
+        Description: The selected choice's Value. Anchored to one field of
+          .Selected — never resolve this component as a whole record
+          (powerfx-limits.md).
+        DataType: Text
+    Properties:
+      Height: =constStyle.Label.Height.Small + constStyle.Combobox.Height.Medium + constStyle.Spacing.XS
+      Output: =com_Field_Input.Selected.Value
+      Width: =280
+    Children:
+      - con_Field:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderStyle: =BorderStyle.None
+            Height: =Parent.Height
+            LayoutDirection: =LayoutDirection.Vertical
+            LayoutGap: =constStyle.Spacing.XS
+            Width: =Parent.Width
+          Children:
+            - lbl_Field_Label:
+                Control: ModernText
+                Properties:
+                  AutoHeight: =true
+                  FontWeight: =FontWeight.Semibold
+                  Size: =constStyle.BasicStyle.FontSize.Small
+                  Text: =cmp_FieldChoice.Label & If(cmp_FieldChoice.Required, " *", "")
+            - com_Field_Input:
+                Control: ModernCombobox
+                Properties:
+                  AccessibleLabel: =cmp_FieldChoice.Label
+                  DefaultSelectedItems: =Filter(cmp_FieldChoice.Choices, Value = cmp_FieldChoice.Value)
+                  DisplayMode: =cmp_FieldChoice.DisplayMode
+                  Height: =constStyle.Combobox.Height.Medium
+                  InputTextPlaceholder: =cmp_FieldChoice.Placeholder
+                  Items: =cmp_FieldChoice.Choices
+                  OnChange: =cmp_FieldChoice.OnChange()
+                  Required: =cmp_FieldChoice.Required
+                  SelectMultiple: =false
+                  TabIndex: =0
