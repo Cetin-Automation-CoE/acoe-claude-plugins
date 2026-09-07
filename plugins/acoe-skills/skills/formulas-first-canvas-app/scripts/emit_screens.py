@@ -815,11 +815,20 @@ def _form_input_block(entity, field, item_indent):
         ]
     elif field.type == "choice":
         control_type = "ModernCombobox"
+        # DefaultSelectedItems: =Filter(<choices>, Value = loc<Entity>.<Field>)
+        # is correct as-is for edit mode — it seeds the combobox from the
+        # record being edited, unlike the list screen's filter comboboxes
+        # (which seed empty via FirstN(..., 0)). ItemDisplayText was already
+        # added by the live-compile fix (Phase 2); InputTextPlaceholder and
+        # IsSearchable were not — a bare combobox otherwise shows the factory
+        # "Find items" placeholder.
         props = [
             ("AccessibleLabel", label_text),
             ("DefaultSelectedItems",
              "=Filter(%s, Value = %s)" % (entity.choices_table(field), loc_ref)),
             ("Height", "=constStyle.Combobox.Height.Medium"),
+            ("InputTextPlaceholder", label_text),
+            ("IsSearchable", "=false"),
             ("ItemDisplayText", "=ThisItem.Value"),
             ("Items", "=%s" % entity.choices_table(field)),
             ("OnChange", dirty_setter),
@@ -1020,10 +1029,21 @@ def emit_form_screen(entity, model):
             ("LayoutDirection", "=LayoutDirection.Vertical"),
             ("LayoutGap", "=constStyle.Spacing.M"),
             ("LayoutOverflowY", "=LayoutOverflow.Scroll"),
-            ("PaddingBottom", "=constStyle.Spacing.L"),
-            ("PaddingLeft", "=constStyle.Spacing.XL"),
-            ("PaddingRight", "=constStyle.Spacing.XL"),
-            ("PaddingTop", "=constStyle.Spacing.L"),
+            # Baseline con_Form_Body: PaddingLeft/Right=20, PaddingTop/Bottom=15
+            # literals. House style is tokens, not literals (check_tokens.py
+            # would only flag colour/size/radius literals, not these — but
+            # tokens are the rule anyway) — Spacing.L is the closest token to
+            # the baseline's horizontal 20, Spacing.M to its vertical 15.
+            ("PaddingBottom", "=constStyle.Spacing.M"),
+            ("PaddingLeft", "=constStyle.Spacing.L"),
+            ("PaddingRight", "=constStyle.Spacing.L"),
+            ("PaddingTop", "=constStyle.Spacing.M"),
+            # Baseline: Width=Parent.Width, Y=cmp_Form_Header.Height. Without
+            # these the body has no Width (so it sits at its content's
+            # natural width) and no Y (so it sits at 0 and covers the
+            # header) — the live-render defect this task fixes.
+            ("Width", "=Parent.Width"),
+            ("Y", "=cmp_%sForm_Header.Height" % entity.entity),
         ], variant="AutoLayout", children=[card_block, errors_block, actions_block])
 
     header_name = "cmp_%sForm_Header" % entity.entity

@@ -569,5 +569,29 @@ class TestGallerySortUsesUdfs(unittest.TestCase):
         self.assertIn('funcTableSortOrder(enumEntity.', items)
 
 
+class TestFormScreenMatchesBaselineSkeleton(unittest.TestCase):
+    """Live render: a ~420px card pinned top-left, covering the header."""
+
+    def setUp(self):
+        self.e = entity()
+        self.text = es.emit_form_screen(self.e, small_model())
+        self.props = TestListScreenMatchesBaselineSkeleton._props_of
+
+    def test_body_fills_width_and_sits_below_header(self):
+        p = self.props(self, "con_%sForm_Body" % self.e.entity)
+        self.assertEqual(p["Width"], "=Parent.Width")
+        self.assertEqual(p["Y"], "=cmp_%sForm_Header.Height" % self.e.entity)
+        self.assertEqual(p["LayoutAlignItems"], "=LayoutAlignItems.Stretch")
+        self.assertIn("PaddingLeft", p)
+        self.assertIn("PaddingTop", p)
+
+    def test_form_comboboxes_have_placeholder_and_typed_default(self):
+        for f in self.e.choice_fields:
+            p = self.props(self, self.e.form_control(f))
+            self.assertEqual(p["InputTextPlaceholder"], '="%s"' % f.label, f.name)
+            self.assertIn("DefaultSelectedItems", p, f.name)
+            self.assertEqual(p["ItemDisplayText"], "=ThisItem.Value", f.name)
+
+
 if __name__ == "__main__":
     unittest.main()
