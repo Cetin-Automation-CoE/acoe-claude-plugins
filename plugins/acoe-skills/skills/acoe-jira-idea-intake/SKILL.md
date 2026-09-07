@@ -35,6 +35,32 @@ somebody else did.
 If you are unsure which mode applies, ask. Creating a duplicate Idea is worse than one extra
 question.
 
+## Scope — `New Functionalities` only
+
+Every ACOE Idea carries a **Delivery Type**. This skill handles exactly one of them,
+`New Functionalities`: new RPA automation, a Power App, a Power BI report, an AI use case, or a
+new feature or enhancement of an existing solution. It sends that value on every create and
+never asks the user to choose.
+
+The other three are **out of scope and must be refused**:
+
+| Delivery Type | Covers |
+|---|---|
+| `Internal Operations` | ceremonies, sprint planning, retrospectives, internal meetings, team admin, internal documentation |
+| `Support & Maintenance` | production incidents, bug fixes, troubleshooting, user support, technical maintenance, platform updates |
+| `Ad-Hoc` | feasibility analysis, technical investigation, workshops, consultations, stakeholder meetings, PoC assessment |
+
+The reason is simple: **a business case is only tracked for `New Functionalities`**, and the
+business case is what this skill exists to build. The other types have no Affected People, no
+runs, no minutes and no ROI, so every question here would be meaningless.
+
+If asked to create or edit one of those, say so plainly and stop. Do not create it anyway, do
+not create it as `New Functionalities` intending to fix the type later, and do not fill in a
+business case for it. Point the user at Jira, where they can raise it directly.
+
+In update mode, read the Delivery Type first. **If an existing Idea is not
+`New Functionalities`, do not edit it at all**, not even a single field, and say why.
+
 ## Two phases — do not merge them
 
 1. **Template preparation.** Read the source, extract what it supports, ask about the rest,
@@ -57,7 +83,7 @@ Two categories of fields, and they behave differently:
 | Behaviour | Fields |
 |---|---|
 | **Always ask the user. Never distil from the source, even if the answer looks obvious.** | Requestor, Department, Effort Estimation, Affected People, Monthly Run Cost, PR Potential, Due date, Target start, Target end |
-| **Never ask. Set it automatically.** | Team (always Automation CoE) |
+| **Never ask. Set it automatically.** | Team (always Automation CoE), Delivery Type (always `New Functionalities`) |
 | **Never ask. Never send. Jira's own default is correct.** | Priority Override (defaults to `Standard`) |
 | **Distil from the source, then have the user confirm or correct.** | Summary, Description, Business Case Description, Monthly Runs per Person, Minutes per Run, Other Cash Saved / Month, Used Applications, External ID |
 
@@ -145,11 +171,14 @@ returns both, and reuse that response for the rest of the conversation.
 
 - Requestor and Department — one `getJiraIssueTypeMetaWithFields` call returns both option
   lists (`references/fields.md` §5). Make it once, here. Ask for a name and match it in the
-  `Příjmení Jméno` format, then offer the top-level org units and narrow to the
-  sub-department. Never guess between two candidates, show them and let the user pick.
-- Components — which delivery technology is expected. Five options only: `RPA`,
-  `Power Platform`, `Power BI`, `AI`, `Excel`. Several are allowed on one Idea. This is the
-  CoE's call, not something to read out of the source.
+  `Příjmení Jméno` format, then offer the org units. Department is a **flat list** of about
+  fifteen units with no sub-departments, so ask once and submit the value exactly as stored.
+  Never build a `Unit - Sub` string, and never guess between two candidates.
+- Components — which delivery technology is expected. Six options only: `RPA`,
+  `Power Platform`, `Power BI`, `AI`, `Excel`, `Code`. Several are allowed on one Idea. This is
+  the CoE's call, not something to read out of the source. `Code` covers solutions written as
+  code rather than assembled in a platform: a React or other web app in Azure, an API or
+  service, PowerShell or Python scripts, anything where the deliverable is a codebase.
 - Anything mandatory (Summary, Description) where the source is too thin to draft.
 
 **Round 2 — the scoring inputs.** These decide backlog position, so they are worth pushing on
@@ -294,6 +323,8 @@ Things that will silently produce a bad Idea if you get them wrong, so check the
 - **Never write the calculated fields.** Saved FTEs `customfield_10103`, Net Benefit 3Y
   `customfield_11296`, ROI 3Y `customfield_10083`, Payback Months `customfield_11297` and Idea
   Priority `customfield_10105` are computed by Jira from the inputs.
+- **Delivery Type (`customfield_11396`)** is always `{ "value": "New Functionalities" }`. It
+  has no Jira default, so omitting it leaves the Idea unclassified. Never send another value.
 - **Team (`customfield_10001`)** is always Automation CoE
   `99e75e3e-d31e-4aae-941a-f60e8e548378`, passed as a bare UUID string. Set it on create and do
   not ask the user. Atlassian Team fields often do not appear in the create metadata even when

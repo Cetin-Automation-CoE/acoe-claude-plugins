@@ -12,7 +12,7 @@ the conversation already shows where things came from.
 | Summary | … |
 | Requestor | Příjmení Jméno |
 | Department | … |
-| Components | RPA / Power Platform / Power BI / AI / Excel |
+| Components | RPA / Power Platform / Power BI / AI / Excel / Code |
 | Used Applications | …, …, … |
 | External ID | WP… / *(žádné)* |
 | Due date | … |
@@ -37,7 +37,7 @@ Jira computes it:
 **Úspora:** `<lidí> × <běhů/os./měsíc> × <minut> = <hodin> h/měsíc ≈ <MD> MD/měsíc`
 (kontrola: `<běhů> × <minut>` = `<minut/měsíc na osobu>`, strop je 10 080)
 
-Team is always Automation CoE and is set automatically, and Priority Override is left to
+Team (Automation CoE) and Delivery Type (`New Functionalities`) are both set automatically, and Priority Override is left to
 Jira's own `Standard` default, so neither appears as a row to be decided. PR Potential has no default: show the row empty until the user chooses, never
 pre-filled with a suggestion.
 
