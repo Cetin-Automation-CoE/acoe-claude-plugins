@@ -1,0 +1,174 @@
+# Machine-readable control contracts. Read by scripts/check_control_props.py and,
+# from Phase 2, by the generator's emitter — one source of truth, so generated
+# output cannot contain a property the guard would reject.
+#
+# Prose version and the reasoning: references/control-dialects.md
+#
+# Provenance: seeded from Microsoft Learn, reconciled against the provably-compiled
+# app at /Users/krystofpe/powerapps-work/canvas-src. Where they disagreed, the
+# compiled app won.
+#
+# COVERAGE LIMIT: absence from this file means "not verified", not "invalid".
+# check_control_props.py reports properties on unlisted controls as unchecked.
+
+enums:
+  Align: [Left, Center, Right, Justify]
+  TextCanvas.Align: [Start, Center, End]
+  FontWeight: [Bold, Semibold, Normal, Lighter]
+  TextCanvas.Weight: [Bold, Regular]
+  ButtonCanvas.Appearance: [Primary, Secondary, Outline, Subtle, Transparent]
+  ButtonCanvas.Layout: [IconBefore, IconAfter, IconOnly, TextOnly]
+  ButtonCanvas.IconStyle: [Filled, Regular]
+  TextInputType: [SingleLine, Multiline, Password, Search]
+  TriggerOutput: [Keypress, FocusOut, Delayed]
+  Appearance: [FilledDarker, FilledLighter, Outline]
+  VerticalAlign: [Top, Middle, Bottom]
+  BorderStyle: [None, Solid, Dashed, Dotted]
+  LayoutDirection: [Horizontal, Vertical]
+  DisplayMode: [Edit, View, Disabled]
+
+controls:
+
+  ModernText:
+    generation: modern
+    properties:
+      - Color, Size, FontWeight, Align, Wrap, AutoHeight, Text, Visible, OnSelect
+      - Italic, Underline, Strikethrough
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
+      - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - Fill, BorderColor, BorderThickness, BorderStyle
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+      - AccessibleLabel, TabIndex, Live
+    enums:
+      FontWeight: FontWeight
+      Align: TextCanvas.Align
+      BorderStyle: BorderStyle
+    renamed_from:
+      FontColor: Color
+      FontSize: Size
+      Weight: FontWeight
+      FontItalic: Italic
+      FontUnderline: Underline
+      FontStrikethrough: Strikethrough
+      BorderRadius: [RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight]
+    removed: [DisplayMode]
+
+  Text:
+    generation: previous
+    note: >-
+      Previous-generation modern text. Still valid, a DIFFERENT control from
+      ModernText — not a version of it.
+    properties:
+      - FontColor, Size, Weight, Align, VerticalAlign, AutoHeight, Text, Visible, OnSelect
+      - Fill, BorderColor, BorderThickness, BorderStyle
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+      - AccessibleLabel, TabIndex, DisplayMode
+    enums:
+      Weight: TextCanvas.Weight
+      Align: TextCanvas.Align
+      VerticalAlign: VerticalAlign
+      BorderStyle: BorderStyle
+      DisplayMode: DisplayMode
+
+  ModernTextInput:
+    generation: modern
+    note: >-
+      No HintText (classic TextInput only) and no Format (also classic). For numeric
+      entry keep it a text input, right-align via the token, parse with Value().
+      OnChange fires on BLUR, not per keystroke.
+    properties:
+      - Placeholder, Default, Text, Type, TriggerOutput, MaxLength, Required
+      - ValidationState, Appearance, Color, Size, FontWeight, Align
+      - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - AccessibleLabel, OnChange, OnSelect, DisplayMode, BasePaletteColor
+      - AlignInContainer, FillPortions, Height, Width, X, Y, Visible, TabIndex
+    enums:
+      Type: TextInputType
+      TriggerOutput: TriggerOutput
+      Appearance: Appearance
+      FontWeight: FontWeight
+      Align: TextCanvas.Align
+      DisplayMode: DisplayMode
+    renamed_from:
+      HintText: Placeholder
+
+  ModernCombobox:
+    generation: modern
+    note: >-
+      SelectMultiple DEFAULTS TO TRUE — set it false explicitly for single-select.
+      InputTextPlaceholder's factory default is the literal "Find items".
+      Outputs: SelectedItems, Selected, SearchText. There is NO Value property.
+    properties:
+      - Items, ItemDisplayText, DefaultSelectedItems, InputTextPlaceholder
+      - SelectMultiple, IsSearchable, MultiValueDelimiter, DelayOutput
+      - Required, ValidationState, Appearance, Color, Size
+      - AccessibleLabel, TabIndex, OnChange, DisplayMode, Visible
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+    enums:
+      Appearance: Appearance
+      DisplayMode: DisplayMode
+    renamed_from:
+      Fields: ItemDisplayText
+      TriggerOutput: DelayOutput
+
+  ModernDatePicker:
+    generation: modern
+    properties:
+      - DefaultDate, SelectedDate, Format, DateTimeZone, StartDate, EndDate
+      - StartOfWeek, IsEditable, Placeholder, Appearance
+      - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - ValidationState, AccessibleLabel, OnChange, DisplayMode, Visible
+      - AlignInContainer, FillPortions, Height, Width, X, Y, TabIndex
+    enums:
+      Appearance: Appearance
+      DisplayMode: DisplayMode
+
+  Button:
+    generation: previous
+    note: >-
+      Previous-generation modern button — what this skill's eight bundled components
+      use. Takes the PLAIN Align enum, unlike the text controls. No Color, no Fill.
+    properties:
+      - FontColor, FontSize, BorderRadius, BorderThickness, BorderColor
+      - BasePaletteColor, Icon, Appearance, Layout, IconStyle, Align
+      - Text, AccessibleLabel, TabIndex, DisplayMode, OnSelect, Visible
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+    enums:
+      Appearance: ButtonCanvas.Appearance
+      Layout: ButtonCanvas.Layout
+      IconStyle: ButtonCanvas.IconStyle
+      Align: Align
+      DisplayMode: DisplayMode
+    absent: [Color, Fill]
+
+  ModernButton@1.0.0:
+    generation: updated
+    note: A different control again, per Learn. Not used by this skill's components.
+    properties:
+      - Color, Size, Text, Icon, IconStyle, Appearance, Layout, Tooltip
+      - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - AccessibleLabel, TabIndex, DisplayMode, OnSelect, Visible
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+    enums:
+      DisplayMode: DisplayMode
+
+  Gallery:
+    generation: modern
+    note: >-
+      LEAF CONTROL. Inside an auto-layout container it defaults to FillPortions 0 and
+      collapses to the ~200px control default — always set FillPortions or an explicit
+      Height. No ShowScrollbar (classic only).
+    properties:
+      - Items, TemplateSize, TemplatePadding, Transition, WrapCount
+      - DelayItemLoading, LoadingSpinner, LoadingSpinnerColor
+      - BorderColor, BorderThickness, BorderStyle
+      - AccessibleLabel, TabIndex, Visible, FillPortions
+      - LayoutDirection, LayoutGap, LayoutJustifyContent, LayoutAlignItems
+      - LayoutMinHeight, LayoutMinWidth, LayoutOverflowX, LayoutOverflowY
+      - Height, Width, X, Y, AlignInContainer, Default, Selectable, ShowNavigation
+    enums:
+      BorderStyle: BorderStyle
+      LayoutDirection: LayoutDirection
+    absent: [ShowScrollbar]
+    requires_one_of: [FillPortions, Height]
