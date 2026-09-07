@@ -14,7 +14,7 @@ This file is for people. The file Claude reads is `SKILL.md`.
 | Requirement | Why |
 |---|---|
 | Claude Code with the `acoe-skills` plugin installed | The skill loads automatically when you talk about canvas apps |
-| Python 3.9 or newer | The scaffolder, `inventory.py` and the five `check_*.py` guard scripts are Python, no packages needed |
+| Python 3.9 or newer | The scaffolder, `inventory.py` and the six `check_*.py` guard scripts are Python, no packages needed |
 | The `canvas-apps` plugin (Canvas Authoring MCP) | The only way to compile and push `.pa.yaml` source into a live app |
 | Power Apps Studio access | You create the blank app and keep its tab open while Claude pushes |
 
@@ -138,7 +138,7 @@ Ask Claude: *"Add a Contracts entity with a list and a form screen."*
 
 ## 4. Check an app's health
 
-Six scripts, all read-only except that the five `check_*.py` guards exit non-zero
+Seven scripts, all read-only except that the six `check_*.py` guards exit non-zero
 when they find a violation, so they drop straight into a pre-commit hook or CI.
 
 ```bash
@@ -148,6 +148,7 @@ python3 scripts/check_data_layer.py         --src Src/ --datasource-pattern 'PP_
 python3 scripts/check_collection_columns.py --src Src/                 # every column you read exists
 python3 scripts/check_references.py         --src Src/                 # every name resolves, in a safe order
 python3 scripts/check_control_props.py      --src Src/ --tokens-file Src/App.pa.yaml  # control properties match their control's contract
+python3 scripts/check_layout.py             --src Src/                 # auto-layout sizing that actually renders
 ```
 
 **Why bother when the app compiles?** The compiler does not check column names on
@@ -156,9 +157,12 @@ Studio binder rejects forward references that the compile service accepts. Each 
 those fails at runtime or shows up as dozens of unrelated errors. `check_control_props.py`
 adds a fourth class: a property name that belongs to the *other* control generation,
 or a design-token value from the wrong dialect, both of which read fine in the YAML
-and fail only at compile. None of the six scripts replaces a live compile — they
-narrow what a `compile_canvas` push still needs to catch. When a push does fail,
-`references/compile-error-playbook.md` maps the error text to a cause and a fix.
+and fail only at compile. `check_layout.py` adds a fifth: sizing that is individually
+valid but leaves a container or a leaf control with no resolvable size, which renders
+as a collapsed control rather than a compile error. None of the seven scripts replaces
+a live compile — they narrow what a `compile_canvas` push still needs to catch. When a
+push does fail, `references/compile-error-playbook.md` maps the error text to a cause
+and a fix.
 
 Ask Claude: *"Run the guards on this app and tell me what is off."*
 
@@ -227,7 +231,7 @@ colours or sizes.
   `compile_canvas` in a live coauthoring session. That is what the guard scripts exist
   to compensate for.
 - **The `--model` generator's output has not yet been validated against a live
-  `compile_canvas` run.** The five local guards prove the emitted YAML is
+  `compile_canvas` run.** The six local guards prove the emitted YAML is
   structurally sound, contract-clean and internally consistent — they do not prove
   Power Apps accepts it. Treat the first push as a debugging session, not a formality,
   and expect `references/compile-error-playbook.md` to be consulted.
@@ -252,8 +256,9 @@ formulas-first-canvas-app/
   scripts/              new_app.py generator (--model or the generic --name path),
                         model.py (schema + validation + derived names),
                         emit_mock.py / emit_formulas.py / emit_screens.py
-                        (the --model emitters), inventory.py, and five
+                        (the --model emitters), inventory.py, and six
                         check_*.py guards including check_control_props.py
+                        and check_layout.py
   templates/            App.pa.yaml, design-tokens.pa.yaml, ListScreen, FormScreen,
                         model.example.yaml (the model.yaml schema, two worked
                         entities), inventory.md and findings.csv report templates

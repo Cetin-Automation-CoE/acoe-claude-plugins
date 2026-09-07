@@ -65,6 +65,14 @@ binder never sees a forward reference. If the agent starts hand-writing
 starts inventing field names no domain sentence implied, that is the division
 breaking down.
 
+**There is deliberately no `--domain` flag on `new_app.py`.** An earlier
+plan named one; step 2b above supersedes it by design, not by omission.
+Turning a domain sentence into fields, archetypes and plausible vocab is
+agent judgement — exactly what step 2b already does — not script work a CLI
+flag could do better. Writing that judgement into `model.yaml` and calling
+`--model` on it does everything a `--domain` flag would have, without
+teaching the script to guess at domain semantics it has no way to get right.
+
 A model with **N** entities under `entities:` produces **N** list screens and
 **N** form screens, one navigation registry row per entity, and one
 `col*`/`funcLoad*`/`funcSave*`/`funcDelete*` set per entity — all in the single
@@ -87,7 +95,7 @@ a *working published* app as invalid. So: create a blank tablet app in studio,
 compile. The command prints these steps with your paths filled in.
 
 **The generator's own output has not yet been validated against a live
-`compile_canvas` run.** The five local guards (below) prove the emitted YAML is
+`compile_canvas` run.** The six local guards (below) prove the emitted YAML is
 structurally sound, contract-clean and internally consistent — they do not
 prove Power Apps accepts it. Treat the first push of any `--model` build as a
 debugging session and expect to consult
@@ -200,9 +208,10 @@ with section banners: `references/app-formulas-layout.md`.
 | `check_collection_columns.py` | Every column a gallery or form reads off a collection actually exists on it. |
 | `check_references.py` | Every name resolves, and `App.Formulas` declaration order is safe for the Studio binder. |
 | `check_control_props.py` | Control properties match `references/control-contracts.yaml` — property names, renamed-away names, and enum namespaces, resolved through design tokens and component declarations. |
+| `check_layout.py` | Auto-layout sizing that actually renders: every fixed (`FillPortions: =0`) child of an auto-layout container carries an explicit main-axis size, every auto-layout container itself resolves a size, and a leaf control is never left with no sizing at all. |
 
-Copy `scripts/` into the target repo and run all six alongside every compile: the
-five `check_*.py` guards plus `inventory.py`. All six are standalone; `new_app.py`
+Copy `scripts/` into the target repo and run all seven alongside every compile: the
+six `check_*.py` guards plus `inventory.py`. All seven are standalone; `new_app.py`
 reads `templates/` and `components/` relative to itself, so run it from the skill
 tree.
 
@@ -213,9 +222,10 @@ python3 scripts/check_data_layer.py    --src <Src/> --datasource-pattern 'PP_[A-
 python3 scripts/check_collection_columns.py --src <Src/>
 python3 scripts/check_references.py    --src <Src/>   # names resolve; declaration order is safe
 python3 scripts/check_control_props.py --src <Src/> --tokens-file <Src/>/App.pa.yaml
+python3 scripts/check_layout.py        --src <Src/>   # auto-layout sizing that actually renders
 ```
 
-`new_app.py` runs all five `check_*.py` guards on its own output, so a fresh
+`new_app.py` runs all six `check_*.py` guards on its own output, so a fresh
 scaffold starts clean.
 
 Each takes `--help`. `check_*` exit non-zero on violation, so they drop straight into
@@ -233,10 +243,10 @@ all, then close the loop against a live session:
                                          ↑                    ↓
                                          └──── fix ──── parse errors
 
-The five `check_*.py` guards catch architecture, tokens, data layer, collection
-columns and control contracts. Each prints what it does NOT cover. **They prove the
-YAML is structurally sound and contract-clean — they do not prove the app
-compiles.** Everything else needs `compile_canvas` against a live coauthoring
+The six `check_*.py` guards catch architecture, tokens, data layer, collection
+columns, control contracts and auto-layout sizing. Each prints what it does NOT
+cover. **They prove the YAML is structurally sound and contract-clean — they do
+not prove the app compiles.** Everything else needs `compile_canvas` against a live coauthoring
 session; there is no substitute, because `pac canvas pack` is deprecated and
 crashes and `pac canvas validate` rejects every file of a working published app.
 
