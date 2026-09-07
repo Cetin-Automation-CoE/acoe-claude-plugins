@@ -101,6 +101,7 @@ Screens:
                         AccessibleLabel: ="Item status"
                         DefaultSelectedItems: =Filter(constStatusChoices, Value = locItem.Status)
                         Height: =constStyle.Combobox.Height.Medium
+                        ItemDisplayText: =ThisItem.Value
                         Items: =constStatusChoices
                         OnChange: |-
                           =UpdateContext({locDirty: true})

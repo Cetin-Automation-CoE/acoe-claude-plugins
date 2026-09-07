@@ -108,6 +108,7 @@ Screens:
                               AccessibleLabel: ="Filter by status"
                               FillPortions: =0
                               Height: =constStyle.Combobox.Height.Medium
+                              ItemDisplayText: =ThisItem.Value
                               # The vocabulary, not a re-typed list of strings.
                               Items: =constStatusChoices
                               SelectMultiple: =true
