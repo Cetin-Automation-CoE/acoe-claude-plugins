@@ -95,7 +95,6 @@ ComponentDefinitions:
                 Properties:
                   AccessibleLabel: =cmp_FieldDate.Label
                   DefaultDate: =cmp_FieldDate.Value
-                  DisplayMode: =cmp_FieldDate.DisplayMode
                   Height: =constStyle.Label.Height.Medium
                   OnChange: =cmp_FieldDate.OnChange()
                   Placeholder: =cmp_FieldDate.Placeholder

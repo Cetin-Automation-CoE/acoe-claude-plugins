@@ -50,7 +50,15 @@ ComponentDefinitions:
         DisplayName: Choices
         Description: Closed vocabulary table; each row needs a Value column
         DataType: Table
-        Default: =
+        # A typed default establishes the schema so .Selected.Value and the
+        # DefaultSelectedItems filter below can resolve. A blank default (the
+        # cmp_FilterButton pattern) is fine there because that component's
+        # Choices is never resolved into an output; here it is (Output below),
+        # so it needs a real column. |- block scalar because the value has a
+        # colon in it (`Value: ""`), same reason every other Default with a
+        # colon in this file uses it.
+        Default: |-
+          =Table({Value: ""})
       Required:
         PropertyKind: Input
         DisplayName: Required
@@ -103,9 +111,9 @@ ComponentDefinitions:
                 Properties:
                   AccessibleLabel: =cmp_FieldChoice.Label
                   DefaultSelectedItems: =Filter(cmp_FieldChoice.Choices, Value = cmp_FieldChoice.Value)
-                  DisplayMode: =cmp_FieldChoice.DisplayMode
                   Height: =constStyle.Combobox.Height.Medium
                   InputTextPlaceholder: =cmp_FieldChoice.Placeholder
+                  ItemDisplayText: =ThisItem.Value
                   Items: =cmp_FieldChoice.Choices
                   OnChange: =cmp_FieldChoice.OnChange()
                   Required: =cmp_FieldChoice.Required

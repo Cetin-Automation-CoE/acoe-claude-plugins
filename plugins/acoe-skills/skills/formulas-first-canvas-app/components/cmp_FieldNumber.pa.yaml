@@ -95,7 +95,6 @@ ComponentDefinitions:
                   Align: =constStyle.Label.NumberInput.AlignModern
                   Appearance: =constStyle.Label.TextInput.Appearance
                   Default: =Text(cmp_FieldNumber.Value)
-                  DisplayMode: =cmp_FieldNumber.DisplayMode
                   Height: =constStyle.Label.TextInput.Height.SingleLine
                   OnChange: =cmp_FieldNumber.OnChange()
                   Placeholder: =cmp_FieldNumber.Placeholder

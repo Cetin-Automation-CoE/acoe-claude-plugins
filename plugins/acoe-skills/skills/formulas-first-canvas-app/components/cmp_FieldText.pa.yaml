@@ -93,7 +93,6 @@ ComponentDefinitions:
                   AccessibleLabel: =cmp_FieldText.Label
                   Appearance: =constStyle.Label.TextInput.Appearance
                   Default: =cmp_FieldText.Value
-                  DisplayMode: =cmp_FieldText.DisplayMode
                   Height: =constStyle.Label.TextInput.Height.SingleLine
                   OnChange: =cmp_FieldText.OnChange()
                   Placeholder: =cmp_FieldText.Placeholder
