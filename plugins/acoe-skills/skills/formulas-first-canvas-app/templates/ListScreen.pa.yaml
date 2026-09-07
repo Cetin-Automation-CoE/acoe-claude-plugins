@@ -100,7 +100,7 @@ Screens:
                               Appearance: =constStyle.Label.TextInput.Appearance
                               FillPortions: =0
                               Height: =constStyle.Label.TextInput.Height.SingleLine
-                              HintText: ="Search"
+                              Placeholder: ="Search"
                               TabIndex: =0
                               Width: =280
                         - com_List_StatusFilter:
@@ -190,6 +190,10 @@ Screens:
                       Properties:
                         AccessibleLabel: ="Items table"
                         BorderColor: =constTransparent.RGBA
+                        # Gallery is a leaf control: inside an auto-layout container it
+                        # defaults to FillPortions 0 and collapses to the ~200px control
+                        # default. This line is what makes the grid fill the screen.
+                        FillPortions: =1
                         # Items reads the SCOPE formula, not the raw collection.
                         # Gallery, counter and filter chips must share one base
                         # or they drift apart.
@@ -246,7 +250,7 @@ Screens:
                               - lbl_Row_Amount:
                                   Control: ModernText
                                   Properties:
-                                    Align: =constStyle.Label.NumberInput.Align
+                                    Align: =constStyle.Label.NumberInput.AlignModern
                                     Color: =funcMoneyTextColor(ThisItem.Amount)
                                     Size: =constStyle.BasicStyle.FontSize.Medium
                                     Text: =funcAsCurrency(ThisItem.Amount)

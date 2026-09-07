@@ -112,9 +112,11 @@ Screens:
                       Control: ModernTextInput
                       Properties:
                         AccessibleLabel: ="Item amount"
-                        Align: =constStyle.Label.NumberInput.Align
+                        Align: =constStyle.Label.NumberInput.AlignModern
                         Default: =Text(locItem.Amount)
-                        Format: =TextFormat.Number
+                        # ModernTextInput has no Format property (that is the classic
+                        # TextInput). Numeric entry stays a text input: right-aligned
+                        # via the token above, parsed with Value() in funcSaveItem.
                         Height: =constStyle.Label.TextInput.Height.SingleLine
                         OnChange: |-
                           =UpdateContext({locDirty: true})

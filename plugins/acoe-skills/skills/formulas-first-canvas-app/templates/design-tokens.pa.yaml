@@ -116,7 +116,8 @@ constStyle = {
         Radius: 10,
         Height: {Large: 40, Medium: 32, Small: 27},
         TextLabel: {
-            Align: Align.Left,
+            AlignModern: 'TextCanvas.Align'.Start,
+            AlignLegacy: Align.Left,
             VerticalAlign: VerticalAlign.Middle,
             PaddingLeft: 8,
             PaddingRight: 8,
@@ -124,7 +125,8 @@ constStyle = {
             PaddingBottom: 4
         },
         TextInput: {
-            Align: Align.Left,
+            AlignModern: 'TextCanvas.Align'.Start,
+            AlignLegacy: Align.Left,
             VerticalAlign: VerticalAlign.Middle,
             PaddingLeft: 0,
             PaddingRight: 0,
@@ -136,8 +138,13 @@ constStyle = {
         },
         // Money and quantities are right-aligned. Grid cells are Labels, not
         // NumberInputs, so they do NOT inherit this — set it explicitly there.
+        // Alignment splits by control family: text controls take
+        // 'TextCanvas.Align'.{Start|Center|End}, Buttons take Align.{Left|Center|Right}.
+        // Two fields, because one token cannot serve both. See
+        // references/control-dialects.md.
         NumberInput: {
-            Align: Align.Right,
+            AlignModern: 'TextCanvas.Align'.End,
+            AlignLegacy: Align.Right,
             VerticalAlign: VerticalAlign.Middle,
             PaddingLeft: 8,
             PaddingRight: 8
@@ -148,7 +155,8 @@ constStyle = {
         BorderRadius: 10,
         FontWeight: FontWeight.Semibold,
         IconStyle: 'Icon.IconStyle'.Filled,
-        Align: Align.Center,
+        AlignModern: 'TextCanvas.Align'.Center,
+        AlignLegacy: Align.Center,
         VerticalAlign: VerticalAlign.Middle
     },
     Combobox: {

@@ -107,8 +107,10 @@ For any app whose audience reads figures all day:
 - **Right-align money and quantities**, in cells *and* headers. Left-aligned currency in
   a grid is the single worst typographic error in a business app — it destroys the
   vertical scan that makes a column of numbers comparable at a glance.
-- The `NumberInput` token carries `Align.End`. Grid cells are labels, not inputs, so
-  they do not inherit it. Set it explicitly.
+- The `NumberInput` token carries two fields, because one cannot serve both dialects:
+  `AlignModern` (`'TextCanvas.Align'.End`, for `ModernText`/`ModernTextInput`) and
+  `AlignLegacy` (`Align.Right`, for the previous-generation `Button`). Grid cells are
+  labels, not inputs, so they do not inherit it. Set it explicitly.
 - Format with an explicit locale: `Text(v, "[$-en-US]#,##0")`. Locale-default formats
   render decimals inconsistently.
 - Power Fx treats `%` in a format string as a **literal** — no ×100. Multiply

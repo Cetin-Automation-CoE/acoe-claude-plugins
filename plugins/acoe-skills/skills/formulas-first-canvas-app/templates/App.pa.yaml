@@ -87,7 +87,11 @@ App:
                   }
               )
           );
-          Clear(colItems);
+          // NOTE: no Clear() here. The seeded rows above are the mock data and
+          // must survive: clearing them is what made every scaffolded app render
+          // an empty grid. Seed-then-clear is correct ONLY for the framework
+          // collections (colFilters, colSorts, colBack, colNotifications), where
+          // a typed schema with no rows is genuinely wanted.
           // SWITCH DAY: delete the mock above, uncomment below.
           // Choice/lookup unwrapping happens HERE and nowhere else.
           // ClearCollect(
