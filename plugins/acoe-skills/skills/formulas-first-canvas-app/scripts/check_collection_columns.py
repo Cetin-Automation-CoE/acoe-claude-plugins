@@ -131,6 +131,8 @@ def main():
     if not args.quiet:
         for c in sorted(schemas):
             print(f"  {c}: {len(schemas[c])} columns")
+    print("  Not covered: column TYPES; columns added at runtime by Patch/Collect "
+          "with a new shape; SortByColumns strings against the sorted collection.")
 
 
 if __name__ == "__main__":

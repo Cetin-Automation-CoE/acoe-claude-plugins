@@ -25,6 +25,31 @@ DEFAULT_APP_STATE = {"colFilters", "colSorts", "colBack", "colNotifications"}
 
 WRITE_FNS = r"Collect|ClearCollect|Patch|Remove|RemoveIf|UpdateIf|Update"
 
+FRAMEWORK_COLLECTIONS = {"colFilters", "colSorts", "colBack", "colNotifications"}
+RE_CLEAR = re.compile(r"\bClear\(\s*(col\w+)\s*\)")
+
+
+def check_bare_clear(text, filename):
+    """Flag Clear() on an entity collection.
+
+    Seed-then-clear is correct ONLY for the framework collections, where a typed
+    schema with no rows is genuinely wanted. On an entity collection it is what
+    made every scaffolded app render an empty grid: the mock rows were seeded to
+    establish the schema and then deleted.
+
+    Use ClearCollect() to replace contents; a bare Clear() on an entity collection
+    is almost always a leftover.
+    """
+    findings = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        code = raw.split("//")[0]
+        for m in RE_CLEAR.finditer(code):
+            col = m.group(1)
+            if col in FRAMEWORK_COLLECTIONS:
+                continue
+            findings.append((filename, n, col, raw.strip()[:80]))
+    return findings
+
 
 def code_only(line: str) -> str:
     line = re.sub(r'"[^"]*"', '""', line)
@@ -102,8 +127,25 @@ def main():
         print("\n\n".join(fail))
         sys.exit(1)
 
+    # 4. Bare Clear() on an entity collection — the seed-then-clear pattern that
+    #    rendered every scaffolded app empty.
+    bare_clears = []
+    for path in files:
+        bare_clears.extend(check_bare_clear(path.read_text(encoding="utf-8"), str(path)))
+    if bare_clears:
+        print("FAIL: %d bare Clear() on an entity collection.\n" % len(bare_clears))
+        for fname, n, col, ctx in bare_clears:
+            print("  %s:%s  Clear(%s)\n      %s" % (fname, n, col, ctx))
+        print("\n  Seed-then-clear is correct only for %s.\n"
+              "  On an entity collection this empties the app. Use ClearCollect() to\n"
+              "  replace contents, or delete the Clear()."
+              % ", ".join(sorted(FRAMEWORK_COLLECTIONS)))
+        sys.exit(1)
+
     print(f"PASS: data sources and data writes confined to the layer "
           f"({len(files)} files, app-state exempt: {', '.join(sorted(app_state))})")
+    print("  Not covered: whether the data-access banner is accurate; delegation "
+          "warnings; UDF parameter/column case collisions.")
 
 
 if __name__ == "__main__":

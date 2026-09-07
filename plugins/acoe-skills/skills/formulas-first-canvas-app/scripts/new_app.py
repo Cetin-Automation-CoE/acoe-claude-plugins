@@ -166,6 +166,7 @@ def main():
         # this still checks the banners and that no screen writes a data
         # collection directly.
         ("check_data_layer.py", ["--src", str(out), "--datasource-pattern", "__NO_DATASOURCE__"]),
+        ("check_control_props.py", ["--src", str(out)]),
     ]
     failed = 0
     for script, argv in checks:
@@ -181,8 +182,16 @@ def main():
         sys.exit(1)
 
     print(f"""
-All checks pass.
+All 5 local guards pass. That means: architecture, tokens, data layer, collection
+columns and control contracts are clean.
 
+It does NOT mean the app compiles. There is no offline compile for Canvas Apps —
+`pac canvas pack` is deprecated and crashes, and `pac canvas validate` rejects every
+file of a working published app. The only real validator is compile_canvas against a
+live coauthoring session.
+""")
+
+    print(f"""
 Next — there is no local .msapp path (pac canvas pack is deprecated and
 crashes; pac canvas validate rejects even working apps), so push the source
 into a live app:

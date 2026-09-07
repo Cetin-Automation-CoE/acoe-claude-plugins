@@ -115,6 +115,8 @@ def main():
     print(msg + ")")
     for name, n in exempted.most_common():
         print(f"  exempt: {name} ({n})")
+    print("  Not covered: spacing literals (reported by inventory.py, not enforced); "
+          "literals inside token-exempt lines; values built at runtime.")
 
 
 if __name__ == "__main__":

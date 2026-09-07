@@ -192,6 +192,8 @@ def main():
 
     print(f"PASS: every const/enum/func/gl reference resolves, and App.Formulas "
           f"declares in dependency order ({len(files)} files, {len(defined)} names)")
+    print("  Not covered: whether a resolved name has the right TYPE or arity; "
+          "control property names (see check_control_props.py); runtime nulls.")
 
 
 if __name__ == "__main__":
