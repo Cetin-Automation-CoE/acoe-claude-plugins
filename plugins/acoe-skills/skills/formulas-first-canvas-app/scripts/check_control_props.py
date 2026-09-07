@@ -67,6 +67,51 @@ def load_contracts(path=None):
     return data
 
 
+RE_TOKEN_OPEN = re.compile(r"^([A-Za-z_]\w*)\s*[:=]\s*\{\s*$")
+RE_TOKEN_LEAF = re.compile(r"^([A-Za-z_]\w*)\s*:\s*(.+?),?\s*$")
+
+
+def parse_tokens(text):
+    """Parse a Power Fx token record into {dotted.path: literal}.
+
+    Handles the one-key-per-line record style the skill's design-tokens file uses:
+
+        constStyle = {
+            Label: {
+                NumberInput: {
+                    AlignModern: 'TextCanvas.Align'.End,
+
+    COVERAGE LIMIT: inline records (`Height: {Large: 40, Medium: 32}`) are recorded
+    as opaque leaves, not descended into. Callers resolving a path below one get
+    None and treat the site as unchecked rather than clean.
+    """
+    mapping = {}
+    stack = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("//"):
+            continue
+        if line.endswith("};") or line == "}" or line == "},":
+            if stack:
+                stack.pop()
+            continue
+        m = RE_TOKEN_OPEN.match(line)
+        if m:
+            stack.append(m.group(1))
+            continue
+        m = RE_TOKEN_LEAF.match(line)
+        if m and not m.group(2).startswith("{"):
+            mapping[".".join(stack + [m.group(1)])] = m.group(2).rstrip(",").strip()
+    return mapping
+
+
+def make_resolver(mapping):
+    """Return a resolver closing over a token map; unknown paths give None."""
+    def resolve(path):
+        return mapping.get(path)
+    return resolve
+
+
 def iter_properties(text, filename):
     """Yield a PropSite per property line, tracking the enclosing control.
 
@@ -247,6 +292,9 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--src", required=True)
     ap.add_argument("--contracts", default=None)
+    ap.add_argument("--tokens-file", default=None,
+                    help="Power Fx fragment defining constStyle etc. "
+                         "Defaults to <src>/App.pa.yaml, where new_app.py inlines them.")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
@@ -254,10 +302,21 @@ def main():
     src = pathlib.Path(args.src)
     files = sorted(p for p in src.rglob("*.pa.yaml") if p.name != "_EditorState.pa.yaml")
 
+    resolver = None
+    token_text = ""
+    if args.tokens_file:
+        token_text = pathlib.Path(args.tokens_file).read_text(encoding="utf-8")
+    else:
+        app = src / "App.pa.yaml"
+        if app.exists():
+            token_text = app.read_text(encoding="utf-8")
+    if token_text:
+        resolver = make_resolver(parse_tokens(token_text))
+
     findings = []
     for path in files:
         findings.extend(check_text(path.read_text(encoding="utf-8"),
-                                   str(path), contracts))
+                                   str(path), contracts, resolver=resolver))
 
     errs = [f for f in findings if f.severity == "error"]
     warns = [f for f in findings if f.severity == "warn"]
