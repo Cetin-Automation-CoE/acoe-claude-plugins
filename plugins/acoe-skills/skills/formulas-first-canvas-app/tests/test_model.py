@@ -112,6 +112,46 @@ class TestValidation(unittest.TestCase):
         bad = MINIMAL.replace("{name: Tag,", "{name: 'Tag Number',")
         self.assertIn("Tag Number", self._err(bad))
 
+    def test_field_name_value_is_rejected_as_a_powerfx_reserved_word(self):
+        """M1: a SharePoint column literally named 'Value' is common, and it
+        would shadow the Power Fx built-in inside every control formula that
+        reads the row (ThisItem.Value, locX.Value, ...)."""
+        bad = MINIMAL.replace("{name: Tag, type: text, required: true, grid: 100}",
+                              "{name: Value, type: text, required: true, grid: 100}")
+        msg = self._err(bad)
+        self.assertIn("Value", msg)
+        self.assertIn("reserved", msg)
+
+    def test_field_names_self_parent_thisitem_text_are_also_rejected(self):
+        for reserved in ("Self", "Parent", "ThisItem", "Text"):
+            bad = MINIMAL.replace(
+                "{name: Tag, type: text, required: true, grid: 100}",
+                "{name: %s, type: text, required: true, grid: 100}" % reserved)
+            self.assertIn(reserved, self._err(bad), reserved)
+
+    def test_grid_garbage_value_is_a_model_error_not_a_bare_valueerror(self):
+        """M6: `grid: <garbage>` used to escape as a bare ValueError from
+        int(), bypassing the friendly error handler entirely."""
+        bad = MINIMAL.replace("grid: 100", "grid: wibble")
+        msg = self._err(bad)
+        self.assertIn("grid", msg)
+        self.assertIn("wibble", msg)
+
+    def test_colliding_derived_choices_table_names_are_rejected(self):
+        """M2: entity 'Asset' field 'StatusChoices' and entity 'AssetStatus'
+        field 'Choices' both derive the SAME choices-table name
+        (constAssetStatusChoicesChoices) — undetected, this used to reach
+        emit_formulas.topo_sort as two blocks sharing one name and raise
+        OrderError with an EMPTY cycle list, a confusing internal error for
+        what is really a model problem."""
+        text = ("app_name: X\nentities:\n"
+                "  - entity: Asset\n    plural: Assets\n    fields:\n"
+                "      - {name: StatusChoices, type: choice, vocab: [Open, Shut]}\n"
+                "  - entity: AssetStatus\n    plural: AssetStatuses\n    fields:\n"
+                "      - {name: Choices, type: choice, vocab: [A, B]}\n")
+        msg = self._err(text)
+        self.assertIn("constAssetStatusChoicesChoices", msg)
+
 
 class TestGridCap(unittest.TestCase):
     def test_fields_beyond_the_cap_fall_off_the_grid_but_stay_on_the_form(self):

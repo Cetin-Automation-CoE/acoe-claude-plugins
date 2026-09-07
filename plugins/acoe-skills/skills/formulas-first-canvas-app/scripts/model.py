@@ -23,6 +23,11 @@ FILTER_KINDS = (True, False, "chips")
 MAX_GRID_COLUMNS = 7
 KEY_COLUMN = "Key"
 RESERVED = {KEY_COLUMN, "IsSelected"}
+# Power Fx names a field would shadow inside every control formula that
+# references the row it came from (ThisItem.Self, locX.Value, ...). A
+# SharePoint column literally named "Value" is common — catch it here, at
+# generation time, rather than as a baffling compile error later.
+RESERVED_POWERFX = {"Self", "Parent", "ThisItem", "Value", "Text"}
 IDENT = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 
 
@@ -45,6 +50,12 @@ class Field(object):
             raise ModelError(
                 "entity %r: field name %r is reserved — the generator adds it as the "
                 "key column. Rename the field." % (entity_name, self.name))
+        if self.name in RESERVED_POWERFX:
+            raise ModelError(
+                "entity %r: field name %r is a Power Fx reserved word — it would "
+                "shadow the built-in %r inside every control formula that reads this "
+                "row (e.g. ThisItem.%s, Self.%s). Rename the field."
+                % (entity_name, self.name, self.name, self.name, self.name))
         self.type = str(spec.get("type", "text")).strip()
         if self.type not in ARCHETYPES:
             raise ModelError("entity %r, field %r: unknown type %r — valid types are: %s"
@@ -73,7 +84,15 @@ class Field(object):
         self.label = str(spec.get("label") or self.name.upper())
         raw_grid = spec.get("grid", "flex")
         self.grid_hidden = (raw_grid == "hidden")
-        self.grid_width = raw_grid if raw_grid in ("flex", "hidden") else int(raw_grid)
+        if raw_grid in ("flex", "hidden"):
+            self.grid_width = raw_grid
+        else:
+            try:
+                self.grid_width = int(raw_grid)
+            except (TypeError, ValueError):
+                raise ModelError(
+                    "entity %r, field %r: grid must be 'flex', 'hidden' or an integer "
+                    "pixel width, got %r" % (entity_name, self.name, raw_grid))
 
     @property
     def in_grid(self):
@@ -212,6 +231,28 @@ class Model(object):
             seen.add(e.entity)
             if e.plural in {x.plural for x in self.entities if x is not e}:
                 raise ModelError("duplicate plural %r — collections would collide" % e.plural)
+
+        # ---- M2: derived choices-table names must not collide -------------
+        # choices_table() concatenates entity.entity + field.name with no
+        # separator, so entity "Asset" field "StatusChoices" and entity
+        # "AssetStatus" field "Choices" both derive
+        # "constAssetStatusChoicesChoices". Undetected, this reaches
+        # emit_formulas.topo_sort as two blocks that define the SAME name,
+        # which raises OrderError with an EMPTY cycle list — a confusing
+        # internal error for what is really a model problem. Catch it here
+        # with a message the user can act on.
+        choices_owner = {}
+        for e in self.entities:
+            for f in e.choice_fields:
+                cname = e.choices_table(f)
+                if cname in choices_owner:
+                    other_entity, other_field = choices_owner[cname]
+                    raise ModelError(
+                        "entity %r field %r and entity %r field %r both derive the "
+                        "same choices table name %r — rename one of the fields (or "
+                        "entities) so their names do not concatenate to the same "
+                        "identifier" % (other_entity, other_field, e.entity, f.name, cname))
+                choices_owner[cname] = (e.entity, f.name)
 
 
 def load_model(path):
