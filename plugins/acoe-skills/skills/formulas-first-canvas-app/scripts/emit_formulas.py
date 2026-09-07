@@ -23,10 +23,27 @@ as a pattern to read, not finished domain code.
 Scope: this module owns the layers that are driven by the entity model —
 enums (`enumScreenType`, `enumEntity`), one choices table per choice field,
 the per-entity data-access layer (scope formula, load/save/delete UDFs), and
-the `constScreens` registry. Scalar constants, pure helper UDFs and globals
-(layers 3-5 in `templates/App.pa.yaml`) are entity-agnostic and are not part
-of this module's contract — see `templates/design-tokens.pa.yaml`, which
-`scripts/new_app.py` already inlines into `App.pa.yaml` separately.
+the `constScreens` registry. Colour tokens, the style object, scalar
+constants, pure helper UDFs and derived values (the template's combined
+"1-4" banner, plus its numbered 5 and 6) are entity-agnostic and are not
+part of this module's contract — see `templates/design-tokens.pa.yaml`,
+which `scripts/new_app.py` already inlines into `App.pa.yaml` separately.
+Emitted banner numbers match `templates/App.pa.yaml`'s real scheme (read
+there before changing them): this module's vocabularies fall inside its
+"1-4" banner, its data-access layer is "7", its registry is "8".
+
+Honesty about what `uses` actually captures: within today's generated text,
+the ONLY genuine cross-block reference is `constScreens` -> `enumEntity` /
+`enumScreenType` — the registry rows literally contain those enum names.
+Nothing in a scope, load, save or delete UDF's body textually names another
+named formula (they only touch the collection, which isn't a named formula
+and carries no forward-reference restriction), so nothing forces, say, a
+save UDF after its entity's load UDF except the order they were appended to
+the input list. That is fine — Kahn's algorithm still computes whatever
+edges genuinely exist, faithfully, and `_all_specs` appends blocks in the
+required layer/per-entity order for everything else — but it means a FUTURE
+block that starts referencing another by name is what this design protects
+against, not a guarantee that today's ordering is edge-derived end to end.
 """
 from __future__ import annotations
 
@@ -69,15 +86,27 @@ _DATA_END_BANNER = (
     "      // ============================================================"
 )
 
+# ---- section banners -----------------------------------------------------
+# These MUST match the numbers `templates/App.pa.yaml` actually uses (read
+# there, don't guess): the template bundles colour tokens, the style object,
+# vocabularies AND scalar constants under ONE combined "1-4" banner; pure
+# helper UDFs are 5; derived values are 6; the data-access layer is 7;
+# registries are 8; UI utility UDFs are 9. This module only ever emits
+# vocabularies (enums + choices tables, part of "1-4"), the data-access
+# layer (7) and the registry (8) — so those are the only banners below.
+# Task 5 splices this module's output into that template; renumbering here
+# without checking there would produce two different "7." sections.
 _LAYER_HEADER = {
-    "enums": "      // ############ 1. ENUMS AND VOCABULARIES ############",
-    "choices": "      // ############ 2. CHOICES TABLES ############\n"
-               "      // Every dropdown, filter and validation reads these. A value\n"
-               "      // that exists in the UI but not here is a value nothing can\n"
-               "      // validate.",
-    "data": "      // ############ 6. DATA ACCESS LAYER ############\n" + _DATA_BEGIN_BANNER,
-    "registry": "      // ############ 7. REGISTRIES AND NAVIGATION ############\n"
-                "      // MUST come last: these read layer-6 formulas and the enum\n"
+    "vocab": "      // ############ 1-4. TOKENS, STYLE, VOCABULARIES ############\n"
+             "      // Vocabularies only (enums + choices tables) — colour tokens,\n"
+             "      // the style object and scalar constants live in\n"
+             "      // templates/design-tokens.pa.yaml, spliced in above this.\n"
+             "      // Every dropdown, filter and validation reads these tables. A\n"
+             "      // value that exists in the UI but not here is a value nothing\n"
+             "      // can validate.",
+    "data": "      // ############ 7. DATA ACCESS LAYER ############\n" + _DATA_BEGIN_BANNER,
+    "registry": "      // ############ 8. REGISTRIES AND NAVIGATION ############\n"
+                "      // MUST come last: these read layer-7 formulas and the enum\n"
                 "      // vocab above. Adding a screen is a ROW here, not a new\n"
                 "      // Switch arm elsewhere.",
 }
@@ -117,7 +146,7 @@ def _enum_screen_type_spec():
         "          Form: \"form\"\n"
         "      };"
     )
-    return ("enums", "enumScreenType", text)
+    return ("vocab", "enumScreenType", text)
 
 
 def _enum_entity_spec(model):
@@ -133,7 +162,7 @@ def _enum_entity_spec(model):
         + "\n".join(members) + "\n"
         "      };"
     )
-    return ("enums", "enumEntity", text)
+    return ("vocab", "enumEntity", text)
 
 
 def _choices_spec(entity, field):
@@ -148,7 +177,7 @@ def _choices_spec(entity, field):
         + "\n".join(rows) + "\n"
         "      );"
     ) % (entity.entity, field.name, name)
-    return ("choices", name, text)
+    return ("vocab", name, text)
 
 
 def _scope_spec(entity):
@@ -285,18 +314,23 @@ def _entity_data_layer_specs(entity, rows, today):
 def _registry_spec(model):
     rows = []
     for entity in model.entities:
+        # entity.enum_member is model.py's single source of truth for the
+        # fully-qualified "enumEntity.<Plural>" reference — hand-rebuilding
+        # it here (e.g. "enumEntity." + entity.plural) would be exactly the
+        # kind of two-emitters-can-disagree duplication model.py exists to
+        # prevent.
         rows.append(
             "          {\n"
             "              Screen: %s,\n"
             "              DisplayName: %s,\n"
             "              Icon: %s,\n"
-            "              Entity: enumEntity.%s,\n"
+            "              Entity: %s,\n"
             "              Type: enumScreenType.List,\n"
             "              Group: %s,\n"
             "              BackLabel: %s\n"
             "          }" % (
                 entity.list_screen, _quote(entity.plural), _quote(entity.icon),
-                entity.plural, _quote(entity.group), _quote(entity.plural + " list"),
+                entity.enum_member, _quote(entity.group), _quote(entity.plural + " list"),
             )
         )
         rows.append(
@@ -304,13 +338,13 @@ def _registry_spec(model):
             "              Screen: %s,\n"
             "              DisplayName: %s,\n"
             "              Icon: %s,\n"
-            "              Entity: enumEntity.%s,\n"
+            "              Entity: %s,\n"
             "              Type: enumScreenType.Form,\n"
             "              Group: \"\",\n"
             "              BackLabel: %s\n"
             "          }" % (
                 entity.form_screen, _quote(entity.entity), _quote(entity.icon),
-                entity.plural, _quote(entity.entity),
+                entity.enum_member, _quote(entity.entity),
             )
         )
     text = (
@@ -341,20 +375,46 @@ def _all_specs(model, rows, today):
     return specs
 
 
-def _finalize(specs):
+def _known_names(model):
+    """Every top-level name `emit_all` could ever define for `model` —
+    independent of `rows`/`today`, since names never depend on mock data.
+
+    `_finalize` derives `uses` against THIS complete universe, not just
+    whatever subset of blocks a particular call happens to be rendering, so
+    that a standalone `emit_choices_tables`/`emit_data_layer` call detects
+    the exact same edges `emit_all` would. Scanning against a narrower,
+    call-local set of names would silently miss a real cross-layer
+    dependency the moment one is introduced — the same fragility this fix
+    round exists to close.
+    """
+    names = {"enumScreenType", "enumEntity", "constScreens"}
+    for entity in model.entities:
+        for field in entity.choice_fields:
+            names.add(entity.choices_table(field))
+        names.add(entity.scope_formula)
+        names.add(entity.func_load)
+        names.add(entity.func_save)
+        names.add(entity.func_delete)
+    return frozenset(names)
+
+
+def _finalize(specs, known_names):
     """Turn [(layer, name, text), ...] into (blocks, layer_of).
 
     `uses` is computed by scanning each block's text for whole-word tokens
-    that match another block's defined name — never hand-listed. That is
-    what makes the dependency graph, and therefore the order `topo_sort`
-    derives from it, genuinely computed rather than asserted.
+    that match a name in `known_names` — never hand-listed, and never
+    limited to the names defined within `specs` itself. That is what makes
+    the dependency graph, and therefore the order `topo_sort` derives from
+    it, genuinely computed rather than asserted: a block earns a dependency
+    edge if and only if its rendered text actually contains another block's
+    name, full stop — nothing here encodes "the data layer depends on
+    enums" or "save comes after load" as an assumption.
     """
-    names = frozenset(name for _, name, _ in specs)
     blocks = []
     layer_of = {}
     for layer, name, text in specs:
         tokens = frozenset(_TOKEN_RE.findall(text))
-        uses = (tokens & names) - {name}
+        uses = (tokens & known_names) - {name}
         blocks.append(Block(name, frozenset([name]), uses, text))
         layer_of[name] = layer
     return blocks, layer_of
@@ -364,9 +424,18 @@ def topo_sort(blocks):
     """Kahn's algorithm over `defines` -> `uses` edges.
 
     Deterministic: ties among simultaneously-ready blocks are broken by a
-    stable key — the block's position in the input `blocks` list (its
-    "layer index"), then its name — so two runs over the same input produce
-    byte-identical output.
+    stable key — the block's position in the input `blocks` list, then its
+    name — so two runs over the same input produce byte-identical output.
+
+    Position-in-input, NOT name, is the primary tie-break — deliberately not
+    what an earlier draft of this task's brief specified. An alphabetical
+    secondary key would sort `funcDeleteAsset` < `funcLoadAssets` <
+    `funcSaveAsset`, scrambling the required per-entity scope -> load -> save
+    -> delete sequence the moment those four blocks have no dependency edge
+    forcing a different order (which, today, they don't — see `_all_specs`).
+    Callers that want a particular relative order for blocks with no real
+    dependency between them get it by choosing their input order; that input
+    order is the "layer index" the brief was describing informally.
 
     Raises `OrderError`, naming the participants, if the blocks contain a
     cycle. Never emits a partial or best-effort order: a body that would
@@ -439,7 +508,7 @@ def emit_choices_tables(model):
     field-derived (never a generic name), topologically sorted (they carry
     no dependencies on each other, so this also fixes a stable order)."""
     specs = [_choices_spec(e, f) for e in model.entities for f in e.choice_fields]
-    blocks, _ = _finalize(specs)
+    blocks, _ = _finalize(specs, _known_names(model))
     ordered = topo_sort(blocks)
     return "\n\n".join(b.text for b in ordered)
 
@@ -457,7 +526,7 @@ def emit_data_layer(model, rows, today):
     specs = []
     for entity in model.entities:
         specs.extend(_entity_data_layer_specs(entity, rows, today))
-    blocks, _ = _finalize(specs)
+    blocks, _ = _finalize(specs, _known_names(model))
     ordered = topo_sort(blocks)
     body = "\n\n".join(b.text for b in ordered)
     return "\n\n".join([_DATA_BEGIN_BANNER, body, _DATA_END_BANNER])
@@ -484,6 +553,6 @@ def emit_all(model, rows, today):
     produce byte-identical output.
     """
     specs = _all_specs(model, rows, today)
-    blocks, layer_of = _finalize(specs)
+    blocks, layer_of = _finalize(specs, _known_names(model))
     ordered = topo_sort(blocks)
     return _render(ordered, layer_of)

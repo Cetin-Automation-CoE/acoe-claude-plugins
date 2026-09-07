@@ -81,6 +81,35 @@ class TestEmittedNamesResolve(unittest.TestCase):
                               % (name, use.start(), pos))
 
 
+class TestGenuineDependencyEdges(unittest.TestCase):
+    """`topo_sort` must honor a REAL dependency edge regardless of the order
+    blocks happen to be constructed in — not merely reproduce whatever order
+    `_all_specs` built them in. Without deliberately scrambling the input,
+    a test proves nothing here: `_all_specs` already appends blocks in the
+    right order, so a bug that silently degrades `uses` to "whatever the
+    input order already gives you" would still pass an unscrambled check.
+    """
+
+    def test_registry_stays_after_the_enums_it_references_even_when_specs_are_scrambled(self):
+        mo = two_entity_model()
+        specs = ef._all_specs(mo, rows=4, today=TODAY)
+        # Reverse, not shuffle: this deterministically puts constScreens (the
+        # last block `_all_specs` appends) FIRST and the enum blocks (the
+        # first two it appends) LAST — the worst-case ordering for a
+        # position-only tie-break. If `uses` were empty or hand-declared
+        # incompletely, constScreens would end up before enumEntity here.
+        scrambled = list(reversed(specs))
+        blocks, _ = ef._finalize(scrambled, ef._known_names(mo))
+        ordered = ef.topo_sort(blocks)
+        names = [b.name for b in ordered]
+        self.assertLess(names.index("enumEntity"), names.index("constScreens"),
+                         "constScreens must be ordered after enumEntity, which its "
+                         "own text references, even from a reversed input list")
+        self.assertLess(names.index("enumScreenType"), names.index("constScreens"),
+                         "constScreens must be ordered after enumScreenType, which "
+                         "its own text references, even from a reversed input list")
+
+
 class TestPerEntityLayer(unittest.TestCase):
     def setUp(self):
         self.model = two_entity_model()
