@@ -8,15 +8,11 @@ into the output tree as Frame.pa.yaml — for a --name build from the new
 consumes it). "headermain" (the default either way) writes no extra file: the
 stock screens already are that shape.
 
-The --model assertions here check Frame.pa.yaml directly rather than the
-overall `new_app.py` exit code. A --model build's exit code is NOT green on
-this branch for a reason unrelated to --frame: check_layout.py (also new in
-this task) correctly finds real, pre-existing layout defects in
-emit_screens.py's OWN generated output (a module this task's brief forbids
-modifying — "if one is wrong, report it rather than editing it"). See the
-Task 6/7 report for the specifics. Frame.pa.yaml itself is independently
-guard-clean regardless of that unrelated failure, which the isolated
-check_layout.py run below confirms directly.
+Ruling 14 fixed the two real layout defects check_layout.py found in
+emit_screens.py's generated output (a ModernDatePicker with no sizing; footer
+summary labels with FillPortions: =0 and no Width), so a --model build's exit
+code is asserted directly here too, alongside an isolated check on
+Frame.pa.yaml by itself.
 """
 import pathlib
 import subprocess
@@ -83,10 +79,12 @@ class TestFrameOnModelPath(unittest.TestCase):
     validates this field (scripts/model.py, unmodifiable); new_app.py is the
     first thing that consumes it."""
 
-    def test_model_frame_field_writes_matching_frame_file(self):
+    def test_model_frame_field_writes_matching_frame_file_and_all_six_guards_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = pathlib.Path(tmp) / "Src"
-            run("--model", str(MODEL_EXAMPLE), "--out", str(out), "--rows", "3")
+            r = run("--model", str(MODEL_EXAMPLE), "--out", str(out), "--rows", "3")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("PASS  check_layout.py", r.stdout)
             frame_file = out / "Frame.pa.yaml"
             self.assertTrue(frame_file.exists())
             self.assertIn("FrameHeaderMainFooter:", frame_file.read_text(encoding="utf-8"))

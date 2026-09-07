@@ -46,44 +46,12 @@ class TestGenerateTwoEntityApp(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    @unittest.expectedFailure
     def test_exits_zero(self):
-        """KNOWN, DOCUMENTED FAILURE (Task 7) — not a regression to silently
-        chase away. Task 7 added check_layout.py to the guard list, which
-        correctly discovered two real, pre-existing layout defects in
-        emit_screens.py's OWN generated output (every generated
-        ModernDatePicker has no sizing at all; the list screen's footer
-        summary labels declare `FillPortions: =0` in a Horizontal container
-        with no explicit Width). emit_screens.py is on this project's
-        do-not-modify list ("if one is wrong, report it rather than editing
-        it"), so this cannot be fixed here. See
-        test_layout_defects_in_generated_output_are_the_known_emit_screens_gap
-        below for exactly what check_layout.py finds, and the Task 6/7 report
-        for the full analysis. If emit_screens.py is ever fixed, THIS
-        assertion starts passing again, which unittest reports as an
-        "unexpected success" — that is the signal to remove this decorator.
-        """
         self.assertEqual(self.proc.returncode, 0,
                          self.proc.stdout + self.proc.stderr)
 
     def test_all_guards_report_pass(self):
-        self.assertGreaterEqual(self.proc.stdout.count("PASS"), 5, self.proc.stdout)
-
-    def test_layout_defects_in_generated_output_are_the_known_emit_screens_gap(self):
-        """Pins down exactly what check_layout.py finds in emit_screens.py's
-        generated output, so the gap documented on test_exits_zero's
-        @unittest.expectedFailure is legible on its own, independent of the
-        Task 6/7 report. Run directly against self.out (not the truncated
-        guard summary new_app.py prints) for the untruncated finding list."""
-        r = subprocess.run(
-            [sys.executable, str(SKILL / "scripts" / "check_layout.py"),
-             "--src", str(self.out)],
-            capture_output=True, text=True)
-        self.assertNotEqual(r.returncode, 0, r.stdout)
-        self.assertIn("[R3]", r.stdout)
-        self.assertIn("ModernDatePicker", r.stdout)
-        self.assertIn("[R1]", r.stdout)
-        self.assertIn("_Count", r.stdout)
+        self.assertGreaterEqual(self.proc.stdout.count("PASS"), 6, self.proc.stdout)
 
     def test_one_list_and_one_form_screen_per_entity(self):
         for f in ("AssetsListScreen.pa.yaml", "AssetFormScreen.pa.yaml",

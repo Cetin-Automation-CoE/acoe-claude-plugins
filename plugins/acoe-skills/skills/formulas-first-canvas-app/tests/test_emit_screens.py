@@ -11,6 +11,7 @@ sys.path.insert(0, str(SKILL / "scripts"))
 import model as m  # noqa: E402
 import emit_screens as es  # noqa: E402
 import check_control_props as ccp  # noqa: E402
+import check_layout as cl  # noqa: E402
 
 
 def entity():
@@ -114,6 +115,49 @@ class TestGeneratedOutputPassesTheContractGuard(unittest.TestCase):
                                               components=components)
                     if f.severity == "error"]
             self.assertEqual(errs, [], "%s: %s" % (name, errs))
+
+
+class TestGeneratedOutputPassesTheLayoutGuard(unittest.TestCase):
+    """Ruling 14: check_layout.py found two real defects here (a
+    ModernDatePicker with no sizing at all, and footer summary labels
+    declaring FillPortions: =0 in a Horizontal container with no explicit
+    Width) — this must hold by construction, not by coincidence, exactly
+    like TestGeneratedOutputPassesTheContractGuard above for control
+    contracts. Covers both the with-money and without-money footer code
+    paths, since they emit a different number of footer labels."""
+
+    def _findings(self, e):
+        findings = []
+        for name, text in (("list", es.emit_list_screen(e, small_model())),
+                           ("form", es.emit_form_screen(e, small_model()))):
+            findings.extend(cl.check_text(text, name + ".pa.yaml"))
+        return findings
+
+    def test_list_and_form_are_layout_clean_with_a_money_and_date_field(self):
+        self.assertEqual(self._findings(entity()), [])
+
+    def test_list_and_form_are_layout_clean_without_a_money_field(self):
+        self.assertEqual(self._findings(entity_without_money()), [])
+
+    def test_date_input_carries_an_explicit_height(self):
+        text = es.emit_form_screen(entity(), small_model())
+        # The Due field's own control block, not just anywhere in the file.
+        due_ctrl = entity().form_control(
+            [f for f in entity().fields if f.name == "Due"][0])
+        block = text.split("- %s:" % due_ctrl, 1)[1].split("- ", 1)[0]
+        self.assertIn("Height: =constStyle.Label.TextInput.Height.SingleLine", block)
+
+    def test_footer_count_label_is_the_flexible_child(self):
+        text = es.emit_list_screen(entity(), small_model())
+        block = text.split("- lbl_AssetsList_Count:", 1)[1].split("- ", 1)[0]
+        self.assertIn("FillPortions: =1", block)
+        self.assertNotIn("FillPortions: =0", block)
+
+    def test_footer_money_total_label_keeps_fixed_width(self):
+        text = es.emit_list_screen(entity(), small_model())
+        block = text.split("- lbl_AssetsList_AmountTotal:", 1)[1].split("- ", 1)[0]
+        self.assertIn("FillPortions: =0", block)
+        self.assertIn("Width: =200", block)
 
 
 class TestNoGenericLeakage(unittest.TestCase):

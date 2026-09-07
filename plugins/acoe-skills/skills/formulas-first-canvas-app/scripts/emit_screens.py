@@ -293,6 +293,17 @@ def _footer_block(entity, item_indent):
     A fixed-height, `FillPortions: =0` sibling of the gallery (which keeps
     `FillPortions: =1`): the same leaf-control-collapse rule that requires
     the gallery's own `FillPortions` applies here too.
+
+    Ruling 14: the container's OWN sizing (above) said nothing about its
+    CHILDREN inside this Horizontal layout — every one of them still needs
+    a main-axis size (check_layout.py's Rule 1). The count label is the
+    ONE flexible child (`FillPortions: =1`), which both satisfies Rule 1
+    (no width needed once it isn't `=0`) and gives the strip its natural
+    layout: the count sits at the left edge of the space it absorbs, and
+    any money totals land pinned to the right of it. Money-total labels
+    stay fixed (`FillPortions: =0`) with an explicit Width, since their
+    text is short and bounded ("Label: $amount") and letting them flex
+    would just leave them adrift in the middle of the strip.
     """
     count_text = ('="Showing " & CountRows(%s) & " of " & CountRows(%s)'
                   % (entity.scope_formula, entity.collection))
@@ -300,7 +311,7 @@ def _footer_block(entity, item_indent):
         "lbl_%sList_Count" % entity.plural, item_indent + 6, "ModernText",
         [
             ("Color", "=constStyle.BasicStyle.FontColor"),
-            ("FillPortions", "=0"),
+            ("FillPortions", "=1"),
             ("Size", "=constStyle.BasicStyle.FontSize.Small"),
             ("Text", count_text),
         ])]
@@ -316,6 +327,7 @@ def _footer_block(entity, item_indent):
                 ("FillPortions", "=0"),
                 ("Size", "=constStyle.BasicStyle.FontSize.Small"),
                 ("Text", total_text),
+                ("Width", "=200"),
             ]))
     return _block(
         "con_%sList_Footer" % entity.plural, item_indent, "GroupContainer",
@@ -648,6 +660,12 @@ def _form_input_block(entity, field, item_indent):
         props = [
             ("AccessibleLabel", label_text),
             ("DefaultDate", "=%s" % loc_ref),
+            # Leaf control in an auto-layout container (con_*Form_Card, a
+            # Vertical layout): an explicit Height is mandatory or it
+            # collapses to its control default (check_layout.py's Rule 3).
+            # Same token its ModernTextInput/ModernCombobox siblings in this
+            # same card use for a single-line field.
+            ("Height", "=constStyle.Label.TextInput.Height.SingleLine"),
             ("OnChange", dirty_setter),
             ("TabIndex", "=0"),
         ]
