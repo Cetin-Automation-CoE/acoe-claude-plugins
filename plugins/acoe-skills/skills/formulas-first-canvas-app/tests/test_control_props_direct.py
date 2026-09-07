@@ -1,4 +1,5 @@
 """Layer 1: direct property checking with indentation-tracked control context."""
+import collections
 import pathlib
 import sys
 import unittest
@@ -186,6 +187,85 @@ class TestUnknownControlsAreUnchecked(unittest.TestCase):
         )
         findings = ccp.check_text(text, "t.pa.yaml", self.contracts)
         self.assertEqual(errors(findings), [])
+
+    def test_unlisted_control_is_counted_as_unchecked(self):
+        """I3: an unknown control's properties must be COUNTED, not just
+        silently let through — a guard that never says what it skipped can
+        hide the exact kind of gap that let a Gallery go unseen."""
+        text = (
+            "      - x1:\n"
+            "          Control: SomeFutureControl\n"
+            "          Properties:\n"
+            "            Whatever: =1\n"
+        )
+        counts = collections.Counter()
+        ccp.check_text(text, "t.pa.yaml", self.contracts, counts=counts)
+        self.assertEqual(counts["unknown_control"], 1)
+
+
+class TestSeverityIsSplit(unittest.TestCase):
+    """Ruling 14 (C2): a curated negative (renamed_from/removed/absent) is a
+    hard ERROR; a property simply missing from `properties` is a WARNING —
+    the contract file's own header says absence there means "not verified,"
+    not "invalid," and the compiled reference app proved the lists are not
+    exhaustive enough to carry hard-error semantics."""
+
+    def setUp(self):
+        self.contracts = ccp.load_contracts()
+
+    def test_curated_absent_property_is_still_an_error(self):
+        text = (
+            "      - c1:\n"
+            "          Control: ModernTextInput\n"
+            "          Properties:\n"
+            "            Format: =TextFormat.Number\n"
+        )
+        findings = ccp.check_text(text, "t.pa.yaml", self.contracts)
+        self.assertEqual(len(errors(findings)), 1)
+
+    def test_property_merely_missing_from_the_list_is_only_a_warning(self):
+        text = (
+            "      - c1:\n"
+            "          Control: ModernText\n"
+            "          Properties:\n"
+            "            SomeBrandNewProperty: =1\n"
+        )
+        findings = ccp.check_text(text, "t.pa.yaml", self.contracts)
+        self.assertEqual(errors(findings), [])
+        self.assertEqual(len(warns(findings)), 1)
+        self.assertIn("unverified", warns(findings)[0].message)
+
+
+class TestUnresolvedTokenIsCounted(unittest.TestCase):
+    def test_unresolved_token_path_is_counted_not_just_silently_unchecked(self):
+        contracts = ccp.load_contracts()
+        resolver = ccp.make_resolver({})  # empty map: every path is unresolved
+        text = (
+            "      - c1:\n"
+            "          Control: ModernText\n"
+            "          Properties:\n"
+            "            Align: =constStyle.Nope.Missing\n"
+        )
+        counts = collections.Counter()
+        ccp.check_text(text, "t.pa.yaml", contracts, resolver=resolver, counts=counts)
+        self.assertEqual(counts["unresolved_token"], 1)
+
+
+class TestNoControlContextIsCounted(unittest.TestCase):
+    def test_property_with_no_control_context_is_counted(self):
+        """A screen- or App-level `Properties:` block (Fill, OnVisible, ...)
+        sits above any `- control:` item and never sets control_type — real
+        shape taken from templates/ListScreen.pa.yaml's own screen header."""
+        contracts = ccp.load_contracts()
+        text = (
+            "Screens:\n"
+            "  ListScreen:\n"
+            "    Properties:\n"
+            "      Fill: =constReactGray.RGBA\n"
+        )
+        counts = collections.Counter()
+        ccp.check_text(text, "t.pa.yaml", contracts, counts=counts)
+        self.assertEqual(counts["no_control_context"], 1)
 
 
 if __name__ == "__main__":

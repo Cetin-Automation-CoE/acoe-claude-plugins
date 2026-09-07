@@ -20,6 +20,16 @@ COVERAGE LIMITS — this guard does NOT check:
   * values it cannot resolve statically (If()/Switch()/ThisItem — counted, reported)
   * layout correctness beyond the leaf-control size rule (see check_layout.py)
   * anything only a live compile_canvas run can catch
+
+SEVERITY: a property in a control's curated `renamed_from`, `removed`, or `absent`
+list is a hard ERROR — the contract file KNOWS it is wrong. A property simply
+missing from a control's `properties` list is a WARNING — the contract file is
+not exhaustive, so absence there means "not verified," not "invalid." Errors
+fail the run; warnings do not.
+
+UNCHECKED sites (unresolved token paths, properties on a control type absent
+from the contract file entirely, and property lines the parser could not
+attribute to any control) are counted and reported, never silently dropped.
 """
 from __future__ import annotations
 
@@ -180,7 +190,7 @@ def parse_component_defs(paths):
     return defs
 
 
-def iter_properties(text, filename):
+def iter_properties(text, filename, counts=None):
     """Yield a PropSite per property line, tracking the enclosing control.
 
     Control blocks look like:
@@ -201,6 +211,12 @@ def iter_properties(text, filename):
 
     Multi-line block scalars (`Items: |-`) are consumed whole so their bodies are
     never mistaken for property lines.
+
+    `counts`, when given, is a `collections.Counter`-like mapping incremented
+    for off-indent property lines seen inside an active `Properties:` block
+    (indent deeper than the block's own +2 step, e.g. a multi-line inline
+    record that is not a `|`/`>` block scalar) — these are silently skipped
+    rather than misparsed, but the skip is now visible instead of mute (I3/I4).
     """
     lines = text.splitlines()
     control_name = control_type = component_name = None
@@ -250,6 +266,8 @@ def iter_properties(text, filename):
             continue
 
         if props_indent is None or indent != props_indent + 2:
+            if counts is not None and props_indent is not None and indent > props_indent:
+                counts["off_indent"] += 1
             continue
 
         if value in BLOCK_SCALAR:
@@ -266,7 +284,7 @@ def iter_properties(text, filename):
                        component_name, key, value)
 
 
-def check_text(text, filename, contracts, resolver=None, components=None):
+def check_text(text, filename, contracts, resolver=None, components=None, counts=None):
     """Return a list of Findings for one file's text.
 
     `resolver`, when given, maps a token reference like
@@ -275,13 +293,30 @@ def check_text(text, filename, contracts, resolver=None, components=None):
     `components`, when given, maps a component name to its declared
     `{property: DataType}` inputs, so CanvasComponent instances are checked
     against their own contract instead of the control-property one (Task 7).
+
+    `counts`, when given, is a `collections.Counter`-like mapping this
+    function increments for every UNCHECKED site: a property line with no
+    control context, a property on a control type absent from the contract
+    file entirely, an unresolved token reference, and (via `iter_properties`)
+    an off-indent property line. These are reported, never silently dropped
+    (I3/I4) — a guard that never says what it skipped invites the same
+    "All checks pass" blindness this whole task exists to close.
+
+    SEVERITY (Ruling 14): a property in `renamed_from`, `removed`, or `absent`
+    is a curated negative — the contract file KNOWS it is wrong, so it is a
+    hard ERROR. A property simply missing from `properties` is a WARNING: the
+    contract file's own header says absence there means "not verified," not
+    "invalid," and the compiled reference app proves the lists are not
+    exhaustive enough to carry hard-error semantics.
     """
     findings = []
     seen_props = collections.defaultdict(set)
     controls_seen = {}
 
-    for site in iter_properties(text, filename):
+    for site in iter_properties(text, filename, counts=counts):
         if not site.control_type:
+            if counts is not None:
+                counts["no_control_context"] += 1
             continue
         if site.control_type == "CanvasComponent":
             if components and site.component_name in components:
@@ -289,6 +324,8 @@ def check_text(text, filename, contracts, resolver=None, components=None):
             continue
         spec = contracts["controls"].get(site.control_type)
         if spec is None:
+            if counts is not None:
+                counts["unknown_control"] += 1
             continue  # Unknown control: unchecked, not failed.
 
         controls_seen[(filename, site.control)] = site
@@ -314,11 +351,12 @@ def check_text(text, filename, contracts, resolver=None, components=None):
             continue
         if prop not in spec["properties"]:
             findings.append(Finding(
-                "error", filename, site.line, site.control, prop,
-                "%s has no %s property" % (site.control_type, prop)))
+                "warn", filename, site.line, site.control, prop,
+                "%s not in the contract file for %s — unverified, not "
+                "necessarily invalid" % (prop, site.control_type)))
             continue
 
-        findings.extend(_check_enum(site, spec, contracts, resolver))
+        findings.extend(_check_enum(site, spec, contracts, resolver, counts))
 
     # Leaf controls that must carry an explicit size.
     for key, site in controls_seen.items():
@@ -333,7 +371,7 @@ def check_text(text, filename, contracts, resolver=None, components=None):
     return findings
 
 
-def _check_enum(site, spec, contracts, resolver):
+def _check_enum(site, spec, contracts, resolver, counts=None):
     expected_ns = spec["enums"].get(site.prop)
     if not expected_ns:
         return []
@@ -341,6 +379,8 @@ def _check_enum(site, spec, contracts, resolver):
     if resolver is not None and value.startswith("=const"):
         resolved = resolver(value[1:].strip())
         if resolved is None:
+            if counts is not None:
+                counts["unresolved_token"] += 1
             return []  # Unresolved: reported separately as unchecked.
         value = "=" + resolved
     m = RE_ENUM.match(value)
@@ -449,14 +489,16 @@ def main():
             comp_paths.extend(sorted(d.glob("cmp_*.pa.yaml")))
     components = parse_component_defs(comp_paths)
 
+    counts = collections.Counter()
     findings = []
     for path in files:
         findings.extend(check_text(path.read_text(encoding="utf-8"),
                                    str(path), contracts, resolver=resolver,
-                                   components=components))
+                                   components=components, counts=counts))
 
     errs = [f for f in findings if f.severity == "error"]
     warns = [f for f in findings if f.severity == "warn"]
+    unchecked = sum(counts.values())
 
     if errs:
         print("FAIL: %d control-property violation(s).\n" % len(errs))
@@ -473,10 +515,14 @@ def main():
         print("  warn: %s:%s  %s.%s — %s" % (f.file, f.line, f.control, f.prop, f.message))
 
     print("PASS: control properties match their contracts (%d file(s) checked, "
-          "%d warning(s))" % (len(files), len(warns)))
-    print("  Not covered: property values beyond enum membership; controls absent "
-          "from the contract file; unresolved expressions; layout; anything only a "
-          "live compile_canvas catches.")
+          "%d warning(s), %d unchecked)" % (len(files), len(warns), unchecked))
+    print("  Unchecked: %d unresolved token reference(s), %d property site(s) on a "
+          "control type absent from the contract file, %d property site(s) with no "
+          "control context, %d off-indent property line(s) inside a Properties block."
+          % (counts["unresolved_token"], counts["unknown_control"],
+             counts["no_control_context"], counts["off_indent"]))
+    print("  Not covered: property values beyond enum membership; layout; anything "
+          "only a live compile_canvas catches.")
 
 
 if __name__ == "__main__":
