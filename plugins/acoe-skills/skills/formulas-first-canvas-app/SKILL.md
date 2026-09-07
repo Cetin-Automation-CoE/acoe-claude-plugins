@@ -90,15 +90,27 @@ your own screens.
 
 **There is no local path to an importable `.msapp`.** `pac canvas pack` is
 deprecated and crashes on real apps; `pac canvas validate` reports every file of
-a *working published* app as invalid. So: create a blank tablet app in studio,
-`connect`, then `compile_canvas` to push the tree — which is also its first real
-compile. The command prints these steps with your paths filled in.
+a *working published* app as invalid. So: create a blank tablet app in studio
+**and open it there with coauthoring enabled**, `connect`, then `compile_canvas`
+to push the tree — which is also its first real compile. The command prints
+these steps with your paths filled in.
 
-**The generator's own output has not yet been validated against a live
-`compile_canvas` run.** The six local guards (below) prove the emitted YAML is
-structurally sound, contract-clean and internally consistent — they do not
-prove Power Apps accepts it. Treat the first push of any `--model` build as a
-debugging session and expect to consult
+**A `compile_canvas` push with no active coauthoring session proves nothing —
+do not treat its result as validation, pass or fail.** This is a precondition
+of the whole loop, not a footnote: on 2026-09-07 the identical generated tree
+was pushed twice, once with no active session (reported 0 errors, and carried
+the warning "No active coauthoring canvas designer session detected.
+Validation results may be inaccurate.") and immediately after with a live
+session open in Power Apps Studio (reported 7 errors, all real). Before
+believing any `compile_canvas` result — especially a clean one — confirm the
+app is open in Studio with coauthoring active. See the note at the top of
+`references/compile-error-playbook.md` for the full evidence.
+
+**The six local guards (below) prove the emitted YAML is structurally sound,
+contract-clean and internally consistent — they do not prove Power Apps
+accepts it.** Three live `compile_canvas` runs against this generator's own
+output (all with an active session) have each found real defects the guards
+could not see; treat every push as a debugging session and expect to consult
 `references/compile-error-playbook.md`.
 
 ## The generic pattern (no model, `--name` only)
@@ -249,6 +261,17 @@ cover. **They prove the YAML is structurally sound and contract-clean — they d
 not prove the app compiles.** Everything else needs `compile_canvas` against a live coauthoring
 session; there is no substitute, because `pac canvas pack` is deprecated and
 crashes and `pac canvas validate` rejects every file of a working published app.
+
+**"Push (compile_canvas)" in that loop means an app open in Power Apps
+Studio with coauthoring enabled — not just a `connect()` that succeeds.** A
+`compile_canvas` run with no active coauthoring session comes back marked
+"Validation results may be inaccurate," and that warning is not decorative:
+the identical tree pushed sessionless reported 0 errors and, moments later
+with a live session, reported 7 (`references/compile-error-playbook.md`, top
+section, 2026-09-07). Treat a sessionless clean result as **no signal at
+all** — not as "probably fine," not as grounds to commit or to tell the user
+the app compiles. Confirm the session is live before trusting either a pass
+or a fail out of this loop.
 
 When `compile_canvas` (or `get_appchecker_errors`) returns a parse error, look it
 up in `references/compile-error-playbook.md` before improvising a fix — it is

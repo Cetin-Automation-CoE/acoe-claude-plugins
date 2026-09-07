@@ -1,5 +1,30 @@
 # Compile-error playbook
 
+## A sessionless `compile_canvas` result is not trustworthy — read this first
+
+**"No active coauthoring canvas designer session detected. Validation
+results may be inaccurate." means exactly what it says: do not believe a
+clean result that came with that warning attached.**
+
+Concrete evidence, 2026-09-07: the identical generated tree was pushed twice.
+The first push ran with no active coauthoring session and carried that
+warning; it reported **0 errors**. The very next push — same tree, unchanged
+— ran against a genuine coauthoring session (the app open in Power Apps
+Studio, coauthoring live) and reported **7 errors**, all real, all on
+defects that had been sitting in the tree the whole time (see the "Component
+input with no typed schema" section below, third-run rows). A sessionless
+run is not a weaker signal on the same defects — it can silently pass code
+that a live session hard-fails.
+
+Two earlier live runs (also 2026-09-07) *did* have an active session and
+found genuine defects both times, so a live-session result — clean or not —
+is real evidence. The failure mode is specific: **skip the "app open in
+Studio with coauthoring enabled" precondition, and a clean result tells you
+nothing.** Before treating any `compile_canvas` PASS as evidence the app
+compiles, confirm the session was active. If it was not, the push has not
+actually been validated — re-run it with a live session before believing
+either a pass or a fail.
+
 Keyed by the error text `compile_canvas` (or `get_appchecker_errors`) puts in
 front of you, not by the underlying cause — you have the error first, this
 table gets you to the cause and the fix without re-deriving either from
@@ -17,8 +42,14 @@ two-entity app that passed all six static guards and 226 tests came back with
 2026-09-07** entries below). After both were fixed, a **second** live push
 against the same app (233 tests, guards still green) came back with 34
 errors and two warnings, attributable to four further root causes — see the
-**LIVE 2026-09-07 (second run)** entries below. So the rows below split into
-three kinds, marked in the **Sourcing** column:
+**LIVE 2026-09-07 (second run)** entries below. Both of those pushes had an
+active coauthoring session and are trustworthy on their own terms. A
+**third** push of the same tree, this time run twice — once **without** an
+active session (0 errors reported) and immediately after **with** one (7
+errors, same tree, unchanged) — is what proved a sessionless result cannot
+be believed at all (see the note at the top of this file); its 7 errors are
+the **LIVE 2026-09-07 (third run)** entries below, all one root cause. So the
+rows below split into three kinds, marked in the **Sourcing** column:
 
 - **LIVE (date)** — the quoted text is reproduced verbatim from an actual
   `compile_canvas` transcript against a real pushed app, on the date given.
@@ -103,11 +134,23 @@ the exact wording is not yet captured here — paste it in on first sighting.
 |---|---|---|---|
 | `[txt_FieldText_Input, DisplayMode] Name isn't valid. 'DisplayMode' isn't recognized.` (identical shape on `com_FieldChoice_Input`, `dp_FieldDate_Input`, `txt_FieldNumber_Input` — 4 of 34 errors) | LIVE (2026-09-07, second run) | All four field components (`cmp_FieldText`, `cmp_FieldChoice`, `cmp_FieldDate`, `cmp_FieldNumber`) wrote `DisplayMode: =cmp_FieldX.DisplayMode` on their inner input control, but none of the four declared `DisplayMode` as a `CustomProperties` input on the component itself — so the reference resolves to nothing. | Checked the reference app for how it types a caller-controlled display-mode input before deciding: every `DisplayMode` usage there (`Activities.pa.yaml`, `Activity Form.pa.yaml`, `Components/cmp_Filter.pa.yaml`, `cmp_FilterButton.pa.yaml`, `cmp_Header.pa.yaml`) is an inline `If(glX, DisplayMode.Edit, DisplayMode.View)` expression assigned directly to a control's own `DisplayMode` property — no component anywhere in that app declares `DisplayMode`, or any enum-flavored value, as a `CustomProperties` `DataType`; the only `DataType`s used for custom properties across both corpora are `Text`, `Number`, `Boolean`, `DateAndTime`, `Color`, `Table`, `Record`, `Screen`. With no corpus precedent for typing an enum-valued input, the line was dropped from all four components rather than guessing at an invalid `DataType`. A caller who genuinely needs one of these fields read-only can still set `DisplayMode` on the *component instance* at the call site, the same way the reference app gates its own controls. |
 
-## Component input with no typed schema (Table-typed custom property, blank default)
+## Component input with no typed schema (Table-typed custom property, blank or untyped default)
 
 | Error text | Sourcing | Cause | Remedy |
 |---|---|---|---|
-| `[cmp_FieldChoice, Output] Name isn't valid. 'Value' isn't recognized.` / `[com_FieldChoice_Input, DefaultSelectedItems] Name isn't valid. 'Value' isn't recognized.` / `[com_FieldChoice_Input, DefaultSelectedItems] Incompatible types for comparison: Error, Text.` (3 of 34 errors) | LIVE (2026-09-07, second run) | `cmp_FieldChoice`'s `Choices` custom property (a `Table`-typed input) had a blank `Default: =`. With no default row, the `ModernCombobox` built from `Items: =cmp_FieldChoice.Choices` has no column schema, so `.Selected.Value` in `Output` and the `Value = …` filter in `DefaultSelectedItems` cannot resolve a `Value` column at all — the third error is the same unresolved column cascading into a comparison against an `Error` value. Note `cmp_FilterButton`'s `Choices`/`Items` inputs also ship a blank `Table` default and are fine (matches the reference app exactly) — they are never resolved into a typed output the way `cmp_FieldChoice.Output` is, so this is about how the property is *consumed*, not a blanket rule against blank `Table` defaults. | Give `Choices` a typed default with the right column: `Default: =Table({Value: ""})`. That establishes the schema so `Output` and `DefaultSelectedItems` both resolve. Verified this affects only the standalone `cmp_FieldChoice` component — the generated screens build their own typed `constXChoices` tables directly wherever a choice field appears and were never affected by this. |
+| `[cmp_FieldChoice, Output] Name isn't valid. 'Value' isn't recognized.` / `[com_FieldChoice_Input, DefaultSelectedItems] Name isn't valid. 'Value' isn't recognized.` / `[com_FieldChoice_Input, DefaultSelectedItems] Incompatible types for comparison: Error, Text.` (3 of 34 errors) | LIVE (2026-09-07, second run) | `cmp_FieldChoice`'s `Choices` custom property (a `Table`-typed input) had a blank `Default: =`. With no default row, the `ModernCombobox` built from `Items: =cmp_FieldChoice.Choices` has no column schema, so `.Selected.Value` in `Output` and the `Value = …` filter in `DefaultSelectedItems` cannot resolve a `Value` column at all — the third error is the same unresolved column cascading into a comparison against an `Error` value. ~~Note `cmp_FilterButton`'s `Choices`/`Items` inputs also ship a blank `Table` default and are fine … they are never resolved into a typed output the way `cmp_FieldChoice.Output` is~~ **CORRECTED by the third run below: this claim was wrong.** `cmp_FilterButton.Choices` *is* resolved into its own `Value` output record and hard-failed live the very next round. There is no known-safe blank-`Table`-default case in this component library. | Give `Choices` a typed default with the right column: `Default: =Table({Value: ""})`. That establishes the schema so `Output` and `DefaultSelectedItems` both resolve. Verified this affects only the standalone `cmp_FieldChoice` component — the generated screens build their own typed `constXChoices` tables directly wherever a choice field appears and were never affected by this. |
+| `[Control 'cmp_AssetsList_HeadCategory', Property 'Choices'] The table passed in has none of the expected columns: SampleBooleanField, SampleNumberField, SampleStringField.` (identical shape on 4 more `cmp_*_Head*` instances — 5 of 7 errors) | LIVE (2026-09-07, third run — the first push against a genuine coauthoring session; see the note at the top of this file) | `cmp_FilterButton.Choices` (`Table`-typed Input) had a blank `Default: =` — the exact shape the row above wrongly claimed was safe for this component. `Self.Choices` flows into `cmp_FilterButton`'s own `Value` output record (`Choices: Self.Choices`), so it IS resolved into a typed output; with no schema to infer, the Studio fell back to its placeholder 3-column schema (`SampleBooleanField`/`SampleNumberField`/`SampleStringField`), and every caller passing a real choices table (e.g. `Choices: =constStatusChoices`, shape `Table({Value: "…"})`) failed to type-match it. | Give `Choices` a typed default matching the real column: `Default: |- \n  =Table({Value: ""})` (same fix, same shape, as `cmp_FieldChoice.Choices` above). Also fixed `cmp_FilterButton.Items` pre-emptively — identical blank default, same `Value` output record, no caller currently sets it live but the next one to would hit the same failure. |
+| `[Control 'cmp_AssetsList_Navigation', Property 'Screens'] The table passed in has none of the expected columns: SampleBooleanField, SampleNumberField, SampleStringField.` (identical shape on 1 more `cmp_*_Navigation` instance — 2 of 7 errors) | LIVE (2026-09-07, third run) | `cmp_Navigation.Screens` (`Table`-typed Input) defaulted to `=constScreens` — a bare app-scope named-formula reference. That is a DIFFERENT bad shape than blank: the reference is not resolvable at component-declaration time (the app scope containing `constScreens` isn't available yet), so it also fell back to the same placeholder 3-column schema, and the real `constScreens` registry table failed to type-match it. | Replace the reference with a literal row establishing the same columns: `Screen, DisplayName, Icon, Entity, Type, Group, BackLabel`. Every column except `Screen` is plain `Text` at runtime — `enumScreenType`/`enumEntity` (`scripts/emit_formulas.py`) are named-formula records of string literals (`{List: "list", Form: "form"}`), not real Power Fx enum/optionset types — so blank string literals type-match. `Screen` needs an actual screen reference; this component library is generic across apps (no app-specific screen name it can reference), so `App.ActiveScreen` — always available, no app-specific meaning here — stands in as a value of the right type. Not independently re-verified live (the author holds the only live session); flag if the next push disagrees. |
+
+A `DataType: Table` custom property with an empty or non-`Table(...)`/`[...]`
+default is now caught **statically**, before any push:
+`scripts/check_control_props.py`'s `find_bad_table_defaults()` flags exactly
+these two shapes (blank, and a bare name reference) on any Input property
+typed `Table` — `tests/test_table_default_guard.py` is its regression proof,
+including a standing assertion that every shipped `components/cmp_*.pa.yaml`
+passes it. It cannot judge whether a literal's *columns* actually match what
+callers pass (that is still `compile_canvas`'s job) — only whether the
+Default is a literal construction at all.
 
 ## Expected warnings (not errors — leave the code as is)
 
