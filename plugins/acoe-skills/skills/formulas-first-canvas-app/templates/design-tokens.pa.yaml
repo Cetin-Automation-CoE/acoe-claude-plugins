@@ -155,7 +155,9 @@ constStyle = {
         BorderRadius: 10,
         FontWeight: FontWeight.Semibold,
         IconStyle: 'Icon.IconStyle'.Filled,
-        AlignModern: 'TextCanvas.Align'.Center,
+        // No AlignModern here: Button takes the plain Align enum only (Left|
+        // Center|Right), never 'TextCanvas.Align' — that namespace is for text
+        // controls. AlignLegacy carries the value Button actually needs.
         AlignLegacy: Align.Center,
         VerticalAlign: VerticalAlign.Middle
     },

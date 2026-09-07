@@ -42,7 +42,12 @@ def check_bare_clear(text, filename):
     """
     findings = []
     for n, raw in enumerate(text.splitlines(), 1):
-        code = raw.split("//")[0]
+        # `code_only` strips quoted strings before stripping `//` comments, so a
+        # quoted URL like "https://a" cannot be mistaken for a comment marker
+        # (a false negative the old `raw.split("//")[0]` had). Splitting on "#"
+        # afterwards catches prose comments (`# never Clear(colItems) here`),
+        # which `//`-only stripping let through as a false positive.
+        code = code_only(raw).split("#")[0]
         for m in RE_CLEAR.finditer(code):
             col = m.group(1)
             if col in FRAMEWORK_COLLECTIONS:

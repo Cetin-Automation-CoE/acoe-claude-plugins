@@ -213,6 +213,21 @@ class TestDefect7DataLayer(unittest.TestCase):
             text = "          Clear(%s);\n" % col
             self.assertEqual(cdl.check_bare_clear(text, "App.pa.yaml"), [], col)
 
+    def test_prose_hash_comment_mentioning_clear_is_not_a_false_positive(self):
+        """I5: the old `raw.split("//")[0]` only stripped `//` comments, so a
+        `#`-commented mention of Clear(colItems) was still "seen" as code."""
+        import check_data_layer as cdl
+        text = "      # never Clear(colItems) here\n"
+        self.assertEqual(cdl.check_bare_clear(text, "App.pa.yaml"), [])
+
+    def test_clear_after_a_url_in_a_quoted_string_is_still_caught(self):
+        """I5: `raw.split("//")[0]` truncated at the `//` inside a quoted URL,
+        hiding a real bare Clear() that followed it on the same line."""
+        import check_data_layer as cdl
+        text = '      Set(x, "https://a"); Clear(colItems);\n'
+        findings = cdl.check_bare_clear(text, "App.pa.yaml")
+        self.assertTrue(findings, "bare Clear(colItems) after a quoted URL not caught")
+
 
 class TestCleanTreeStaysClean(unittest.TestCase):
     """The guard must not cry wolf on the shipped tree."""

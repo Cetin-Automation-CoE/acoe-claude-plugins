@@ -18,7 +18,7 @@ COVERAGE LIMITS — this guard does NOT check:
   * property VALUES beyond enum-namespace membership (no type or formula checking)
   * controls absent from references/control-contracts.yaml (reported as unchecked)
   * values it cannot resolve statically (If()/Switch()/ThisItem — counted, reported)
-  * layout correctness beyond the leaf-control size rule (see check_layout.py)
+  * layout correctness beyond the leaf-control size rule (layout is Phase 2)
   * anything only a live compile_canvas run can catch
 
 SEVERITY: a property in a control's curated `renamed_from`, `removed`, or `absent`
@@ -57,6 +57,25 @@ RE_KEY = re.compile(r"^(\s*)([A-Za-z_][\w@.]*):\s*(.*)$")
 # drift apart.
 RE_ENUM = re.compile(r"^=\s*'?([A-Za-z][\w.]*?)'?\.([A-Za-z]\w*)\s*$")
 BLOCK_SCALAR = ("|", "|-", "|+", ">", ">-", ">+")
+
+
+def strip_trailing_comment(value):
+    """Drop a trailing `  # comment` from a property value, honoring quotes.
+
+    `Control: ModernText  # a label` and `Align: =Align.Right  # right` are
+    legal YAML/Power Fx but defeat exact-match parsing (RE_ENUM anchors on
+    `$`, and an unknown-with-comment control type silently drops its whole
+    block) unless the comment is stripped first. Only a `#` preceded by
+    whitespace (or at position 0) outside a double-quoted string counts as a
+    comment marker, so `"#FFAA00"` and similar in-string hashes survive.
+    """
+    in_quotes = False
+    for i, ch in enumerate(value):
+        if ch == '"':
+            in_quotes = not in_quotes
+        elif ch == "#" and not in_quotes and (i == 0 or value[i - 1].isspace()):
+            return value[:i].rstrip()
+    return value
 
 
 def load_contracts(path=None):
@@ -242,7 +261,7 @@ def iter_properties(text, filename, counts=None):
         m = RE_KEY.match(raw)
         if not m:
             continue
-        key, value = m.group(2), m.group(3).strip()
+        key, value = m.group(2), strip_trailing_comment(m.group(3).strip())
 
         if key == "Control":
             control_type = value
@@ -414,9 +433,6 @@ def _check_enum(site, spec, contracts, resolver, counts=None):
            actual_ns, member))]
 
 
-TEXTY = {"Text": ("a quoted string",), "Number": ("a number",),
-         "Boolean": ("true/false",)}
-
 # Ruling 10: universal placement/layout properties every CanvasComponent instance
 # carries regardless of its own CustomProperties — these are control properties, not
 # custom inputs, so a component that never declares them is not "missing" them. Do
@@ -480,12 +496,18 @@ def main():
     ap.add_argument("--tokens-file", default=None,
                     help="Power Fx fragment defining constStyle etc. "
                          "Defaults to <src>/App.pa.yaml, where new_app.py inlines them.")
-    ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--quiet", action="store_true",
+                    help="suppress dialect-warning lines (PASS/FAIL summary still prints)")
     args = ap.parse_args()
 
     contracts = load_contracts(args.contracts)
     src = pathlib.Path(args.src)
+    if not src.is_dir():
+        sys.exit("error: --src is not a directory: %s" % src)
     files = sorted(p for p in src.rglob("*.pa.yaml") if p.name != "_EditorState.pa.yaml")
+    if not files:
+        sys.exit("error: no *.pa.yaml files found under %s — is --src correct? "
+                  "A guard that silently checks nothing is worse than no guard." % src)
 
     resolver = None
     token_text = ""
@@ -526,14 +548,20 @@ def main():
         for f in errs:
             print("  %s:%s  %s.%s\n      %s" % (f.file, f.line, f.control, f.prop, f.message))
         if warns:
-            print("\n  plus %d dialect warning(s) — run without --quiet to see them"
-                  % len(warns))
+            if args.quiet:
+                print("\n  plus %d dialect warning(s) (suppressed by --quiet)" % len(warns))
+            else:
+                print()
+                for f in warns:
+                    print("  warn: %s:%s  %s.%s — %s"
+                          % (f.file, f.line, f.control, f.prop, f.message))
         print("\n  Contracts: %s\n  Prose: references/control-dialects.md"
               % (args.contracts or DEFAULT_CONTRACTS))
         sys.exit(1)
 
-    for f in warns:
-        print("  warn: %s:%s  %s.%s — %s" % (f.file, f.line, f.control, f.prop, f.message))
+    if not args.quiet:
+        for f in warns:
+            print("  warn: %s:%s  %s.%s — %s" % (f.file, f.line, f.control, f.prop, f.message))
 
     print("PASS: control properties match their contracts (%d file(s) checked, "
           "%d warning(s), %d unchecked)" % (len(files), len(warns), unchecked))
