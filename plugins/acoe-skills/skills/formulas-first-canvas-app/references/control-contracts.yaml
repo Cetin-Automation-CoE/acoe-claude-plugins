@@ -12,7 +12,10 @@
 # check_control_props.py reports properties on unlisted controls as unchecked.
 
 enums:
-  Align: [Left, Center, Right, Justify]
+  # This namespace validates only Button.Align — every text control uses
+  # TextCanvas.Align instead. Members are added only when verified against a
+  # compiled app; do not add Justify back without that verification.
+  Align: [Left, Center, Right]
   TextCanvas.Align: [Start, Center, End]
   FontWeight: [Bold, Semibold, Normal, Lighter]
   TextCanvas.Weight: [Bold, Regular]

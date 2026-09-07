@@ -71,6 +71,12 @@ class TestContractsWellFormed(unittest.TestCase):
         canvas = set(self.data["enums"]["TextCanvas.Align"])
         self.assertEqual(plain & canvas, {"Center"})
 
+    def test_align_members_are_scoped_to_button(self):
+        """The plain Align namespace validates only Button.Align. Members are
+        added only when verified against a compiled app — an unverified member
+        is a silent false negative in the guard."""
+        self.assertEqual(set(self.data["enums"]["Align"]), {"Left", "Center", "Right"})
+
     def test_known_absent_properties_are_absent(self):
         c = self.data["controls"]
         self.assertNotIn("HintText", c["ModernTextInput"]["properties"])
