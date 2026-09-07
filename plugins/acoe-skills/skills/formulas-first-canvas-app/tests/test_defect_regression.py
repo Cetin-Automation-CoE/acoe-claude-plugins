@@ -229,6 +229,83 @@ class TestDefect7DataLayer(unittest.TestCase):
         self.assertTrue(findings, "bare Clear(colItems) after a quoted URL not caught")
 
 
+class TestDuplicateControlNamesAcrossFiles(unittest.TestCase):
+    """Defect 10 (live compile, 2026-09-07): control names are unique across
+    the WHOLE APP, not scoped to their own screen or component. All four of
+    this skill's field components used the same generic inner names
+    (`con_Field`, `lbl_Field_Label`, `txt_Field_Input`) before the fix — no
+    guard that only ever looked at one file caught it; the live compiler did,
+    with 'An entity with name ... already exists.'"""
+
+    def test_genuine_duplicate_across_two_files_fails(self):
+        a = ("a.pa.yaml", control("ModernText", [("Text", '="A"')], name="con_Field"))
+        b = ("b.pa.yaml", control("Button", [("Text", '="B"')], name="con_Field"))
+        findings = ccp.find_duplicate_controls([a, b])
+        errs = [f for f in findings if f.severity == "error"]
+        self.assertEqual(len(errs), 1)
+        self.assertIn("con_Field", errs[0].message)
+        self.assertIn("a.pa.yaml", errs[0].message)
+        self.assertEqual(errs[0].file, "b.pa.yaml")
+
+    def test_genuine_duplicate_within_one_file_fails(self):
+        text = (control("ModernText", [("Text", '="A"')], name="con_Field") +
+                control("Button", [("Text", '="B"')], name="con_Field"))
+        findings = ccp.find_duplicate_controls([("a.pa.yaml", text)])
+        errs = [f for f in findings if f.severity == "error"]
+        self.assertEqual(len(errs), 1)
+
+    def test_reproduces_the_four_field_components_pre_fix(self):
+        """Synthetic reproduction of the exact live error: all four shipped
+        field components sharing con_Field/lbl_Field_Label/txt_Field_Input
+        before they were renamed."""
+        shared = control("GroupContainer", [("Height", "=1")],
+                         name="con_Field", variant="AutoLayout")
+        findings = ccp.find_duplicate_controls([
+            ("cmp_FieldText.pa.yaml", shared),
+            ("cmp_FieldChoice.pa.yaml", shared),
+            ("cmp_FieldDate.pa.yaml", shared),
+            ("cmp_FieldNumber.pa.yaml", shared),
+        ])
+        errs = [f for f in findings if f.severity == "error"]
+        self.assertEqual(len(errs), 3, "one error per re-declaration after the first")
+
+    def test_same_name_as_a_formula_reference_is_not_a_redeclaration(self):
+        """The same identifier appearing as a REFERENCE (`=con_Header.Height`)
+        in another file's formula is not a second declaration — RE_ITEM only
+        matches a bare `- name:` declaration line, never a formula value."""
+        declared = control("GroupContainer", [("Height", "=1")],
+                           name="con_Header", variant="AutoLayout")
+        referencing = control(
+            "ModernText",
+            [("Text", '="x"'), ("Height", "=con_Header.Height")], name="lbl_Other")
+        findings = ccp.find_duplicate_controls([
+            ("Screen1.pa.yaml", declared),
+            ("Screen2.pa.yaml", referencing),
+        ])
+        self.assertEqual([f for f in findings if f.severity == "error"], [])
+
+    def test_the_two_alternative_frame_templates_are_not_flagged_on_their_own(self):
+        """`frame-headermainfooter.pa.yaml` and `frame-headerrailmain.pa.yaml`
+        both declare `con_Frame_Header`/`con_Frame_Main` — legitimate, since
+        `write_frame` copies exactly ONE of them into any given generated
+        app. Each file on its own (the real usage: one frame per app) must
+        not self-collide."""
+        for name in ("frame-headermainfooter.pa.yaml", "frame-headerrailmain.pa.yaml"):
+            path = SKILL / "templates" / name
+            text = path.read_text(encoding="utf-8")
+            findings = ccp.find_duplicate_controls([(str(path), text)])
+            self.assertEqual(findings, [], name)
+
+    def test_shipped_field_components_have_no_cross_file_collision(self):
+        """The actual fix: cmp_FieldText/Choice/Date/Number no longer share
+        con_Field/lbl_Field_Label/txt_Field_Input after being renamed to
+        component-specific names."""
+        paths = sorted((SKILL / "components").glob("cmp_Field*.pa.yaml"))
+        file_texts = [(str(p), p.read_text(encoding="utf-8")) for p in paths]
+        findings = ccp.find_duplicate_controls(file_texts)
+        self.assertEqual(findings, [])
+
+
 class TestCleanTreeStaysClean(unittest.TestCase):
     """The guard must not cry wolf on the shipped tree."""
 

@@ -78,10 +78,10 @@ ComponentDefinitions:
         DataType: Text
     Properties:
       Height: =constStyle.Label.Height.Small + constStyle.Combobox.Height.Medium + constStyle.Spacing.XS
-      Output: =com_Field_Input.Selected.Value
+      Output: =com_FieldChoice_Input.Selected.Value
       Width: =280
     Children:
-      - con_Field:
+      - con_FieldChoice:
           Control: GroupContainer
           Variant: AutoLayout
           Properties:
@@ -91,14 +91,14 @@ ComponentDefinitions:
             LayoutGap: =constStyle.Spacing.XS
             Width: =Parent.Width
           Children:
-            - lbl_Field_Label:
+            - lbl_FieldChoice_Label:
                 Control: ModernText
                 Properties:
                   AutoHeight: =true
                   FontWeight: =FontWeight.Semibold
                   Size: =constStyle.BasicStyle.FontSize.Small
                   Text: =cmp_FieldChoice.Label & If(cmp_FieldChoice.Required, " *", "")
-            - com_Field_Input:
+            - com_FieldChoice_Input:
                 Control: ModernCombobox
                 Properties:
                   AccessibleLabel: =cmp_FieldChoice.Label
@@ -110,4 +110,3 @@ ComponentDefinitions:
                   OnChange: =cmp_FieldChoice.OnChange()
                   Required: =cmp_FieldChoice.Required
                   SelectMultiple: =false
-                  TabIndex: =0

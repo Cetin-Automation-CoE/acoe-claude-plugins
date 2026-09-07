@@ -445,10 +445,19 @@ def _check_enum(site, spec, contracts, resolver, counts=None):
 # Deliberately excluded: OnSelect, Color — on this skill's components those are
 # real declared Event/Input properties and must keep resolving through the
 # declaration, not this allowlist.
+#
+# 2026-09-07: `TabIndex` REMOVED. It used to sit in this set on the strength of
+# the same "measured directly" claim above, but the live compile_canvas run
+# that proved `TabIndex` invalid on ModernTextInput/ModernCombobox/
+# ModernDatePicker/Button (references/control-contracts.yaml's provenance
+# comment) also confirms it was never actually counted here — it appears zero
+# times in the compiled reference app, on a component instance or otherwise.
+# Leaving it in this allowlist would have silently waved through the same
+# invalid property on a CanvasComponent instance instead of catching it.
 UNIVERSAL_INSTANCE_PROPS = {
     "X", "Y", "Width", "Height", "Visible", "FillPortions", "AlignInContainer",
     "LayoutMinWidth", "LayoutMinHeight", "LayoutMaxWidth", "LayoutMaxHeight",
-    "TabIndex", "DisplayMode",
+    "DisplayMode",
 }
 
 
@@ -486,6 +495,58 @@ def _check_instance(site, declared, contracts):
         "error", site.file, site.line, site.control, site.prop,
         "%s.%s is DataType Text — pass the string \"%s\", not the enum %s.%s"
         % (site.component_name, site.prop, m.group(2), m.group(1), m.group(2)))]
+
+
+def find_duplicate_controls(file_texts):
+    """Return Findings for a control (or CanvasComponent instance) name
+    declared more than once across the WHOLE APP.
+
+    Ruling (live compile, 2026-09-07): Power Apps control names are unique
+    across the entire app, not scoped to their own screen or component —
+    confirmed by a real `compile_canvas` run: "An entity with name 'con_Field'
+    already exists. Other definition located at
+    Components/cmp_FieldText.pa.yaml(73,9)." All four of this skill's field
+    components (`cmp_FieldText`/`cmp_FieldChoice`/`cmp_FieldDate`/
+    `cmp_FieldNumber`) used the same generic inner names (`con_Field`,
+    `lbl_Field_Label`, `txt_Field_Input`) before that push — invisible to
+    every guard that only ever looked at one file (or one control) at a time.
+
+    Reuses `RE_ITEM` — the exact pattern `iter_properties` already uses to
+    recognize a control's own declaration line (`- some_name:` with nothing
+    after the colon) — rather than a second name-parsing path that could
+    drift from it. Only DECLARATION sites count: a control name that shows up
+    elsewhere as a formula reference (`=con_Header.Height`) or inside a
+    string/comment never matches `RE_ITEM` (it is not a bare `- name:` list
+    item), so those are correctly left alone — the collision this function
+    catches is two controls sharing a name, not a name being read twice.
+
+    `file_texts` is an iterable of `(filename, text)` pairs, e.g. `main()`'s
+    own `files` loop for one generated app's `--src` tree. Passing the whole
+    skill's own `templates/` library at once is NOT the intended use — its
+    two `frame-*.pa.yaml` reference layouts are mutually-exclusive
+    ALTERNATIVES (`scripts/new_app.py`'s `write_frame` copies exactly one of
+    them into any given generated app as `Frame.pa.yaml`), so they legitimately
+    share names like `con_Frame_Header` without ever coexisting in one app.
+    """
+    first_seen = {}
+    findings = []
+    for filename, text in file_texts:
+        for line_no, raw in enumerate(text.splitlines(), start=1):
+            m = RE_ITEM.match(raw)
+            if not m:
+                continue
+            name = m.group(2)
+            if name in first_seen:
+                other_file, other_line = first_seen[name]
+                findings.append(Finding(
+                    "error", filename, line_no, name, "",
+                    "an entity with name '%s' already exists. Other "
+                    "definition located at %s:%s — control names are unique "
+                    "across the WHOLE APP, not scoped to their own screen or "
+                    "component" % (name, other_file, other_line)))
+            else:
+                first_seen[name] = (filename, line_no)
+    return findings
 
 
 def main():
@@ -534,10 +595,13 @@ def main():
 
     counts = collections.Counter()
     findings = []
+    file_texts = []
     for path in files:
-        findings.extend(check_text(path.read_text(encoding="utf-8"),
-                                   str(path), contracts, resolver=resolver,
+        text = path.read_text(encoding="utf-8")
+        file_texts.append((str(path), text))
+        findings.extend(check_text(text, str(path), contracts, resolver=resolver,
                                    components=components, counts=counts))
+    findings.extend(find_duplicate_controls(file_texts))
 
     errs = [f for f in findings if f.severity == "error"]
     warns = [f for f in findings if f.severity == "warn"]

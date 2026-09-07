@@ -14,7 +14,7 @@
 #         Width: =Parent.Width
 #
 # Read cmp_FieldText.Output for the current value — never re-read the inner
-# txt_Field_Input control by name from outside, it is a private implementation
+# txt_FieldText_Input control by name from outside, it is a private implementation
 # detail.
 #
 # ONE scalar output (Text) of a known type. Do NOT fold this and its three
@@ -67,10 +67,10 @@ ComponentDefinitions:
         DataType: Text
     Properties:
       Height: =constStyle.Label.Height.Small + constStyle.Label.TextInput.Height.SingleLine + constStyle.Spacing.XS
-      Output: =txt_Field_Input.Text
+      Output: =txt_FieldText_Input.Text
       Width: =280
     Children:
-      - con_Field:
+      - con_FieldText:
           Control: GroupContainer
           Variant: AutoLayout
           Properties:
@@ -80,14 +80,14 @@ ComponentDefinitions:
             LayoutGap: =constStyle.Spacing.XS
             Width: =Parent.Width
           Children:
-            - lbl_Field_Label:
+            - lbl_FieldText_Label:
                 Control: ModernText
                 Properties:
                   AutoHeight: =true
                   FontWeight: =FontWeight.Semibold
                   Size: =constStyle.BasicStyle.FontSize.Small
                   Text: =cmp_FieldText.Label & If(cmp_FieldText.Required, " *", "")
-            - txt_Field_Input:
+            - txt_FieldText_Input:
                 Control: ModernTextInput
                 Properties:
                   AccessibleLabel: =cmp_FieldText.Label
@@ -98,4 +98,3 @@ ComponentDefinitions:
                   OnChange: =cmp_FieldText.OnChange()
                   Placeholder: =cmp_FieldText.Placeholder
                   Required: =cmp_FieldText.Required
-                  TabIndex: =0

@@ -70,10 +70,10 @@ ComponentDefinitions:
         DataType: DateAndTime
     Properties:
       Height: =constStyle.Label.Height.Small + constStyle.Label.Height.Medium + constStyle.Spacing.XS
-      Output: =dp_Field_Input.SelectedDate
+      Output: =dp_FieldDate_Input.SelectedDate
       Width: =280
     Children:
-      - con_Field:
+      - con_FieldDate:
           Control: GroupContainer
           Variant: AutoLayout
           Properties:
@@ -83,14 +83,14 @@ ComponentDefinitions:
             LayoutGap: =constStyle.Spacing.XS
             Width: =Parent.Width
           Children:
-            - lbl_Field_Label:
+            - lbl_FieldDate_Label:
                 Control: ModernText
                 Properties:
                   AutoHeight: =true
                   FontWeight: =FontWeight.Semibold
                   Size: =constStyle.BasicStyle.FontSize.Small
                   Text: =cmp_FieldDate.Label & If(cmp_FieldDate.Required, " *", "")
-            - dp_Field_Input:
+            - dp_FieldDate_Input:
                 Control: ModernDatePicker
                 Properties:
                   AccessibleLabel: =cmp_FieldDate.Label
@@ -99,4 +99,3 @@ ComponentDefinitions:
                   Height: =constStyle.Label.Height.Medium
                   OnChange: =cmp_FieldDate.OnChange()
                   Placeholder: =cmp_FieldDate.Placeholder
-                  TabIndex: =0

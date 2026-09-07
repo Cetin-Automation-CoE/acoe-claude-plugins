@@ -68,10 +68,10 @@ ComponentDefinitions:
         DataType: Number
     Properties:
       Height: =constStyle.Label.Height.Small + constStyle.Label.TextInput.Height.SingleLine + constStyle.Spacing.XS
-      Output: =Value(txt_Field_Input.Text)
+      Output: =Value(txt_FieldNumber_Input.Text)
       Width: =280
     Children:
-      - con_Field:
+      - con_FieldNumber:
           Control: GroupContainer
           Variant: AutoLayout
           Properties:
@@ -81,14 +81,14 @@ ComponentDefinitions:
             LayoutGap: =constStyle.Spacing.XS
             Width: =Parent.Width
           Children:
-            - lbl_Field_Label:
+            - lbl_FieldNumber_Label:
                 Control: ModernText
                 Properties:
                   AutoHeight: =true
                   FontWeight: =FontWeight.Semibold
                   Size: =constStyle.BasicStyle.FontSize.Small
                   Text: =cmp_FieldNumber.Label & If(cmp_FieldNumber.Required, " *", "")
-            - txt_Field_Input:
+            - txt_FieldNumber_Input:
                 Control: ModernTextInput
                 Properties:
                   AccessibleLabel: =cmp_FieldNumber.Label
@@ -100,4 +100,3 @@ ComponentDefinitions:
                   OnChange: =cmp_FieldNumber.OnChange()
                   Placeholder: =cmp_FieldNumber.Placeholder
                   Required: =cmp_FieldNumber.Required
-                  TabIndex: =0
