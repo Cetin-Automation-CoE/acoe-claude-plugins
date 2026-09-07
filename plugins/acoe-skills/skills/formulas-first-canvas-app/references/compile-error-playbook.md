@@ -33,6 +33,52 @@ have the fuller prose; this file exists so an agent can go
 **push → read error → look it up here → fix → repush** without a detour into
 either.
 
+## A no-diagnostic crash means malformed input, not "0 errors"
+
+**`Validation FAILED with no diagnostics — the server likely hit an
+unhandled exception. This usually indicates malformed input the validator
+could not attribute to a file.` is not a pass, and it is not an ordinary
+failure either — it means the validator itself broke before it could
+attribute any diagnostic to any file.** Treat it as a signal to bisect
+recent changes, not to re-read the last error list for a clue: there may be
+no diagnostic pointing at the actual cause at all.
+
+LIVE 2026-09-07 (fourth run): this exact text came back after pushing a
+change to `cmp_Navigation.Screens`'s `Default` — an unverified fourth-round
+draft that replaced the (correct) `=constScreens` reference with a literal
+`Table({Screen: App.ActiveScreen, DisplayName: "", …})`. Bisecting by
+reverting only that one line back to `=constScreens` (keeping every other
+change from that round, including the `cmp_FilterButton` fixes) produced
+**zero errors** on the very same tree.
+
+- **Cause**: `App.ActiveScreen` — or any app-scope reference — used inside a
+  component custom-property `Default`. A component's property default is
+  evaluated in **isolated component scope**; app scope is not merely
+  unavailable there in the ordinary "unknown name" sense, reaching into it
+  crashes the validator outright with no attributable diagnostic. This is a
+  different, worse failure mode than the ordinary "table passed in has none
+  of the expected columns" schema-mismatch errors elsewhere in this file —
+  those at least name a control and property. This does not.
+- **Remedy**: never reference app scope (`App.*`, a named formula/global
+  declared at app level, etc.) inside a `CustomProperties.*.Default` in a
+  component definition. If a property genuinely needs an app-scope-typed
+  placeholder value, accept it as an instance-level override at the call
+  site instead of trying to default it inside the component. A bare
+  reference to another **named formula** in the SAME scope (e.g.
+  `cmp_Navigation.Screens`'s `Default: =constScreens`, where `constScreens`
+  is itself an app-level named formula the component is allowed to read
+  because the property is later populated from app scope by its caller) is
+  a different, proven-safe shape — see the corrected third-run entry above.
+  The crash is specifically about a literal expression that itself REACHES
+  into app scope from inside the default (`App.ActiveScreen` nested in a
+  `Table({...})` literal), not about naming an app-scope identifier at all.
+- **Diagnosis method**: when a push comes back with no diagnostics at all,
+  do not trust the most recent error list to still be relevant — it may not
+  exist this time. Bisect: revert the most recently changed file(s) one at a
+  time (or in small groups) and re-push until the crash disappears. The
+  reverted change is the cause, even if you cannot articulate why from the
+  (absent) error text alone.
+
 ## How precisely each row is sourced
 
 There is no offline compile for Canvas Apps. This generator's own output was
@@ -140,17 +186,20 @@ the exact wording is not yet captured here — paste it in on first sighting.
 |---|---|---|---|
 | `[cmp_FieldChoice, Output] Name isn't valid. 'Value' isn't recognized.` / `[com_FieldChoice_Input, DefaultSelectedItems] Name isn't valid. 'Value' isn't recognized.` / `[com_FieldChoice_Input, DefaultSelectedItems] Incompatible types for comparison: Error, Text.` (3 of 34 errors) | LIVE (2026-09-07, second run) | `cmp_FieldChoice`'s `Choices` custom property (a `Table`-typed input) had a blank `Default: =`. With no default row, the `ModernCombobox` built from `Items: =cmp_FieldChoice.Choices` has no column schema, so `.Selected.Value` in `Output` and the `Value = …` filter in `DefaultSelectedItems` cannot resolve a `Value` column at all — the third error is the same unresolved column cascading into a comparison against an `Error` value. ~~Note `cmp_FilterButton`'s `Choices`/`Items` inputs also ship a blank `Table` default and are fine … they are never resolved into a typed output the way `cmp_FieldChoice.Output` is~~ **CORRECTED by the third run below: this claim was wrong.** `cmp_FilterButton.Choices` *is* resolved into its own `Value` output record and hard-failed live the very next round. There is no known-safe blank-`Table`-default case in this component library. | Give `Choices` a typed default with the right column: `Default: =Table({Value: ""})`. That establishes the schema so `Output` and `DefaultSelectedItems` both resolve. Verified this affects only the standalone `cmp_FieldChoice` component — the generated screens build their own typed `constXChoices` tables directly wherever a choice field appears and were never affected by this. |
 | `[Control 'cmp_AssetsList_HeadCategory', Property 'Choices'] The table passed in has none of the expected columns: SampleBooleanField, SampleNumberField, SampleStringField.` (identical shape on 4 more `cmp_*_Head*` instances — 5 of 7 errors) | LIVE (2026-09-07, third run — the first push against a genuine coauthoring session; see the note at the top of this file) | `cmp_FilterButton.Choices` (`Table`-typed Input) had a blank `Default: =` — the exact shape the row above wrongly claimed was safe for this component. `Self.Choices` flows into `cmp_FilterButton`'s own `Value` output record (`Choices: Self.Choices`), so it IS resolved into a typed output; with no schema to infer, the Studio fell back to its placeholder 3-column schema (`SampleBooleanField`/`SampleNumberField`/`SampleStringField`), and every caller passing a real choices table (e.g. `Choices: =constStatusChoices`, shape `Table({Value: "…"})`) failed to type-match it. | Give `Choices` a typed default matching the real column: `Default: |- \n  =Table({Value: ""})` (same fix, same shape, as `cmp_FieldChoice.Choices` above). Also fixed `cmp_FilterButton.Items` pre-emptively — identical blank default, same `Value` output record, no caller currently sets it live but the next one to would hit the same failure. |
-| `[Control 'cmp_AssetsList_Navigation', Property 'Screens'] The table passed in has none of the expected columns: SampleBooleanField, SampleNumberField, SampleStringField.` (identical shape on 1 more `cmp_*_Navigation` instance — 2 of 7 errors) | LIVE (2026-09-07, third run) | `cmp_Navigation.Screens` (`Table`-typed Input) defaulted to `=constScreens` — a bare app-scope named-formula reference. That is a DIFFERENT bad shape than blank: the reference is not resolvable at component-declaration time (the app scope containing `constScreens` isn't available yet), so it also fell back to the same placeholder 3-column schema, and the real `constScreens` registry table failed to type-match it. | Replace the reference with a literal row establishing the same columns: `Screen, DisplayName, Icon, Entity, Type, Group, BackLabel`. Every column except `Screen` is plain `Text` at runtime — `enumScreenType`/`enumEntity` (`scripts/emit_formulas.py`) are named-formula records of string literals (`{List: "list", Form: "form"}`), not real Power Fx enum/optionset types — so blank string literals type-match. `Screen` needs an actual screen reference; this component library is generic across apps (no app-specific screen name it can reference), so `App.ActiveScreen` — always available, no app-specific meaning here — stands in as a value of the right type. Not independently re-verified live (the author holds the only live session); flag if the next push disagrees. |
+| `[Control 'cmp_AssetsList_Navigation', Property 'Screens'] The table passed in has none of the expected columns: SampleBooleanField, SampleNumberField, SampleStringField.` (identical shape on 1 more `cmp_*_Navigation` instance — 2 of 7 errors) | LIVE (2026-09-07, third run) | **CORRECTED 2026-09-07 (fourth run) — this row's original cause claim was WRONG, kept below struck through as visible history, not silently rewritten.** ~~`cmp_Navigation.Screens` (`Table`-typed Input) defaulted to `=constScreens` — a bare app-scope named-formula reference. That is a DIFFERENT bad shape than blank: the reference is not resolvable at component-declaration time (the app scope containing `constScreens` isn't available yet), so it also fell back to the same placeholder 3-column schema, and the real `constScreens` registry table failed to type-match it.~~ **Actual cause: this was a CASCADE from the row above, not an independent defect.** The fourth run bisected a later crash by reverting only `cmp_Navigation.Screens` back to `=constScreens` while leaving `cmp_FilterButton.Choices`'s fix in place — that tree compiled with **zero errors**. `=constScreens` type-resolves fine on its own; it only produced the placeholder-schema error in the third run because `cmp_FilterButton.Choices` shipped a blank default *in that same push*, and something about that unrelated failure's fallout affected how `cmp_Navigation`'s own instances resolved too. A bare app-scope named-formula reference is not, by itself, a bad `Table` default. | The row above's fix (`cmp_FilterButton.Choices`/`.Items` given typed literal defaults) was sufficient on its own. `cmp_Navigation.Screens` needed **no change** — it was reverted back to `Default: =constScreens` in the fourth run and that is correct. Do not give it a literal `Table(...)` default instead: see the "Validation FAILED with no diagnostics" entry below for what that attempt actually does. |
 
-A `DataType: Table` custom property with an empty or non-`Table(...)`/`[...]`
-default is now caught **statically**, before any push:
-`scripts/check_control_props.py`'s `find_bad_table_defaults()` flags exactly
-these two shapes (blank, and a bare name reference) on any Input property
-typed `Table` — `tests/test_table_default_guard.py` is its regression proof,
-including a standing assertion that every shipped `components/cmp_*.pa.yaml`
-passes it. It cannot judge whether a literal's *columns* actually match what
+A `DataType: Table` custom property with an empty
+default (`Default: =`, nothing after the `=`) is now caught **statically**,
+before any push: `scripts/check_control_props.py`'s
+`find_bad_table_defaults()` flags exactly that one proven-bad shape on any
+Input property typed `Table` — `tests/test_table_default_guard.py` is its
+regression proof, including a standing assertion that every shipped
+`components/cmp_*.pa.yaml` passes it. A bare name/dotted reference
+(`=constScreens`, `=App.Foo`) is deliberately **not** flagged — see the
+correction above — nor is any literal `Table(...)`/`[...]` construction.
+The guard cannot judge whether a literal's *columns* actually match what
 callers pass (that is still `compile_canvas`'s job) — only whether the
-Default is a literal construction at all.
+Default is blank.
 
 ## Expected warnings (not errors — leave the code as is)
 
@@ -188,3 +237,36 @@ consulted on *every* result, not only failing ones.
 | `compile_canvas` hangs with no error for a very long time | EXACT description (`powerfx-limits.md`) | The Power Apps Studio tab is closed. The push does not fail fast — it waits out the full 1800s MCP idle timeout. | Keep the studio tab open for the whole push. A long silent stall is a closed tab, not broken auth. |
 | Every tool reports success but the user's screenshots never change | EXACT description (`powerfx-limits.md`) | The studio tab was reloaded, which starts a *new* coauthoring session. The MCP connection is still talking to the orphaned old one. | `connect` again, then `compile_canvas`. Do **not** `sync_canvas` first — the new session holds the stale document and would overwrite local files with it. |
 | `sync_canvas` pulls a diff that is exactly the last commit reversed | EXACT description (`powerfx-limits.md`) | A studio tab holding an older in-memory document wrote its stale state back over the push. | `git checkout` to recover, re-push, then have the user reload their tab before touching anything else. |
+
+## The verification loop has three stages, not two
+
+`compile_canvas` returning 0 errors is not the end of the loop —
+`get_appchecker_errors` is a **third, separate stage** run against the same
+live app, and it catches a different class of issue: `compile_canvas`
+proves the formulas are syntactically and type-valid; `get_appchecker_errors`
+runs Power Apps' own lint/perf/accessibility analysis over the app that
+already compiled clean. The full loop is:
+
+**local guards (`check_*.py`, offline) → `compile_canvas` (live, syntax/type
+errors) → `get_appchecker_errors` (live, lint/perf/accessibility findings
+on an app that already compiles)**
+
+A clean `compile_canvas` result says nothing about whether
+`get_appchecker_errors` will come back clean too — check both before calling
+a live app finished. See `SKILL.md`'s loop diagram, which now names all
+three stages.
+
+### `get_appchecker_errors` findings, LIVE 2026-09-07 (fourth run, first check against the deployed app)
+
+Three Medium/Performance findings, zero errors:
+
+```
+App.glScopeFilter: Unused variable
+AssetFormScreen.locConfirmDelete: Unused variable
+SiteFormScreen.locConfirmDelete: Unused variable
+```
+
+| Finding | Verdict | Reasoning |
+|---|---|---|
+| `App.glScopeFilter: Unused variable` | Expected, kept as-is | Ruling 6 made the generated per-entity scope formula a literal `Filter(col, true)` because the model has no scope concept yet — this is the SAME deliberate wart as the `warning: [App, Formulas] This predicate is a literal value…` row above. `templates/App.pa.yaml`'s `OnStart` still unconditionally `Set(glScopeFilter, "")`s the global (that line is not touched by the `--model` splice), but no `--model`-generated scope formula reads it any more, so the global is genuinely dead in generated output — not a bug, the direct consequence of the same documented seam. Decision: **keep the global**, do not remove it from the generated output. It is the seam a real per-entity scope condition (e.g. `Owner = glScopeFilter`) will read the moment the model gains one, exactly as the expected-warnings row already describes; removing it now would mean re-adding both the global and its `OnStart` initialization later, for no benefit today, and would split one documented seam into two half-consistent states across the codebase. Left as a Medium/Performance finding to accept, not fix. |
+| `AssetFormScreen.locConfirmDelete` / `SiteFormScreen.locConfirmDelete: Unused variable` | **False positive — checked, the dialog IS wired** | Traced every read/write of `locConfirmDelete` in `scripts/emit_screens.py` (mirrored in `templates/FormScreen.pa.yaml`): `OnVisible` sets it `false`; `btn_*Form_Delete`'s `OnSelect` sets it `true`; the confirmation dialog (`cmp_*Form_Dialog`, `ComponentName: cmp_Dialog`) binds its own built-in `Visible` property to `=locConfirmDelete` (`Visible` is a universal instance property on any control/component, not a custom one — see `UNIVERSAL_INSTANCE_PROPS` in `check_control_props.py`); `OnCancel` and `OnSubmit` both reset it to `false`. That is a complete, correctly wired read/write cycle — the dialog only shows when the flag is true and only the flag controls it. No functional gap. This app-checker finding is treated as a checker limitation with context variables whose only *read* occurs inside a child canvas-component instance's built-in property binding rather than a top-level screen control's — plausible given it is the identical pattern (an instance-level property bound to a context variable) that a human author would also write, but not independently confirmed against Microsoft's checker internals. No code change made; recorded here so a future run does not "fix" a dialog that already works. |

@@ -251,9 +251,9 @@ within two sprints, and the second time it rots nobody notices.
 There is no offline compile. Local guards are the only pre-push signal, so run them
 all, then close the loop against a live session:
 
-    ask → draft model → generate → local guards → push (compile_canvas)
-                                         ↑                    ↓
-                                         └──── fix ──── parse errors
+    ask → draft model → generate → local guards → push (compile_canvas) → get_appchecker_errors
+                                         ↑                    ↓                      ↓
+                                         └──── fix ──── parse errors        lint/perf findings
 
 The six `check_*.py` guards catch architecture, tokens, data layer, collection
 columns, control contracts and auto-layout sizing. Each prints what it does NOT
@@ -261,6 +261,15 @@ cover. **They prove the YAML is structurally sound and contract-clean — they d
 not prove the app compiles.** Everything else needs `compile_canvas` against a live coauthoring
 session; there is no substitute, because `pac canvas pack` is deprecated and
 crashes and `pac canvas validate` rejects every file of a working published app.
+
+**A clean `compile_canvas` is not the end of the loop.** Once the app compiles
+with zero errors, run `get_appchecker_errors` against the same live app — a
+third, separate stage that lints for unused variables, accessibility gaps and
+performance issues on an app that already type-checks. `compile_canvas` proving
+the formulas are valid says nothing about whether the app-checker pass is also
+clean; treat both as required before calling a live app finished. See
+`references/compile-error-playbook.md`'s "verification loop has three stages"
+section for a worked example (`App.glScopeFilter`, `locConfirmDelete`).
 
 **"Push (compile_canvas)" in that loop means an app open in Power Apps
 Studio with coauthoring enabled — not just a `connect()` that succeeds.** A
