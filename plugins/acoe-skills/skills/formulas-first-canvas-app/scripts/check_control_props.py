@@ -212,7 +212,6 @@ def parse_component_defs(paths):
 
 RE_PROPERTY_KIND = re.compile(r"^\s*PropertyKind:\s*(\w+)\s*$")
 RE_DEFAULT_LINE = re.compile(r"^(\s*)Default:\s*(.*)$")
-RE_BARE_REFERENCE = re.compile(r"^[A-Za-z_][\w.]*$")
 
 
 def parse_component_table_defaults(text):
@@ -314,32 +313,37 @@ def parse_component_table_defaults(text):
 def _table_default_is_bad(value):
     """True if a Table-typed Default cannot establish a concrete schema.
 
-    Confirmed live (2026-09-07, third run) on two independent components:
-    a Table-typed component input whose Default is not a concrete literal
-    falls back to the Studio's placeholder schema (`SampleBooleanField` /
+    Confirmed live (2026-09-07, third run): a Table-typed component input
+    whose Default is BLANK (`Default: =` with nothing after the `=`) falls
+    back to the Studio's placeholder schema (`SampleBooleanField` /
     `SampleNumberField` / `SampleStringField`), and a caller's real table
-    then fails to type-match it. Two shapes are known bad:
+    then fails to type-match it (`cmp_FieldChoice.Choices` before its fix;
+    that same run's `cmp_FilterButton.Choices`/`.Items`). Blank is the ONLY
+    shape this function flags.
 
-      * BLANK — `Default: =` with nothing after the `=`
-        (`cmp_FieldChoice.Choices` before its fix; this run's
-        `cmp_FilterButton.Choices`/`.Items`).
-      * A bare NAME reference — `Default: =constScreens`. An app-scope named
-        formula is not resolvable at component-declaration time
-        (`cmp_Navigation.Screens`).
+    A bare NAME reference (`Default: =constScreens`) is NOT flagged, and
+    must not be. It was flagged as bad through the third run on the theory
+    that an app-scope named formula "cannot establish a schema at
+    component-declaration time" — that theory was wrong. The fourth run
+    bisected the third run's 2 `cmp_*_Navigation.Screens` errors to a
+    CASCADE from `cmp_FilterButton.Choices`'s blank default in that same
+    push, not an independent defect: reverting only `cmp_Navigation.Screens`
+    to a bare `=constScreens` while keeping `cmp_FilterButton`'s fix
+    produced zero errors. A guard that flags `=constScreens` would reject
+    the exact shape the live compiler accepts — see
+    `references/compile-error-playbook.md`.
 
     Anything else — a literal `Table(...)` or `[...]` construction, of any
-    number of rows — is accepted without inspecting its columns. This is
-    deliberately narrow to the two proven-bad shapes rather than a full type
-    checker: a literal this function has not seen yet is unchecked, not
-    flagged, the same "absence is not evidence of validity" stance the rest
-    of this guard takes.
+    number of rows, or a bare reference — is accepted without inspecting its
+    columns. This is deliberately narrow to the one proven-bad shape rather
+    than a full type checker: a shape this function has not seen fail live
+    is unchecked, not flagged, the same "absence is not evidence of
+    validity" stance the rest of this guard takes.
     """
     v = value.strip()
     if v.startswith("="):
         v = v[1:].strip()
-    if not v:
-        return True
-    return bool(RE_BARE_REFERENCE.match(v))
+    return not v
 
 
 def find_bad_table_defaults(text, filename):
