@@ -179,9 +179,11 @@ within two sprints, and the second time it rots nobody notices.
   child (`FillPortions: 0`) **must** carry an explicit `Height` — `LayoutMinHeight` is
   ignored for it and the ~200px control default wrecks the layout.
 - **Two text generations, two property vocabularies.** `Control: Text` takes
-  `FontColor` / `Weight` / `'TextCanvas.Align'.Start`; `Control: ModernText` takes
-  `Color` / `FontWeight` / `Align.Left`. Mixing them is a hard compile error, and the
-  skill's components use both (`Text` in the dialog and toast, `ModernText` elsewhere).
+  `FontColor` / `Weight: ='TextCanvas.Weight'.*`; `Control: ModernText` takes
+  `Color` / `FontWeight: =FontWeight.*`. **Both take `Align: ='TextCanvas.Align'.*`**
+  (Start/Center/End) — only `Button` takes the plain `Align.*` enum (Left/Center/Right).
+  Mixing them is a compile error. See `references/control-dialects.md`, and let
+  `scripts/check_control_props.py` enforce it rather than trusting memory.
 - **`Ungroup(t, Rows)` takes an identifier, not `"Rows"`.** The quoted form fails with
   `Expected identifier name`. (`SortByColumns` still takes quoted strings — the
   inconsistency is real.)

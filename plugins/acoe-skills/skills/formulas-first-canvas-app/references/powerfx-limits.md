@@ -94,10 +94,12 @@ The same applies to any global a UDF reads: `Set()` it to a fully typed record a
 
 **What compile catches:** unknown control properties, unknown functions, bad UDF return
 types. The commonest property trap is the two text generations: `Control: Text`
-(previous-generation modern) takes `FontColor`, `Weight` and `'TextCanvas.Align'.Start`;
-`Control: ModernText` takes `Color`, `FontWeight` and `Align.Left`. `Button` in this
-skill is the previous-generation modern button (`'ButtonCanvas.*'` enums, `FontColor`,
-`BorderRadius`, no `Fill`).
+(previous-generation modern) takes `FontColor` and `Weight: ='TextCanvas.Weight'.Bold`;
+`Control: ModernText` takes `Color` and `FontWeight: =FontWeight.Bold`. Both take
+`Align: ='TextCanvas.Align'.{Start|Center|End}`. `Button` in this skill is the
+previous-generation modern button (`'ButtonCanvas.*'` enums, `FontColor`, `BorderRadius`,
+no `Fill`) and takes the plain `Align.{Left|Center|Right}` enum. Full table:
+`references/control-dialects.md`.
 
 **What compile misses:** every column referenced off a collection, every
 `SortByColumns` string, every arithmetic sign. Hence the guard scripts.
