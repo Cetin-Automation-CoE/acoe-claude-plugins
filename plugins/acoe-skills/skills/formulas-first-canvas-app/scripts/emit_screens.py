@@ -187,21 +187,35 @@ def _quote(text):
     return '"' + str(text).replace('"', '""') + '"'
 
 
-def _width_pair(field):
-    """FillPortions for a flex column, an explicit pixel Width otherwise.
+FLEX_COLUMN_PX = 240   # the baseline has no flex column; a "flex" field becomes a wide fixed one
 
-    Carried finding from Task 1: `field.grid_width` can also be the string
-    "hidden" — but this is only ever called with a field drawn from
-    `entity.grid_fields`, which already excludes hidden fields, so "hidden"
-    can never reach here. The assert makes that invariant loud instead of
-    producing `Width: =hidden`.
+
+def _column_px(field):
+    """Pixel width for a grid column. `grid: flex` is a wide fixed column — the
+    baseline has no flex column at all; one FillPortions=1 header crushes its
+    fixed siblings to zero width on a narrow canvas (seen live 2026-09-07)."""
+    return FLEX_COLUMN_PX if field.grid_width == "flex" else int(field.grid_width)
+
+
+def _column_dims(field):
+    """`Width` + `LayoutMinWidth`, both pinned to the SAME pixel value
+    (Task 1/baseline conformance): every grid column is fixed now, none
+    flex — see `_column_px`. `LayoutMinWidth` is what lets the header row
+    and the gallery declare a combined min-width (the sum over all columns)
+    so the table can scroll horizontally instead of squeezing columns to
+    fit a narrow canvas.
+
+    Carried finding from the previous `_width_pair`: `field.grid_width` can
+    also be the string "hidden" — but this is only ever called with a field
+    drawn from `entity.grid_fields`, which already excludes hidden fields,
+    so "hidden" can never reach here. The assert makes that invariant loud
+    instead of producing `Width: =hidden`.
     """
     assert field.grid_width != "hidden", (
-        "_width_pair called on a grid-hidden field %r — read widths off "
+        "_column_dims called on a grid-hidden field %r — read widths off "
         "entity.grid_fields, never entity.form_fields" % field.name)
-    if field.grid_width == "flex":
-        return [("FillPortions", "=1")]
-    return [("Width", "=%d" % field.grid_width)]
+    px = _column_px(field)
+    return [("LayoutMinWidth", "=%d" % px), ("Width", "=%d" % px)]
 
 
 _HEADER_DATATYPE = {
@@ -267,7 +281,7 @@ def _header_block(entity, field, item_indent):
         # Component inputs take STRINGS: cmp_FilterButton.Align is
         # DataType: Text, never the Align enum.
         props.append(("Align", "=%s" % _quote("Right")))
-    props.extend(_width_pair(field))
+    props.extend(_column_dims(field))
     return _block(entity.head_control(field), item_indent, "CanvasComponent",
                   props, component_name="cmp_FilterButton")
 
@@ -310,7 +324,7 @@ def _cell_block(entity, field, item_indent):
     props = [("Color", color), ("Size", size), ("Text", text)]
     if align:
         props.append(("Align", align))
-    props.extend(_width_pair(field))
+    props.extend(_column_dims(field))
     return _block(entity.cell_control(field), item_indent, "ModernText", props)
 
 
@@ -416,7 +430,10 @@ def _footer_block(entity, item_indent, filter_ctrls, search_ctrl):
     for f in entity.fields:
         if f.type != "number" or not f.money:
             continue
-        total_text = ('="%s: " & funcAsCurrency(Sum(\n    %s,\n    %s\n))'
+        # Coalesce(..., 0): Sum() over a filtered-to-nothing set returns
+        # blank, not 0 — funcAsCurrency(blank) is not "0", it is whatever
+        # that function does with a non-number. Coalesce pins the floor.
+        total_text = ('="%s: " & funcAsCurrency(Coalesce(Sum(\n    %s,\n    %s\n), 0))'
                       % (f.label, visible.replace("\n", "\n    "), f.name))
         cells.append(_block(
             "lbl_%sList_%sTotal" % (entity.plural, f.name), item_indent + 6, "ModernText",
@@ -442,10 +459,31 @@ def _footer_block(entity, item_indent, filter_ctrls, search_ctrl):
 def emit_list_screen(entity, model):
     """The list screen for `entity`: search, per-field filter/sort headers,
     a gallery of row cells, an empty state, and the standard chrome (header,
-    navigation, command bar, notifications, spinner)."""
+    navigation, command bar, notifications, spinner).
+
+    Task 1 (baseline conformance): the header/nav/list skeleton mirrors the
+    baseline's Activities.pa.yaml, not the earlier `con_%sList_Main`
+    horizontal-wrapper shape. `cmp_%sList_Header`, `cmp_%sList_Navigation`
+    and `con_%sList_List` are direct SCREEN children — each absolutely
+    positioned off `Parent.Height`/`Parent.Width` and each other's own
+    Height/Width/Y — never a FillPortions share of a wrapper GroupContainer.
+    That wrapper (`con_%sList_Main`, Horizontal, nav + body as its two
+    FillPortions children) is what flexed the nav rail to half the screen
+    live on 2026-09-07: a Horizontal auto-layout container divides ITS OWN
+    width between flexible children, so the nav's `FillPortions: =0` fixed
+    width was never actually fixed against the container's real width the
+    way an absolute `Width` formula is.
+    """
     search_ctrl = "txt_%sList_Search" % entity.plural
     grid_fields = entity.grid_fields
     default_sort_field = grid_fields[0].name if grid_fields else entity.fields[0].name
+    # Sum of every grid column's own pixel width — the header row and the
+    # gallery both need this as their shared LayoutMinWidth so the table
+    # scrolls horizontally as one unit instead of squeezing columns.
+    grid_width_sum = sum(_column_px(f) for f in grid_fields)
+
+    header_name = "cmp_%sList_Header" % entity.plural
+    nav_name = "cmp_%sList_Navigation" % entity.plural
 
     filter_ctrls = {}
     for f in entity.filter_fields:
@@ -499,6 +537,7 @@ def emit_list_screen(entity, model):
             ("BorderColor", "=constTransparent.RGBA"),
             ("FillPortions", "=1"),
             ("Items", items_formula),
+            ("LayoutMinWidth", "=%d" % grid_width_sum),
             ("TemplateSize", "=constStyle.List.TemplateHeight"),
         ], variant="Vertical", children=[row_block])
 
@@ -512,12 +551,12 @@ def emit_list_screen(entity, model):
             ("Visible", "=IsEmpty(%s.AllItems)" % entity.gallery),
         ], component_name="cmp_Empty")
 
-    footer_block = _footer_block(entity, 18, filter_ctrls, search_ctrl)
+    footer_block = _footer_block(entity, 12, filter_ctrls, search_ctrl)
 
     # ---- toolbar: search box, one filter combobox per choice filter field,
     # command bar ------------------------------------------------------------
     toolbar_children = [_block(
-        search_ctrl, 24, "ModernTextInput",
+        search_ctrl, 18, "ModernTextInput",
         [
             ("AccessibleLabel", "=%s" % _quote("Search %s" % entity.plural.lower())),
             ("Appearance", "=constStyle.Label.TextInput.Appearance"),
@@ -531,18 +570,26 @@ def emit_list_screen(entity, model):
             continue
         ctrl = filter_ctrls[f.name]
         toolbar_children.append(_block(
-            ctrl, 24, "ModernCombobox",
+            ctrl, 18, "ModernCombobox",
             [
                 ("AccessibleLabel", "=%s" % _quote("Filter by %s" % f.name)),
+                # Empty but TYPED default selection. Without it an untouched
+                # ModernCombobox has no defined selection state,
+                # IsEmpty(SelectedItems) never returns true, and the gallery
+                # stays empty until the first reset. (Baseline comment,
+                # translated; confirmed live 2026-09-07 — the grid read "0 of 16".)
+                ("DefaultSelectedItems", "=FirstN(%s, 0)" % entity.choices_table(f)),
                 ("FillPortions", "=0"),
                 ("Height", "=constStyle.Combobox.Height.Medium"),
+                ("InputTextPlaceholder", "=%s" % _quote(f.label)),
+                ("IsSearchable", "=false"),
                 ("ItemDisplayText", "=ThisItem.Value"),
                 ("Items", "=%s" % entity.choices_table(f)),
                 ("SelectMultiple", "=true"),
                 ("Width", "=200"),
             ]))
     toolbar_children.append(_block(
-        "cmp_%sList_Commands" % entity.plural, 24, "CanvasComponent",
+        "cmp_%sList_Commands" % entity.plural, 18, "CanvasComponent",
         [
             ("CanAdd", "=true"),
             ("CanRemoveFilters", "=!IsEmpty(colFilters)"),
@@ -554,7 +601,7 @@ def emit_list_screen(entity, model):
             ("OnRemoveFilter", "=Clear(colFilters)"),
         ], component_name="cmp_CommandBar"))
     toolbar_block = _block(
-        "con_%sList_Toolbar" % entity.plural, 18, "GroupContainer",
+        "con_%sList_Toolbar" % entity.plural, 12, "GroupContainer",
         [
             ("BorderStyle", "=BorderStyle.None"),
             ("FillPortions", "=0"),
@@ -572,44 +619,63 @@ def emit_list_screen(entity, model):
             ("Height", "=constStyle.List.HeaderHeight"),
             ("LayoutDirection", "=LayoutDirection.Horizontal"),
             ("LayoutGap", "=constStyle.Spacing.S"),
+            ("LayoutMinWidth", "=%d" % grid_width_sum),
         ], variant="AutoLayout",
         children=[[l for f in grid_fields for l in _header_block(entity, f, 24)]])
 
-    body_block = _block(
-        "con_%sList_Body" % entity.plural, 12, "GroupContainer",
+    # con_%sList_Table: header row + gallery + empty state, one scrolling
+    # unit (Task 1/baseline conformance, modelled on the baseline's
+    # con_Activities_Table) — this is what lets fixed-width columns overflow
+    # a narrow canvas horizontally instead of being crushed to fit it.
+    table_block = _block(
+        "con_%sList_Table" % entity.plural, 12, "GroupContainer",
         [
             ("BorderStyle", "=BorderStyle.None"),
             ("FillPortions", "=1"),
             ("LayoutAlignItems", "=LayoutAlignItems.Stretch"),
             ("LayoutDirection", "=LayoutDirection.Vertical"),
+            ("LayoutGap", "=constStyle.Spacing.S"),
+            ("LayoutOverflowX", "=LayoutOverflow.Scroll"),
+        ], variant="AutoLayout", children=[headers_block, gallery_block, empty_block])
+
+    # con_%sList_List: the baseline's con_Activities_List — a direct SCREEN
+    # child, absolutely positioned off the nav rail's OWN Width (never a
+    # fixed 250/60 literal) and the header's Height. See the module
+    # docstring above for why this replaces the old FillPortions wrapper.
+    list_block = _block(
+        "con_%sList_List" % entity.plural, 6, "GroupContainer",
+        [
+            ("BorderStyle", "=BorderStyle.None"),
+            ("Height", "=Parent.Height - %s.Height - 20" % header_name),
+            ("LayoutAlignItems", "=LayoutAlignItems.Stretch"),
+            ("LayoutDirection", "=LayoutDirection.Vertical"),
             ("LayoutGap", "=constStyle.Spacing.M"),
+            # Carried from the pre-Task-1 con_%sList_Body: this container's
+            # own inset from its (new) absolutely-positioned edges. Nothing
+            # about the skeleton restructure changes this padding.
             ("PaddingBottom", "=constStyle.Spacing.L"),
             ("PaddingLeft", "=constStyle.Spacing.XL"),
             ("PaddingRight", "=constStyle.Spacing.XL"),
             ("PaddingTop", "=constStyle.Spacing.L"),
-        ], variant="AutoLayout",
-        children=[toolbar_block, headers_block, gallery_block, empty_block, footer_block])
+            ("Width", "=Parent.Width - %s.Width - 20" % nav_name),
+            ("X", "=%s.Width + 10" % nav_name),
+            ("Y", "=%s.Height + 10" % header_name),
+        ], variant="AutoLayout", children=[toolbar_block, table_block, footer_block])
 
+    # cmp_%sList_Navigation: also a direct SCREEN child now (the baseline's
+    # cmp_Activities_Navigation) — self-sizing off its OWN Navigation input
+    # via Self-referential-by-name formulas (copied from the baseline
+    # verbatim, substituting only the control name), never a FillPortions
+    # share of a wrapper.
     nav_block = _block(
-        "cmp_%sList_Navigation" % entity.plural, 12, "CanvasComponent",
+        nav_name, 6, "CanvasComponent",
         [
-            ("FillPortions", "=0"),
-            ("Height", "=Parent.Height"),
+            ("Height", "=Parent.Height - %s.Height" % header_name),
             ("Navigation", "=locNavigation"),
             ("OnClose", "=UpdateContext({locNavigation: false})"),
+            ("Width", "=If(%s.Navigation, 250, 60)" % nav_name),
+            ("Y", "=%s.Y + %s.Height" % (header_name, header_name)),
         ], component_name="cmp_Navigation")
-
-    header_name = "cmp_%sList_Header" % entity.plural
-    main_block = _block(
-        "con_%sList_Main" % entity.plural, 6, "GroupContainer",
-        [
-            ("BorderStyle", "=BorderStyle.None"),
-            ("Height", "=Parent.Height - %s.Height" % header_name),
-            ("LayoutAlignItems", "=LayoutAlignItems.Stretch"),
-            ("LayoutDirection", "=LayoutDirection.Horizontal"),
-            ("Width", "=Parent.Width"),
-            ("Y", "=%s.Height" % header_name),
-        ], variant="AutoLayout", children=[nav_block, body_block])
 
     header_block = _block(
         header_name, 6, "CanvasComponent",
@@ -664,7 +730,7 @@ def emit_list_screen(entity, model):
     for name, value in sorted(top_props):
         lines.extend(_render_prop_line("      ", name, value))
     lines.append("    Children:")
-    for block in (header_block, main_block, notification_block, spinner_block):
+    for block in (header_block, nav_block, list_block, notification_block, spinner_block):
         lines.extend(block)
     return "\n".join(lines) + "\n"
 

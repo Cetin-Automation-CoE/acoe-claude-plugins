@@ -25,6 +25,10 @@ def entity():
             {"name": "Amount", "type": "number", "grid": 118, "money": True},
             {"name": "Due", "type": "date", "grid": 112, "semantics": "due"},
             {"name": "Notes", "type": "longtext", "grid": "hidden"},
+            # Task 1 (baseline conformance): the baseline has no flex grid
+            # column at all, so entity() needs one to exercise the
+            # flex-becomes-wide-fixed conversion (_column_px / FLEX_COLUMN_PX).
+            {"name": "Region", "type": "text", "grid": "flex"},
         ],
     })
 
@@ -245,7 +249,12 @@ class TestFooterAggregates(unittest.TestCase):
         squashed = re.sub(r"\s+", " ", text)
         sum_needle = re.sub(r"\s+", " ", "Sum(\n    %s,\n    Amount\n)" % visible).strip()
         self.assertIn(sum_needle, squashed)
-        self.assertIn("funcAsCurrency(Sum(", text)
+        # Task 1 (baseline conformance): the footer total is now coalesced
+        # (funcAsCurrency(Coalesce(Sum(...), 0))) so a fully-filtered-out
+        # money column reads "0", not a blank Sum() result — this literal
+        # adjacency check is updated to match, not loosened; the inner Sum()
+        # text asserted above is unchanged and still embeds verbatim.
+        self.assertIn("funcAsCurrency(Coalesce(Sum(", text)
         self.assertNotIn("Sum(%s, Amount)" % e.scope_formula, text,
                          "the footer Sum() must not read the bare, unfiltered "
                          "scope (Ruling 18) — that ignored search entirely")
@@ -404,6 +413,85 @@ class TestEmittedYamlIsValid(unittest.TestCase):
             except yaml.YAMLError as exc:
                 self.fail("%s screen is not valid YAML: %s" % (name, exc))
             self.assertIn("Screens", data, name)
+
+
+class TestListScreenMatchesBaselineSkeleton(unittest.TestCase):
+    """The first live render showed a nav rail at 50% width, an empty grid and
+    factory placeholders. Every assertion here is a symptom from that screenshot,
+    traced to a divergence from the baseline's Activities.pa.yaml."""
+
+    def setUp(self):
+        self.e = entity()
+        self.text = es.emit_list_screen(self.e, small_model())
+
+    def _props_of(self, control_name):
+        lines = self.text.splitlines()
+        start = next(i for i, l in enumerate(lines) if l.strip() == "- %s:" % control_name)
+        indent = len(lines[start]) - len(lines[start].lstrip())
+        props = {}
+        for l in lines[start + 1:]:
+            if l.strip().startswith("- ") and (len(l) - len(l.lstrip())) <= indent:
+                break
+            if l.strip() == "Children:":
+                break
+            if ":" in l and (len(l) - len(l.lstrip())) == indent + 6:
+                k, _, v = l.strip().partition(":")
+                props[k] = v.strip()
+        return props
+
+    def test_no_horizontal_main_wrapper(self):
+        """The wrapper is what made the nav flex to half the screen."""
+        self.assertNotIn("con_%sList_Main" % self.e.plural, self.text)
+
+    def test_nav_is_a_direct_screen_child_with_self_sizing_width(self):
+        p = self._props_of("cmp_%sList_Navigation" % self.e.plural)
+        self.assertEqual(p["Width"], "=If(cmp_%sList_Navigation.Navigation, 250, 60)" % self.e.plural)
+        self.assertIn("cmp_%sList_Header.Height" % self.e.plural, p["Y"])
+        self.assertIn("Parent.Height", p["Height"])
+
+    def test_list_container_derives_position_from_nav_and_header(self):
+        p = self._props_of("con_%sList_List" % self.e.plural)
+        self.assertEqual(p["X"], "=cmp_%sList_Navigation.Width + 10" % self.e.plural)
+        self.assertIn("cmp_%sList_Navigation.Width" % self.e.plural, p["Width"])
+        self.assertIn("cmp_%sList_Header.Height" % self.e.plural, p["Y"])
+        self.assertEqual(p["LayoutAlignItems"], "=LayoutAlignItems.Stretch")
+
+    def test_every_filter_combobox_has_typed_empty_default_and_placeholder(self):
+        """An untouched ModernCombobox has no defined selection state, so
+        IsEmpty(SelectedItems) never returns true and the grid reads 0 of N."""
+        for f in self.e.filter_fields:
+            p = self._props_of("com_%sList_%sFilter" % (self.e.plural, f.name))
+            self.assertEqual(p["DefaultSelectedItems"],
+                             "=FirstN(%s, 0)" % self.e.choices_table(f), f.name)
+            self.assertEqual(p["InputTextPlaceholder"], '="%s"' % f.label, f.name)
+            self.assertEqual(p["ItemDisplayText"], "=ThisItem.Value", f.name)
+
+    def test_no_flex_column_and_min_widths_everywhere(self):
+        """A FillPortions=1 header crushes fixed siblings on a narrow canvas."""
+        for f in self.e.grid_fields:
+            p = self._props_of(self.e.head_control(f))
+            self.assertNotIn("FillPortions", p, f.name)
+            self.assertIn("Width", p, f.name)
+            self.assertIn("LayoutMinWidth", p, f.name)
+
+    def test_header_row_min_width_is_the_sum_of_column_widths(self):
+        widths = [es._column_px(f) for f in self.e.grid_fields]
+        p = self._props_of("con_%sList_Headers" % self.e.plural)
+        self.assertEqual(p["LayoutMinWidth"], "=%d" % sum(widths))
+
+    def test_table_container_scrolls_horizontally(self):
+        p = self._props_of("con_%sList_Table" % self.e.plural)
+        self.assertEqual(p["LayoutOverflowX"], "=LayoutOverflow.Scroll")
+
+    def test_footer_total_is_coalesced(self):
+        self.assertIn("Coalesce(Sum(", self.text)
+
+
+class TestFlexColumnBecomesWideFixed(unittest.TestCase):
+    def test_flex_maps_to_240_px(self):
+        f = [x for x in entity().fields if x.grid_width == "flex"]
+        if f:
+            self.assertEqual(es._column_px(f[0]), 240)
 
 
 if __name__ == "__main__":
