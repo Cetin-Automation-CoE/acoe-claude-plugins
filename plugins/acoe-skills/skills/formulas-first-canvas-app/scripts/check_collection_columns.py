@@ -25,6 +25,28 @@ import sys
 SCOPE_WORDS = {"ThisItem", "ThisRecord", "Parent", "Self", "App", "Value", "As"}
 
 
+def code_only(line: str) -> str:
+    """Strip a trailing `//` comment from one line.
+
+    A comment can never be a real column reference — Ruling 13 (this guard
+    was the one sibling of check_tokens.py/check_data_layer.py that scanned
+    raw lines instead of this).
+
+    Unlike check_data_layer.py's own code_only(), quoted string CONTENTS
+    are kept intact here, not blanked to `""`: the SortByColumns(...) check
+    below has to read the quoted column name (SortByColumns(colX, "Year",
+    ...)), not have it erased. So a `//` inside a quoted string (a URL,
+    say) still must not be mistaken for a comment start — a bare
+    `line.split("//")[0]` gets that wrong — so quoted spans are masked with
+    same-length, slash-free placeholders ONLY to find where a genuine `//`
+    starts outside them; the ORIGINAL text up to that point (quotes intact)
+    is what's returned.
+    """
+    masked = re.sub(r'"[^"]*"', lambda m: "x" * len(m.group(0)), line)
+    cut = masked.find("//")
+    return line if cut == -1 else line[:cut]
+
+
 def balanced(text: str, open_idx: int) -> str:
     """Return the substring from an opening paren to its matching close."""
     depth = 0
@@ -105,15 +127,20 @@ def main():
     bad = []
     for f in sorted(src.rglob("*.pa.yaml")):
         for ln, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            # A `//` comment (e.g. emit_formulas.py's "SWITCH DAY" seam,
+            # which deliberately shows the real data-source binding, column
+            # names and all) can never be a real column reference — scan
+            # only what would actually run. Ruling 13.
+            code = code_only(line)
             # Filter/LookUp/RemoveIf/UpdateIf(colX, <Column> ...)
             # The (?!\s*\() guard matters: Filter(constX, funcCanWrite(Value)) has a
             # FUNCTION CALL as its predicate, not a column reference.
-            for m in re.finditer(r"\b(?:Filter|LookUp|RemoveIf|UpdateIf)\(\s*((?:col|const)\w+)\s*,\s*([A-Za-z_]\w*)(?!\w)(?!\s*\()", line):
+            for m in re.finditer(r"\b(?:Filter|LookUp|RemoveIf|UpdateIf)\(\s*((?:col|const)\w+)\s*,\s*([A-Za-z_]\w*)(?!\w)(?!\s*\()", code):
                 col, ref = m.group(1), m.group(2)
                 if col in schemas and ref not in schemas[col] and ref not in SCOPE_WORDS:
                     bad.append((f.relative_to(src), ln, col, ref, line.strip()[:80]))
             # SortByColumns(<expr over colX>, "Column", ...) — never validated by compile
-            for m in re.finditer(r'SortByColumns\(\s*(?:\w+\()*\s*((?:col|const)\w+)[^)]*?\)?\s*,\s*"(\w+)"', line):
+            for m in re.finditer(r'SortByColumns\(\s*(?:\w+\()*\s*((?:col|const)\w+)[^)]*?\)?\s*,\s*"(\w+)"', code):
                 col, ref = m.group(1), m.group(2)
                 if col in schemas and ref not in schemas[col]:
                     bad.append((f.relative_to(src), ln, col, ref, line.strip()[:80]))
