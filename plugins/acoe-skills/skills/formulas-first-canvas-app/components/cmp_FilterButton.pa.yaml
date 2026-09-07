@@ -42,7 +42,18 @@ ComponentDefinitions:
         DisplayName: Choices
         Description: Closed vocabulary for this column, e.g. a status choices table
         DataType: Table
-        Default: =
+        # LIVE 2026-09-07 (third run): a blank default here does NOT stay
+        # inert. Self.Choices flows into the Value output record below
+        # (`Choices: Self.Choices`), so a schema-less default makes the
+        # Studio fall back to its placeholder schema
+        # (SampleBooleanField/SampleNumberField/SampleStringField) — and a
+        # caller passing a real choices table (e.g. `=constStatusChoices`,
+        # shape `Table({Value: "…"})`) then fails to type-match it. 5 of the
+        # run's 7 errors were exactly this, on `cmp_*_Head*` instances. A
+        # typed default matching the real column establishes the schema, the
+        # same fix cmp_FieldChoice.Choices already needed.
+        Default: |-
+          =Table({Value: ""})
       DataType:
         PropertyKind: Input
         DisplayName: DataType
@@ -72,7 +83,14 @@ ComponentDefinitions:
         DisplayName: Items
         Description: Distinct values offered in the dialog when there is no fixed vocabulary
         DataType: Table
-        Default: =
+        # Same schema-less-default class as Choices above (see its comment).
+        # No template currently sets `Items` on a real instance, so this one
+        # has not yet been observed erroring live — but it flows into the
+        # same Value output record (`Items: Self.Items`) and would hit the
+        # identical failure the moment a caller passes a real table. Fixed
+        # pre-emptively as part of the sweep for this defect class.
+        Default: |-
+          =Table({Value: ""})
       Label:
         PropertyKind: Input
         DisplayName: Label

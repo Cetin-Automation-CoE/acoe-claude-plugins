@@ -50,7 +50,34 @@ ComponentDefinitions:
         DisplayName: Screens
         Description: The routing registry. Defaults to the app-wide constScreens.
         DataType: Table
-        Default: =constScreens
+        # LIVE 2026-09-07 (third run): `=constScreens` is an app-scope named
+        # formula reference and does NOT establish a schema at
+        # component-declaration time — the Studio cannot resolve an
+        # app-scope name that early, so it fell back to the placeholder
+        # schema (SampleBooleanField/SampleNumberField/SampleStringField)
+        # and the real registry table (below) failed to type-match it. 2 of
+        # the run's 7 errors were this, on both cmp_*_Navigation instances.
+        # A literal row establishes the schema instead. Every column here is
+        # a plain Text value at runtime — enumScreenType/enumEntity (see
+        # scripts/emit_formulas.py) are named-formula RECORDS of string
+        # literals (`{List: "list", Form: "form"}`), not real Power Fx enum
+        # types — except `Screen`, a genuine screen reference. This
+        # component library is generic across apps (no fixed screen name to
+        # reference), so `App.ActiveScreen` stands in as a value of the
+        # right type; it is always available at runtime and carries no
+        # app-specific meaning here.
+        Default: |-
+          =Table(
+              {
+                  Screen: App.ActiveScreen,
+                  DisplayName: "",
+                  Icon: "",
+                  Entity: "",
+                  Type: "",
+                  Group: "",
+                  BackLabel: ""
+              }
+          )
     Properties:
       Fill: =If(cmp_Navigation.Navigation, constBackdropColor.RGBA, constTransparent.RGBA)
       Width: =If(cmp_Navigation.Navigation, 250, 60)

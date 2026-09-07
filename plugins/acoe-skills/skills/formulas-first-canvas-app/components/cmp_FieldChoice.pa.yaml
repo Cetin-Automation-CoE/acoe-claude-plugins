@@ -51,12 +51,16 @@ ComponentDefinitions:
         Description: Closed vocabulary table; each row needs a Value column
         DataType: Table
         # A typed default establishes the schema so .Selected.Value and the
-        # DefaultSelectedItems filter below can resolve. A blank default (the
-        # cmp_FilterButton pattern) is fine there because that component's
-        # Choices is never resolved into an output; here it is (Output below),
-        # so it needs a real column. |- block scalar because the value has a
-        # colon in it (`Value: ""`), same reason every other Default with a
-        # colon in this file uses it.
+        # DefaultSelectedItems filter below can resolve. CORRECTION (LIVE
+        # 2026-09-07, third run): an earlier version of this comment claimed
+        # a blank default was "fine" on cmp_FilterButton's Choices/Items
+        # because those are never resolved into an output — that was wrong.
+        # They flow into cmp_FilterButton's own Value output record and a
+        # blank default caused 5 real compile errors there too; both are now
+        # fixed the same way this one is. There is no known-safe blank-Table-
+        # default case in this component library. |- block scalar because
+        # the value has a colon in it (`Value: ""`), same reason every other
+        # Default with a colon in this file uses it.
         Default: |-
           =Table({Value: ""})
       Required:
