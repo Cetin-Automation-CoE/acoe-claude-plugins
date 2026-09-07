@@ -210,6 +210,158 @@ def parse_component_defs(paths):
     return defs
 
 
+RE_PROPERTY_KIND = re.compile(r"^\s*PropertyKind:\s*(\w+)\s*$")
+RE_DEFAULT_LINE = re.compile(r"^(\s*)Default:\s*(.*)$")
+RE_BARE_REFERENCE = re.compile(r"^[A-Za-z_][\w.]*$")
+
+
+def parse_component_table_defaults(text):
+    """Map component name -> {Input Table property: (default text, line no)}.
+
+    Walks the same `ComponentDefinitions` shape and indentation invariant
+    `parse_component_defs_text` already relies on (see its COVERAGE LIMIT
+    note), extended to also read each property's `PropertyKind` and
+    `Default` — needed by `find_bad_table_defaults` below, which judges
+    whether a `DataType: Table` Input property's `Default` can actually
+    establish a schema.
+
+    Only Input properties with `DataType: Table` are recorded. A block-scalar
+    (`|-` etc.) Default has its continuation lines joined with a single
+    space, the same reconstruction `iter_properties` does elsewhere in this
+    file. Properties of any other PropertyKind/DataType are read (their
+    PropertyKind/DataType/Default lines are still consumed, so a stray
+    `Default:` line inside them cannot be mistaken for the FOLLOWING
+    property's) but never added to the result.
+    """
+    result = {}
+    lines = text.splitlines()
+    n = len(lines)
+    current_cmp = None
+    cmp_indent = None
+    prop = None
+    prop_indent = None
+    prop_kind = None
+    prop_datatype = None
+    i = 0
+    while i < n:
+        raw = lines[i]
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            i += 1
+            continue
+        indent = len(raw) - len(raw.lstrip())
+
+        m = RE_CMP_NAME.match(raw)
+        if m:
+            current_cmp = m.group(2)
+            cmp_indent = indent
+            result.setdefault(current_cmp, {})
+            prop = prop_indent = prop_kind = prop_datatype = None
+            i += 1
+            continue
+
+        if current_cmp is None:
+            i += 1
+            continue
+
+        if indent <= cmp_indent:
+            current_cmp = None
+            i += 1
+            continue
+
+        m = RE_PROPERTY_KIND.match(raw)
+        if m and prop:
+            prop_kind = m.group(1)
+            i += 1
+            continue
+
+        m = RE_DATATYPE.match(raw)
+        if m and prop:
+            prop_datatype = m.group(1)
+            i += 1
+            continue
+
+        m = RE_DEFAULT_LINE.match(raw)
+        if m and prop:
+            def_indent = len(m.group(1))
+            value = m.group(2).strip()
+            line_no = i + 1
+            i += 1
+            if value in BLOCK_SCALAR:
+                body = []
+                while i < n:
+                    nxt = lines[i]
+                    if nxt.strip() and (len(nxt) - len(nxt.lstrip())) <= def_indent:
+                        break
+                    body.append(nxt.strip())
+                    i += 1
+                value = " ".join(body)
+            if prop_kind == "Input" and prop_datatype == "Table":
+                result[current_cmp][prop] = (value, line_no)
+            continue
+
+        m = RE_PROP_NAME.match(raw)
+        if m and m.group(2) not in ("CustomProperties", "Properties", "Children"):
+            if prop_indent is None or indent == prop_indent:
+                prop_indent = indent
+                prop = m.group(2)
+                prop_kind = None
+                prop_datatype = None
+
+        i += 1
+    return result
+
+
+def _table_default_is_bad(value):
+    """True if a Table-typed Default cannot establish a concrete schema.
+
+    Confirmed live (2026-09-07, third run) on two independent components:
+    a Table-typed component input whose Default is not a concrete literal
+    falls back to the Studio's placeholder schema (`SampleBooleanField` /
+    `SampleNumberField` / `SampleStringField`), and a caller's real table
+    then fails to type-match it. Two shapes are known bad:
+
+      * BLANK — `Default: =` with nothing after the `=`
+        (`cmp_FieldChoice.Choices` before its fix; this run's
+        `cmp_FilterButton.Choices`/`.Items`).
+      * A bare NAME reference — `Default: =constScreens`. An app-scope named
+        formula is not resolvable at component-declaration time
+        (`cmp_Navigation.Screens`).
+
+    Anything else — a literal `Table(...)` or `[...]` construction, of any
+    number of rows — is accepted without inspecting its columns. This is
+    deliberately narrow to the two proven-bad shapes rather than a full type
+    checker: a literal this function has not seen yet is unchecked, not
+    flagged, the same "absence is not evidence of validity" stance the rest
+    of this guard takes.
+    """
+    v = value.strip()
+    if v.startswith("="):
+        v = v[1:].strip()
+    if not v:
+        return True
+    return bool(RE_BARE_REFERENCE.match(v))
+
+
+def find_bad_table_defaults(text, filename):
+    """Findings for every Table-typed Input custom property whose Default
+    cannot establish a schema — see `_table_default_is_bad`.
+    """
+    findings = []
+    for cmp_name, props in parse_component_table_defaults(text).items():
+        for prop, (value, line_no) in sorted(props.items()):
+            if _table_default_is_bad(value):
+                findings.append(Finding(
+                    "error", filename, line_no, cmp_name, prop,
+                    "DataType Table input's Default (%r) establishes no "
+                    "schema — the Studio falls back to a placeholder schema "
+                    "(SampleBooleanField/SampleNumberField/SampleStringField)"
+                    " and a caller's real table then fails to type-match it."
+                    " Give it a literal Table(...)/[...] default with at "
+                    "least one typed row, e.g. Default: =Table({Value: "
+                    '""})' % value))
+    return findings
+
+
 def iter_properties(text, filename, counts=None):
     """Yield a PropSite per property line, tracking the enclosing control.
 
@@ -601,6 +753,7 @@ def main():
         file_texts.append((str(path), text))
         findings.extend(check_text(text, str(path), contracts, resolver=resolver,
                                    components=components, counts=counts))
+        findings.extend(find_bad_table_defaults(text, str(path)))
     findings.extend(find_duplicate_controls(file_texts))
 
     errs = [f for f in findings if f.severity == "error"]
