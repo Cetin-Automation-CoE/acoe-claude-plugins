@@ -10,17 +10,26 @@ truth: `entity.collection`, `entity.gallery`, `entity.loc_var`,
 `entity.choices_table`) — never the templates' generic `colItems`/`locItem`/
 `gal_List_Items`, which stay in the templates as a pattern to read.
 
-CONTRACT-AWARE BY CONSTRUCTION (Phase 1's whole point): every property this
-module writes is checked against `references/control-contracts.yaml` — for a
-plain control (ModernText, ModernTextInput, ModernCombobox, ModernDatePicker,
-Button, Gallery) via `_check_control_prop`, for a CanvasComponent instance
-(cmp_Header, cmp_FilterButton, ...) against that component's own declared
-CustomProperties via `_check_component_prop` — BEFORE the property line is
-ever written. An unknown property raises `ContractError` at generation time,
-never at push time. `check_control_props.py` reads the exact same contract
-file, so `tests/test_emit_screens.py`'s
-`TestGeneratedOutputPassesTheContractGuard` passes because the emitter is
-correct, not because output was tuned until the guard went quiet.
+CONTRACT-AWARE BY CONSTRUCTION (Phase 1's whole point): every CONTROL property
+this module writes — via `_block`, for a plain control (ModernText,
+ModernTextInput, ModernCombobox, ModernDatePicker, Button, Gallery) via
+`_check_control_prop`, or for a CanvasComponent instance (cmp_Header,
+cmp_FilterButton, ...) against that component's own declared CustomProperties
+via `_check_component_prop` — is checked against
+`references/control-contracts.yaml` BEFORE the property line is ever written.
+An unknown property raises `ContractError` at generation time, never at push
+time. `check_control_props.py` reads the exact same contract file, so
+`tests/test_emit_screens.py`'s `TestGeneratedOutputPassesTheContractGuard`
+passes because the emitter is correct, not because output was tuned until the
+guard went quiet.
+
+M4: this does NOT cover the handful of top-level SCREEN properties (`Fill`,
+`LoadingSpinnerColor`, `OnVisible`) that `emit_list_screen`/`emit_form_screen`
+write directly via `_render_prop_line`, bypassing `_block` entirely — a
+Screen is not a control and has no entry in control-contracts.yaml for
+`_check_control_prop` to check it against. An earlier version of this
+docstring claimed blanket coverage; that was an overclaim, not a description
+of what the code does.
 
 ARCHETYPE -> CONTROL (grid cell always ModernText; only Color/Text/Align
 formulas vary):
@@ -119,13 +128,25 @@ def _needs_block_scalar(value):
       block-mapping grammar reads an unquoted `: ` inside a plain scalar as
       the start of a NESTED mapping, which corrupts the document silently
       for a line-oriented reader and raises `yaml.safe_load` outright for a
-      real one).
+      real one), or
+    * a `#` (Ruling 16/C2: YAML treats a space followed by `#` as the start
+      of a COMMENT in a plain scalar — `Label: ="ORDER # REF"` is emitted,
+      parsed, and quietly truncated to `Label: ="ORDER`, with everything
+      after the `#` gone. The file stays perfectly valid YAML, which is
+      exactly why no well-formedness check can see this — only a value-aware
+      reader like this function can), or
+    * leading/trailing whitespace (defensive: a plain scalar's surrounding
+      whitespace is not part of its value once the wrapping quotes are
+      stripped by a downstream tool, so anything already touching the edges
+      of the line is not safe to trust to inline rendering either).
 
     This is not cosmetic: `OnChange: =UpdateContext({locDirty: true})`
-    rendered inline breaks the file. `templates/*.pa.yaml` always wraps this
-    shape in `|-` for exactly this reason, even for a single logical line.
+    rendered inline breaks the file, and `Label: ="ORDER # REF"` breaks it
+    silently. `templates/*.pa.yaml` always wraps the colon/newline shape in
+    `|-` for exactly this reason, even for a single logical line.
     """
-    return "\n" in value or ":" in value
+    return ("\n" in value or ":" in value or "#" in value
+            or value != value.strip())
 
 
 def _render_prop_line(pad, name, value):
@@ -191,6 +212,40 @@ _HEADER_DATATYPE = {
 
 # ---- list screen: per-field pieces ---------------------------------------
 
+def _header_sort_toggle(entity, field):
+    """Ruling 19/I2: clicking a column header must toggle that column's sort
+    state in `colSorts` — before this fix, `_header_block` never emitted
+    `OnSelect` at all, so nothing ever wrote `colSorts`, `IsSorted` was
+    permanently false, and the gallery's `SortByColumns` (which reads
+    `LookUp(colSorts, Table = <entity>).ID`/`.SortOrder`) was frozen on
+    whatever `OnVisible` seeded once at screen load.
+
+    `UpdateIf`, not `With()`: `OnVisible` (see `top_props` below) guarantees
+    there is always exactly one `colSorts` row for this entity's
+    `enum_member`, so a click only ever needs to UPDATE it, never insert one.
+    `UpdateIf`'s change record is evaluated against the ORIGINAL row being
+    replaced — `ID`/`SortOrder` inside it read the row's value BEFORE this
+    update — which is what lets the direction flip (asc -> desc -> asc) read
+    its own prior state without a scratch variable: clicking the currently-
+    sorted column's header flips `SortOrder`; clicking any other column
+    resets to ascending.
+    """
+    return (
+        "=UpdateIf(\n"
+        "    colSorts,\n"
+        "    Table = %s,\n"
+        "    {\n"
+        "        ID: %s,\n"
+        "        SortOrder: If(\n"
+        "            ID = %s And SortOrder = \"asc\",\n"
+        "            \"desc\",\n"
+        "            \"asc\"\n"
+        "        )\n"
+        "    }\n"
+        ")"
+    ) % (entity.enum_member, _quote(field.name), _quote(field.name))
+
+
 def _header_block(entity, field, item_indent):
     """One `cmp_FilterButton` instance — a column header that doubles as the
     filter/sort affordance. Its own custom-property contract is
@@ -203,6 +258,7 @@ def _header_block(entity, field, item_indent):
         ("IsFiltered", "=%s in colFilters.ID" % _quote(field.name)),
         ("IsSorted", "=%s in colSorts.ID" % _quote(field.name)),
         ("Label", "=%s" % _quote(field.label)),
+        ("OnSelect", _header_sort_toggle(entity, field)),
         ("Title", "=%s" % _quote(field.name)),
     ]
     if field.type == "choice":
@@ -272,23 +328,64 @@ def _filter_clause(entity, filter_ctrls):
     widget — a `filter: true` on a non-choice field is accepted by the model
     but this generator does not (yet) build a widget for it, so it is simply
     left out of the clause rather than guessed at.
+
+    Ruling 15/C1: the clause for EACH field is its own `IsEmpty(...) Or
+    <field> in ...` pair — that `Or` is what makes an UNSET combobox mean "no
+    constraint from this field" (IsEmpty is true, so the pair is
+    true regardless of the field's value). But the fields themselves must be
+    joined with `And`: filtering is supposed to narrow the result to rows
+    that satisfy EVERY active filter at once. Joining fields with `Or`
+    instead (the original bug) means picking a value in any ONE combobox
+    makes every other combobox's own `IsEmpty(...) Or ...` pair irrelevant —
+    the whole predicate short-circuits to `true` and nothing is ever
+    filtered out. Each field's pair is parenthesised so `And`/`Or` precedence
+    is never ambiguous when there is more than one filter field.
     """
     if not filter_ctrls:
         return "true"
     parts = []
     for field_name, ctrl in filter_ctrls.items():
-        parts.append("IsEmpty(%s.SelectedItems) Or %s in %s.SelectedItems.Value"
+        parts.append("(IsEmpty(%s.SelectedItems) Or %s in %s.SelectedItems.Value)"
                       % (ctrl, field_name, ctrl))
-    return " Or\n    ".join(parts)
+    return " And\n    ".join(parts)
 
 
-def _footer_block(entity, item_indent):
-    """The footer aggregate strip (Ruling 12): a filtered/total count that
-    reads the SAME scope formula the gallery and filter chips read — the
-    whole point of `entity.scope_formula` existing is that this count cannot
-    silently disagree with what the grid shows — plus one `Sum()` total per
-    `money: true` field, formatted through `funcAsCurrency` so currency
-    formatting stays owned by one function.
+def _visible_rows_expr(entity, filter_ctrls, search_ctrl):
+    """The `Filter(...)` expression that decides which rows are visible in
+    the grid right now — factored into ONE function so the gallery's `Items`
+    and the footer's aggregates read the textually IDENTICAL expression and
+    cannot silently drift apart (Ruling 18/I1: the footer used to read the
+    bare, unfiltered `entity.scope_formula` while the gallery read
+    `Filter(scope, filters, search)`, so the count was permanently "N of N"
+    and the money `Sum()` ignored search entirely — the exact opposite of
+    what Ruling 12 asked for). Every caller below embeds this SAME rendered
+    text rather than rebuilding an equivalent expression by hand, so the two
+    genuinely cannot disagree.
+
+    Returned with the first line unindented and continuation lines at a
+    relative 4-space indent; callers splice it in and reindent as needed
+    (see the `.replace("\\n", "\\n    ")` calls below).
+    """
+    return (
+        "Filter(\n"
+        "    %s,\n"
+        "    %s,\n"
+        "    %s\n"
+        ")"
+    ) % (entity.scope_formula, _filter_clause(entity, filter_ctrls),
+         _search_clause(entity, search_ctrl))
+
+
+def _footer_block(entity, item_indent, filter_ctrls, search_ctrl):
+    """The footer aggregate strip (Ruling 12, corrected by Ruling 18/I1): a
+    filtered/total count and a `Sum()` per `money: true` field that read the
+    SAME `Filter(...)` expression the gallery's `Items` reads
+    (`_visible_rows_expr`) — that is what makes it genuinely impossible for
+    this count to disagree with what the grid shows, rather than merely
+    claiming so. The "of M" denominator stays the full, unfiltered
+    `entity.collection` — "Showing 4 of 16" — so the total is legible even
+    while filtered. `Sum()` totals are formatted through `funcAsCurrency` so
+    currency formatting stays owned by one function.
 
     A fixed-height, `FillPortions: =0` sibling of the gallery (which keeps
     `FillPortions: =1`): the same leaf-control-collapse rule that requires
@@ -305,8 +402,9 @@ def _footer_block(entity, item_indent):
     text is short and bounded ("Label: $amount") and letting them flex
     would just leave them adrift in the middle of the strip.
     """
-    count_text = ('="Showing " & CountRows(%s) & " of " & CountRows(%s)'
-                  % (entity.scope_formula, entity.collection))
+    visible = _visible_rows_expr(entity, filter_ctrls, search_ctrl)
+    count_text = ('="Showing " & CountRows(\n    %s\n) & " of " & CountRows(%s)'
+                  % (visible.replace("\n", "\n    "), entity.collection))
     cells = [_block(
         "lbl_%sList_Count" % entity.plural, item_indent + 6, "ModernText",
         [
@@ -318,8 +416,8 @@ def _footer_block(entity, item_indent):
     for f in entity.fields:
         if f.type != "number" or not f.money:
             continue
-        total_text = ('="%s: " & funcAsCurrency(Sum(%s, %s))'
-                      % (f.label, entity.scope_formula, f.name))
+        total_text = ('="%s: " & funcAsCurrency(Sum(\n    %s,\n    %s\n))'
+                      % (f.label, visible.replace("\n", "\n    "), f.name))
         cells.append(_block(
             "lbl_%sList_%sTotal" % (entity.plural, f.name), item_indent + 6, "ModernText",
             [
@@ -382,11 +480,7 @@ def emit_list_screen(entity, model):
 
     items_formula = (
         "=SortByColumns(\n"
-        "    Filter(\n"
-        "        %s,\n"
-        "        %s,\n"
-        "        %s\n"
-        "    ),\n"
+        "    %s,\n"
         "    // WARNING: this string column name is NEVER validated by the\n"
         "    // compiler. check_collection_columns.py is what catches a typo.\n"
         "    LookUp(colSorts, Table = %s).ID,\n"
@@ -396,8 +490,8 @@ def emit_list_screen(entity, model):
         "        SortOrder.Descending\n"
         "    )\n"
         ")"
-    ) % (entity.scope_formula, _filter_clause(entity, filter_ctrls),
-         _search_clause(entity, search_ctrl), entity.enum_member, entity.enum_member)
+    ) % (_visible_rows_expr(entity, filter_ctrls, search_ctrl).replace("\n", "\n    "),
+         entity.enum_member, entity.enum_member)
 
     gallery_block = _block(
         entity.gallery, 18, "Gallery",
@@ -419,7 +513,7 @@ def emit_list_screen(entity, model):
             ("Visible", "=IsEmpty(%s.AllItems)" % entity.gallery),
         ], component_name="cmp_Empty")
 
-    footer_block = _footer_block(entity, 18)
+    footer_block = _footer_block(entity, 18, filter_ctrls, search_ctrl)
 
     # ---- toolbar: search box, one filter combobox per choice filter field,
     # command bar ------------------------------------------------------------
@@ -699,13 +793,35 @@ def _save_arg(entity, field):
     return "%s.Text" % ctrl
 
 
+def _display_name_ref(entity):
+    """The value shown in the form header's title (Ruling 20/I3).
+
+    `cmp_Header.DisplayName` is `DataType: Text`. The previous emitter always
+    used the FIRST GRID field, unconditionally — a type error the moment
+    that field is a number or date, since neither unifies with `Text`
+    without an explicit cast. Prefer the first text/longtext field (grid
+    fields first, since that is what a reader expects the title to track;
+    then any text/longtext field on the entity at all); only when the entity
+    has NO text field anywhere does this fall back to the first grid field,
+    wrapped in `Text(...)` so it still type-checks.
+    """
+    for f in entity.grid_fields:
+        if f.type in ("text", "longtext"):
+            return "%s.%s" % (entity.loc_var, f.name)
+    for f in entity.fields:
+        if f.type in ("text", "longtext"):
+            return "%s.%s" % (entity.loc_var, f.name)
+    fallback = entity.grid_fields[0] if entity.grid_fields else entity.fields[0]
+    return "Text(%s.%s)" % (entity.loc_var, fallback.name)
+
+
 def emit_form_screen(entity, model):
     """The form screen for `entity`: one label+input pair per field —
     INCLUDING grid-hidden ones, since `entity.form_fields` (unlike
     `entity.grid_fields`) is every field — a validation summary, Save/
     Cancel/Delete, a delete-confirmation dialog, and the standard chrome."""
     fields = entity.form_fields
-    display_field = entity.grid_fields[0].name if entity.grid_fields else fields[0].name
+    display_ref = _display_name_ref(entity)
 
     card_children = []
     for f in fields:
@@ -846,8 +962,8 @@ def emit_form_screen(entity, model):
             ("AllowNavigation", "=false"),
             ("BackLabel", "=%s" % _quote("Back to the %s list" % entity.plural.lower())),
             ("DisplayName",
-             '=If(IsBlank(glSelectedKey), "New %s", %s.%s)'
-             % (entity.entity, entity.loc_var, display_field)),
+             '=If(IsBlank(glSelectedKey), "New %s", %s)'
+             % (entity.entity, display_ref)),
             ("Height", "=constStyle.Header.Height"),
             ("IsLoading", "=glBoolIsLoading"),
             ("OnBack", "=funcGoBack()"),

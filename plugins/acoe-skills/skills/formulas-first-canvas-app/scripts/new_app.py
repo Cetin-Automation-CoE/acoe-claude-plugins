@@ -102,6 +102,35 @@ def write_frame(out, frame):
     (out / "Frame.pa.yaml").write_text(text, encoding="utf-8")
     return FRAME_SCREEN_NAMES[frame]
 
+_DISPLAY_NAME_RE = re.compile(r'^([ \t]*)DisplayName: ="Items"\s*$', re.MULTILINE)
+
+
+def render_display_name(template_text, name):
+    """Replace the --name path's generic `DisplayName: ="Items"` line with
+    `name`, matching the line's existing indentation.
+
+    Ruling 16/C2: this used to be a bare `t.replace('DisplayName: ="Items"',
+    f'DisplayName: ="{name}"', 1)` — an app named e.g. "Orders # 2024" would
+    render `DisplayName: ="Orders # 2024"`, and YAML treats a space followed
+    by `#` as the start of a COMMENT in a plain scalar, silently truncating
+    the value to `="Orders` while the file stays perfectly valid YAML. Uses
+    `emit_screens._needs_block_scalar` — the exact same rule the --model
+    emitter applies to every property value it writes — so both paths agree
+    on what is safe to inline versus what needs a `|-` block scalar.
+    """
+    match = _DISPLAY_NAME_RE.search(template_text)
+    if not match:
+        sys.exit('error: expected exactly one \'DisplayName: ="Items"\' line in the '
+                  'template — the template shape changed; update new_app.py.')
+    indent = match.group(1)
+    value = '="%s"' % name.replace('"', '""')
+    if emit_screens._needs_block_scalar(value):
+        replacement = "%sDisplayName: |-\n%s    %s" % (indent, indent, value)
+    else:
+        replacement = "%sDisplayName: %s" % (indent, value)
+    return template_text[:match.start()] + replacement + template_text[match.end():]
+
+
 def strip_header(text: str) -> str:
     """Drop the tokens file's usage header (the first // ==== ... ==== banner)."""
     lines = text.splitlines()
@@ -279,10 +308,11 @@ def main():
                          "App'). With --model the name comes from model.yaml's "
                          "app_name instead — do not pass both.")
     ap.add_argument("--brand", default=None, help="primary brand colour as hex, e.g. '#0F6CBD'")
-    ap.add_argument("--components", default="all",
+    ap.add_argument("--components", default=None,
                     help="'all' (default), 'none' for the formula layer only (no screens), "
                          "or a comma-separated subset of: " + ", ".join(ALL_COMPONENTS)
-                         + " (--name only — a --model build always writes all twelve)")
+                         + " (--name only — mutually exclusive with --model, which "
+                         "always writes all twelve)")
     ap.add_argument("--frame", default=None, choices=FRAME_CHOICES,
                     help="reference chrome layout copied in as Frame.pa.yaml: "
                          "'headermain' (default — no extra file, the stock "
@@ -301,6 +331,31 @@ def main():
         sys.exit("error: --frame and --model are mutually exclusive — a model-driven "
                   "build takes its frame from model.yaml's own frame: field. Drop "
                   "--frame (or drop --model).")
+
+    # Ruling 23: --components is only meaningful for a --name build (a
+    # --model build always writes all twelve, unconditionally). Accepting
+    # the flag and silently discarding it is the same trust failure as a
+    # guard printing PASS over broken output — reject it instead, exactly
+    # like the --frame/--model rejection above.
+    if args.model and args.components is not None:
+        sys.exit("error: --components and --model are mutually exclusive — a "
+                  "model-driven build always writes all twelve components. Drop "
+                  "--components (or drop --model).")
+    if args.components is None:
+        args.components = "all"
+
+    # C3/Ruling 17: --rows must produce at least one mock row. --rows 0
+    # emits an empty, untyped Table() — the emitter's own generated comment
+    # ("MOCK — one fully typed row per shape... an untyped or empty seed
+    # makes every named formula over it fail") documents exactly why every
+    # named formula over the collection then fails, with six guard PASS
+    # lines printed over it. Reject before touching the filesystem. --rows
+    # is only meaningful with --model (see its --help text); the --name
+    # path ignores it entirely, so only check it here.
+    if args.model and args.rows < 1:
+        sys.exit("error: --rows must be at least 1 (got %d) — an empty seed emits an "
+                  "untyped Table() that every named formula over the collection then "
+                  "fails against." % args.rows)
 
     # Ruling 1: load the model FIRST, before touching the filesystem at all,
     # so a bad model.yaml writes nothing.
@@ -391,7 +446,8 @@ def main():
         for f in screens:
             t = (TEMPLATES / f).read_text(encoding="utf-8")
             # Only the header title is app-specific; every identifier stays generic.
-            t = t.replace('DisplayName: ="Items"', f'DisplayName: ="{name}"', 1)
+            if 'DisplayName: ="Items"' in t:
+                t = render_display_name(t, name)
             (out / f).write_text(t, encoding="utf-8")
 
         # ---- components ---------------------------------------------------------

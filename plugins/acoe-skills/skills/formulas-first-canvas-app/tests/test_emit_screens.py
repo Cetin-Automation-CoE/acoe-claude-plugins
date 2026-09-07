@@ -1,5 +1,6 @@
 """Generated screens must be contract-clean by construction, not by luck."""
 import pathlib
+import re
 import sys
 import unittest
 
@@ -46,6 +47,36 @@ def small_model():
     return m.Model({"app_name": "Ops", "entities": [{
         "entity": "Asset", "plural": "Assets",
         "fields": [{"name": "Tag", "type": "text", "grid": 100}]}]})
+
+
+def entity_two_filters():
+    """Two independent choice filter fields — the minimum shape that can
+    actually distinguish `And` from `Or` between per-field filter clauses
+    (Ruling 15/C1)."""
+    return m.Entity({
+        "entity": "Asset", "plural": "Assets",
+        "fields": [
+            {"name": "Status", "type": "choice", "grid": 120, "filter": True,
+             "vocab": ["Open", "Shut"]},
+            {"name": "Category", "type": "choice", "grid": 120, "filter": True,
+             "vocab": ["A", "B"]},
+        ],
+    })
+
+
+def entity_number_first():
+    """No text/longtext field ANYWHERE — the shape that used to make the
+    form header's DisplayName a type error (Ruling 20/I3): DisplayName is
+    DataType: Text, and the previous emitter unconditionally used the first
+    GRID field regardless of its archetype."""
+    return m.Entity({
+        "entity": "Reading", "plural": "Readings",
+        "fields": [
+            {"name": "Amount", "type": "number", "grid": 100},
+            {"name": "Status", "type": "choice", "grid": 120,
+             "vocab": ["Open", "Shut"]},
+        ],
+    })
 
 
 class TestListScreen(unittest.TestCase):
@@ -169,26 +200,193 @@ class TestNoGenericLeakage(unittest.TestCase):
 
 
 class TestFooterAggregates(unittest.TestCase):
-    """Ruling 12: the list screen's footer must show a filtered/total count
-    against the SAME scope formula the gallery reads (so it cannot silently
-    disagree with the grid), plus one Sum() per money field."""
+    """Ruling 12, corrected by Ruling 18/I1: the list screen's footer must
+    show a filtered count and per-money-field Sum() over the SAME `Filter`
+    expression the gallery's own `Items` reads — not the bare, unfiltered
+    scope formula (which is what the pre-fix footer read, permanently
+    showing "N of N" and a Sum() that ignored search). `_visible_rows_expr`
+    is the ONE function both the gallery and the footer call, so this test
+    reconstructs its exact output and confirms both consumers embed it
+    verbatim — the thing that makes them incapable of silently disagreeing.
+    """
 
-    def test_count_references_the_scope_formula_not_the_raw_collection(self):
+    def _filter_ctrls(self, e):
+        return {f.name: "com_%sList_%sFilter" % (e.plural, f.name)
+                for f in e.filter_fields if f.type == "choice"}
+
+    def _visible(self, e):
+        search_ctrl = "txt_%sList_Search" % e.plural
+        return es._visible_rows_expr(e, self._filter_ctrls(e), search_ctrl)
+
+    def test_count_reads_the_same_filter_expression_the_gallery_uses(self):
         e = entity()
         text = es.emit_list_screen(e, small_model())
-        self.assertIn("CountRows(%s)" % e.scope_formula, text)
+        visible = self._visible(e)
+        # The gallery's Items and the footer's count both embed this exact
+        # text (reindented, so compare with whitespace collapsed).
+        # >= 2, not == 2: `entity()` also has a money field, so the footer's
+        # Sum() embeds a third copy — the point here is that the gallery's
+        # Items and the footer's count are never allowed to drift apart, not
+        # an exact occurrence count that depends on how many money fields
+        # the entity happens to have.
+        squashed = re.sub(r"\s+", " ", text)
+        self.assertGreaterEqual(squashed.count(re.sub(r"\s+", " ", visible).strip()), 2,
+                         "gallery Items and footer count must both embed the "
+                         "identical Filter(...) expression")
+        self.assertIn("CountRows(", text)
+        self.assertNotIn("CountRows(%s)" % e.scope_formula, text,
+                         "the footer must not read the bare, unfiltered scope "
+                         "(Ruling 18) — that is what froze the count at N of N")
 
-    def test_money_field_produces_a_sum_over_the_scope_formula(self):
+    def test_money_field_produces_a_sum_over_the_filtered_expression(self):
         e = entity()
         text = es.emit_list_screen(e, small_model())
-        self.assertIn("Sum(%s, Amount)" % e.scope_formula, text)
-        self.assertIn("funcAsCurrency(Sum(%s, Amount))" % e.scope_formula, text)
+        visible = self._visible(e)
+        squashed = re.sub(r"\s+", " ", text)
+        sum_needle = re.sub(r"\s+", " ", "Sum(\n    %s,\n    Amount\n)" % visible).strip()
+        self.assertIn(sum_needle, squashed)
+        self.assertIn("funcAsCurrency(Sum(", text)
+        self.assertNotIn("Sum(%s, Amount)" % e.scope_formula, text,
+                         "the footer Sum() must not read the bare, unfiltered "
+                         "scope (Ruling 18) — that ignored search entirely")
 
     def test_entity_without_a_money_field_still_gets_a_count_and_no_stray_sum(self):
         e = entity_without_money()
         text = es.emit_list_screen(e, small_model())
-        self.assertIn("CountRows(%s)" % e.scope_formula, text)
+        self.assertIn("CountRows(", text)
         self.assertNotIn("Sum(", text)
+
+
+class TestNeedsBlockScalar(unittest.TestCase):
+    """Ruling 16/C2: a `#` in a value used to render inline, and YAML treats
+    a space followed by `#` as the start of a COMMENT in a plain scalar —
+    `Label: ="ORDER # REF"` silently truncates to `Label: ="ORDER`, with the
+    file staying perfectly valid YAML the whole time. `_needs_block_scalar`
+    is the only thing that can catch this, since it inspects the VALUE, not
+    just whether the resulting file parses."""
+
+    def test_hash_forces_a_block_scalar(self):
+        self.assertTrue(es._needs_block_scalar('="ORDER # REF"'))
+
+    def test_leading_or_trailing_whitespace_forces_a_block_scalar(self):
+        self.assertTrue(es._needs_block_scalar('="trailing space" '))
+        self.assertTrue(es._needs_block_scalar(' ="leading space"'))
+
+    def test_ordinary_value_stays_inline(self):
+        self.assertFalse(es._needs_block_scalar('=constStyle.List.HeaderHeight'))
+        self.assertFalse(es._needs_block_scalar('="TAG"'))
+
+    def test_a_hash_containing_label_round_trips_through_real_yaml(self):
+        e = m.Entity({"entity": "Order", "plural": "Orders", "fields": [
+            {"name": "Reference", "type": "text", "grid": 140,
+             "label": "ORDER # REF", "samples": ["A#1"]},
+        ]})
+        text = es.emit_list_screen(e, small_model())
+        self.assertIn("ORDER # REF", text)
+        data = yaml.safe_load(text)
+        self.assertIsNotNone(data)
+        # The label must reach the parsed structure WHOLE, not truncated at
+        # the '#' — this is the actual defect, not merely "the file parses".
+        rendered = yaml.dump(data)
+        self.assertIn("ORDER # REF", rendered)
+
+
+class TestFilterSemantics(unittest.TestCase):
+    """Ruling 15/C1: the previous joiner between per-field filter clauses was
+    `Or`, so any ONE unset combobox's own `IsEmpty(...)` (always true when
+    that combobox is unset) made the WHOLE predicate `true` regardless of
+    what any OTHER filter combobox held — picking a value in one filter did
+    nothing. There was no test anywhere asserting filter semantics, which is
+    why this shipped through nine reviews."""
+
+    def test_multiple_filter_fields_are_joined_with_and(self):
+        e = entity_two_filters()
+        ctrls = {f.name: "com_%s" % f.name for f in e.filter_fields}
+        clause = es._filter_clause(e, ctrls)
+        self.assertIn(") And\n    (", clause,
+                     "per-field filter clauses must be joined with And — an "
+                     "Or joiner lets any one unset combobox make the whole "
+                     "predicate true, and filtering does nothing")
+        self.assertNotIn(") Or\n    (", clause)
+
+    def test_each_field_clause_is_still_the_isempty_or_match_pair(self):
+        """WITHIN one field's own clause, Or is correct: IsEmpty(...) being
+        true is exactly what makes an UNSET combobox mean "no constraint
+        from this field". Only the joiner BETWEEN fields must change to And."""
+        e = entity_two_filters()
+        ctrls = {f.name: "com_%s" % f.name for f in e.filter_fields}
+        clause = es._filter_clause(e, ctrls)
+        for name, ctrl in ctrls.items():
+            pair = ("(IsEmpty(%s.SelectedItems) Or %s in %s.SelectedItems.Value)"
+                    % (ctrl, name, ctrl))
+            self.assertIn(pair, clause)
+
+    def test_no_filter_fields_is_no_constraint(self):
+        self.assertEqual(es._filter_clause(entity(), {}), "true")
+
+    def test_search_clause_unset_search_box_is_no_constraint(self):
+        clause = es._search_clause(entity(), "txtSearch")
+        self.assertTrue(clause.startswith("IsBlank(txtSearch.Text) Or"))
+
+    def test_search_clause_matches_any_one_of_several_search_fields(self):
+        """Search fields are Or'd together — deliberately unlike filter
+        fields, which must ALL be satisfied at once: a term matching ANY one
+        search field should match."""
+        e = m.Entity({"entity": "Asset", "plural": "Assets", "fields": [
+            {"name": "Tag", "type": "text", "search": True},
+            {"name": "Notes", "type": "longtext", "search": True},
+        ]})
+        clause = es._search_clause(e, "txtSearch")
+        self.assertIn("txtSearch.Text in Tag Or\n    txtSearch.Text in Notes", clause)
+
+
+class TestHeaderSortToggle(unittest.TestCase):
+    """Ruling 19/I2: a header's OnSelect must write colSorts, or nothing
+    ever changes IsSorted/IsFiltered and SortByColumns stays frozen forever
+    on whatever OnVisible seeded once at screen load."""
+
+    def _tag_header_block(self, e, mo):
+        text = es.emit_list_screen(e, mo)
+        tag_header = e.head_control([f for f in e.fields if f.name == "Tag"][0])
+        return text.split("- %s:" % tag_header, 1)[1].split("- ", 1)[0]
+
+    def test_header_emits_onselect_that_updates_colsorts_for_its_own_entity(self):
+        e, mo = entity(), small_model()
+        block = self._tag_header_block(e, mo)
+        self.assertIn("OnSelect: |-", block)
+        self.assertIn("UpdateIf(", block)
+        self.assertIn("colSorts,", block)
+        self.assertIn("Table = %s," % e.enum_member, block)
+        self.assertIn('ID: "Tag"', block)
+
+    def test_onselect_flip_reads_the_original_row_not_a_scratch_variable(self):
+        """UpdateIf's change record is evaluated against the row being
+        replaced, so ID/SortOrder inside it read the PRIOR state — that is
+        what lets a second click on the same column flip direction without
+        a With() or a context variable."""
+        e, mo = entity(), small_model()
+        block = self._tag_header_block(e, mo)
+        self.assertIn('ID = "Tag" And SortOrder = "asc"', block)
+        self.assertIn('"desc"', block)
+        self.assertIn('"asc"', block)
+        self.assertNotIn("With(", block)
+
+
+class TestFormDisplayNameTypeMatchesTextInput(unittest.TestCase):
+    """Ruling 20/I3: cmp_Header.DisplayName is DataType: Text. The previous
+    emitter unconditionally used the first GRID field's raw value — a type
+    error the instant that field is a number or a date."""
+
+    def test_number_first_entity_wraps_the_value_in_text(self):
+        e = entity_number_first()
+        text = es.emit_form_screen(e, small_model())
+        self.assertIn("Text(locReading.Amount)", text)
+
+    def test_text_field_is_preferred_over_wrapping_when_one_exists(self):
+        e = entity()
+        text = es.emit_form_screen(e, small_model())
+        self.assertIn("locAsset.Tag)", text)
+        self.assertNotIn("Text(locAsset.Tag)", text)
 
 
 class TestEmittedYamlIsValid(unittest.TestCase):
