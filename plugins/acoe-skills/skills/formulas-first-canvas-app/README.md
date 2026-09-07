@@ -28,7 +28,8 @@ apps and the skill tells Claude not to use them.
 You do not invoke the skill. Talk to Claude about a canvas app and it loads by itself.
 Any of these will do:
 
-- "Create a new canvas app for tracking vendor contracts."
+- "Create a new canvas app for tracking vendor contracts." (Claude will ask for
+  your data model before generating anything — see below.)
 - "Add a Contacts screen to this app."
 - "Why does my app show forty 'unknown name' errors after I edited App.Formulas?"
 - "Review this canvas app before we hand it over."
@@ -41,43 +42,60 @@ What Claude does next depends on which of the situations below you are in.
 
 ## 1. Start a new app
 
-**What you get:** a complete two-screen CRUD skeleton on disk, with the design tokens,
-a list screen, a form screen, eight reusable components and a mock data layer, all
-passing the guard scripts.
+**Claude asks for your data model first.** Paste one in any form — a table, a
+SharePoint list, a Dataverse table, CSV headers, or just a list of field names — or
+say you don't have one and Claude drafts one from your description of the app. Either
+way you get one confirmation round trip (a compact field table; "just go" accepts it
+as drafted) before anything is generated — not a long interview.
+
+**What you get:** a complete app on disk sized to your model — one list screen and one
+form screen **per entity**, the design tokens, eight reusable components, mock data
+that renders on first run, and a navigation registry covering every entity — all
+passing the local guard scripts.
 
 **What happens**
 
-1. Claude runs the scaffolder:
+1. Claude writes your confirmed model to `model.yaml` beside the source tree (schema:
+   `templates/model.example.yaml`). This file is the app's spec — commit it.
+
+2. Claude runs the generator:
 
    ```bash
-   python3 scripts/new_app.py --name "Vendor Register" --brand "#0F6CBD" --out ./Src
+   python3 scripts/new_app.py --model model.yaml --out ./Src
    ```
 
-   `--brand` is your primary colour as hex. Leave it out to keep the default palette.
+   (No model at all, even after being asked, falls back to the generic one-entity
+   pattern: `python3 scripts/new_app.py --name "Vendor Register" --brand "#0F6CBD" --out ./Src`.)
 
-2. You create a **blank tablet app** in Power Apps Studio with the same name and leave
+3. You create a **blank tablet app** in Power Apps Studio with the same name and leave
    the tab open.
 
-3. Claude connects the Canvas Authoring MCP to it and pushes the `Src` folder with
-   `compile_canvas`. That push is also the first compile. Expect a short round of fixes
-   here: the components were ported from a production app but have never been through
-   the strict compiler in this form.
+4. Claude connects the Canvas Authoring MCP to it and pushes the `Src` folder with
+   `compile_canvas`. That push is also the first compile — the generator's output has
+   not yet been validated against a live session, and the components were ported from a
+   production app but have never been through the strict compiler in this exact form.
+   Expect a round of fixes; `references/compile-error-playbook.md` maps the error text
+   you see to a cause and a fix.
 
-4. Commit the moment it compiles green.
+5. Commit the moment it compiles green.
 
-**What is in the skeleton**
+**What is in the generated tree** (shown for a two-entity model; N entities produce N
+of the per-entity rows)
 
 | File | Contents |
 |---|---|
-| `App.pa.yaml` | Design tokens, vocabularies, enums, helper functions, a mock data-access layer, the screen registry, navigation stack, notification helpers |
-| `ListScreen.pa.yaml` | Header, collapsible navigation rail, search, status filter, command bar, three sortable and filterable column headers, a gallery with status colours and right-aligned money, empty state, toasts, spinner |
-| `FormScreen.pa.yaml` | Header with back button, a card with three fields, one validation formula shared by the error label and the Save button, Save, Cancel, Delete behind a confirm dialog |
+| `App.pa.yaml` | Design tokens, vocabularies, enums, helper functions, a mock data-access layer with one region per entity, the screen registry, navigation stack, notification helpers |
+| `<Entity>sListScreen.pa.yaml` (one per entity) | Header, collapsible navigation rail, search, status filter, command bar, sortable and filterable column headers, a gallery with status colours and right-aligned money, footer aggregates, empty state, toasts, spinner |
+| `<Entity>FormScreen.pa.yaml` (one per entity) | Header with back button, a card with the entity's fields, one validation formula shared by the error label and the Save button, Save, Cancel, Delete behind a confirm dialog |
 | `Components/` | The eight components below |
 | `_EditorState.pa.yaml` | Screen and component order for Studio |
 
-**Names are generic on purpose.** The skeleton uses `colItems`, `funcLoadItems`,
-`funcSaveItem`, `locItem` and so on. It is the pattern you copy once per entity, not a
-finished app about one thing. Only the header title takes your app name.
+**Generated identifiers are entity-derived, not generic.** A model with an `Asset`
+entity produces `colAssets`, `funcSaveAsset`, `AssetsListScreen.pa.yaml`. This is
+different from the skeleton `templates/` and `components/` ship with, and from what the
+generic `--name`-only path writes — both of those stay deliberately generic
+(`colItems`, `funcLoadItems`, `funcSaveItem`, `locItem`) because they are the pattern to
+copy once per entity, not a finished domain app.
 
 ---
 
@@ -102,15 +120,17 @@ list."*
 
 ## 3. Add an entity or a screen
 
-Adding a second business object is a repeatable recipe, and Claude follows it:
+If the app has a `model.yaml`, add a new entry under `entities:` and re-run
+`python3 scripts/new_app.py --model model.yaml --out ./Src`. That regenerates the new
+entity's collection, `funcLoad*`/`funcSave*`/`funcDelete*` set, registry row and screen
+pair — the navigation rail reads the registry, so the new screen appears in the menu
+without touching the rail, and there is no `Switch` to extend anywhere. Re-run the
+guards and re-push before trusting it.
 
-- a new collection plus `funcLoad*` / `funcSave*` / `funcDelete*` inside the data-access
-  region
-- a row in the `constScreens` registry
-- a copy of the list and form templates, renamed for the new entity
-
-The navigation rail reads the registry, so the new screen appears in the menu without
-touching the rail. There is no `Switch` to extend anywhere.
+For an app built on the generic `--name`-only skeleton (no `model.yaml`), it is a
+manual recipe instead: a new collection plus `funcLoad*` / `funcSave*` / `funcDelete*`
+inside the data-access region, a row in the `constScreens` registry, and a copy of the
+list and form templates renamed for the new entity.
 
 Ask Claude: *"Add a Contracts entity with a list and a form screen."*
 
@@ -137,7 +157,8 @@ those fails at runtime or shows up as dozens of unrelated errors. `check_control
 adds a fourth class: a property name that belongs to the *other* control generation,
 or a design-token value from the wrong dialect, both of which read fine in the YAML
 and fail only at compile. None of the six scripts replaces a live compile — they
-narrow what a `compile_canvas` push still needs to catch.
+narrow what a `compile_canvas` push still needs to catch. When a push does fail,
+`references/compile-error-playbook.md` maps the error text to a cause and a fix.
 
 Ask Claude: *"Run the guards on this app and tell me what is off."*
 
@@ -205,11 +226,19 @@ colours or sizes.
 - **Nothing compiles offline.** The only validator that reflects reality is
   `compile_canvas` in a live coauthoring session. That is what the guard scripts exist
   to compensate for.
-- **The components have not been compiled in this form.** Treat the first push as a
-  debugging session, not a formality.
+- **The `--model` generator's output has not yet been validated against a live
+  `compile_canvas` run.** The five local guards prove the emitted YAML is
+  structurally sound, contract-clean and internally consistent — they do not prove
+  Power Apps accepts it. Treat the first push as a debugging session, not a formality,
+  and expect `references/compile-error-playbook.md` to be consulted.
+- **The components have not been compiled in this form.** Same caveat as above —
+  they were ported from a production app but never through the strict compiler in
+  this exact shape.
 - **The filter dialog is not included.** Column headers raise `OnSelect` with a metadata
   record; you connect whatever filter UI you have, or start with sort only.
-- **The skeleton is a starting point.** Two screens, one entity, three fields, mock data.
+- **The generic `--name`-only skeleton is a starting point, not a finished app.** Two
+  screens, one entity, three fields, mock data. A `--model` build scales this to as
+  many entities and fields as the model declares.
 
 ---
 
@@ -217,17 +246,24 @@ colours or sizes.
 
 ```
 formulas-first-canvas-app/
-  SKILL.md              what Claude reads: the six rules, naming, traps, references
+  SKILL.md              what Claude reads: the ask-for-model workflow, the six rules,
+                        naming, traps, references
   README.md             this file
-  scripts/              new_app.py scaffolder + inventory.py + five check_*.py guards,
-                        including check_control_props.py
+  scripts/              new_app.py generator (--model or the generic --name path),
+                        model.py (schema + validation + derived names),
+                        emit_mock.py / emit_formulas.py / emit_screens.py
+                        (the --model emitters), inventory.py, and five
+                        check_*.py guards including check_control_props.py
   templates/            App.pa.yaml, design-tokens.pa.yaml, ListScreen, FormScreen,
-                        inventory.md and findings.csv report templates
+                        model.example.yaml (the model.yaml schema, two worked
+                        entities), inventory.md and findings.csv report templates
   components/           the eight cmp_*.pa.yaml files
   references/           layout order, Power Fx limits, data layer, design system,
                         component library, the refactoring ladder, control dialects
-                        (control-dialects.md) and the machine-readable contracts
-                        check_control_props.py checks against (control-contracts.yaml)
-  tests/                unittest suite for the guards — run with
+                        (control-dialects.md), the machine-readable contracts
+                        check_control_props.py checks against (control-contracts.yaml),
+                        and the compile-error playbook keyed by compile_canvas's own
+                        error text (compile-error-playbook.md)
+  tests/                unittest suite for the guards and the generator — run with
                         `python3 -m unittest discover -s tests`
 ```

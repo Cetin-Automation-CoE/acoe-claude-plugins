@@ -1,6 +1,6 @@
 ---
 name: formulas-first-canvas-app
-description: Use when building, editing, reviewing or refactoring a Power Apps Canvas App — .pa.yaml source, App.Formulas, Power Fx named formulas, user-defined functions, canvas components, msapp unpack — or when a canvas app has duplicated colour literals, magic numbers, data source names on screens, copy-pasted screen logic, Switch arms that keep growing, or a UI that drifted from its design tokens.
+description: Use when building, editing, reviewing or refactoring a Power Apps Canvas App — including generating a brand-new multi-screen app from a user-supplied or inferred data model — .pa.yaml source, App.Formulas, Power Fx named formulas, user-defined functions, canvas components, msapp unpack — or when a canvas app has duplicated colour literals, magic numbers, data source names on screens, copy-pasted screen logic, Switch arms that keep growing, or a UI that drifted from its design tokens.
 ---
 
 # Formulas-First Canvas Apps
@@ -23,27 +23,59 @@ place. Apps that skip it become unmaintainable at roughly the third screen.
 
 | Situation | Path |
 |---|---|
-| **New app** | `python3 scripts/new_app.py --name "…" --out ./Src` — see below. |
+| **New app** | Ask for the data model first (below), then `python3 scripts/new_app.py --model model.yaml --out ./Src`. |
+| New app, no model at all after asking | `python3 scripts/new_app.py --name "…" --out ./Src` — generic one-entity pattern, see below. |
 | New screen in a conforming app | Copy a screen out of `templates/`; it already consumes the components. |
 | Existing app that does not follow this | **`references/refactoring-legacy-apps.md`.** Rungs 1–2 are read-only and end in a human sign-off gate. Do not edit first. |
 | Unsure which | Run `scripts/inventory.py` over the source. Its literal counts answer it in ten seconds. |
 
-## Starting a new app
+## Starting a new app: ask for the data model first
 
-```bash
-python3 scripts/new_app.py --name "Vendor Register" --brand "#0F6CBD" --out ./Src
+This is a required sequence, not background reading. For any "build me a new
+canvas app" request, run all six steps in order before touching a screen file.
+
+```
+1. ASK  — "Do you have a data model? Paste it in any form — a table, a
+           SharePoint list, a Dataverse table, CSV headers, or just field
+           names. If not, say so and I'll draft one."
+2a. PROVIDED → normalise whatever arrived into model.yaml. Infer archetypes
+               (text, longtext, choice, number, date, boolean) from the
+               source's types; infer a vocab list from any choice column.
+2b. ABSENT   → infer 8-12 fields per table from the domain sentence, with
+               plausible vocab lists and 3-5 realistic samples per text field.
+3. CONFIRM — show a compact field table. ONE round trip maximum. Accept
+             "just go". Do not conduct a long interview.
+4. WRITE   — model.yaml beside the source tree (see
+             `templates/model.example.yaml` for the schema). It is the app's
+             spec — commit it alongside the generated tree.
+5. GENERATE— python3 scripts/new_app.py --model model.yaml --out ./Src
+6. VERIFY  — the script runs every guard on what it just wrote and exits
+             non-zero on failure. It does not by itself prove the app
+             compiles — see "The verification loop" below.
 ```
 
-Writes a complete tree: `App.pa.yaml` with the design tokens **inlined at the
-top** (so they cannot land below their first use), both screens already wired to
-the components, `Components/`, and `_EditorState.pa.yaml`. It then runs every guard
-against what it just wrote and exits non-zero rather than leaving a broken tree behind.
+**Division of labour — neither side does the other's job.** The agent supplies
+domain judgement: which fields belong on this entity, which vocabulary values
+are plausible, which sample strings read as real data instead of `Item 1`,
+`Item 2`. The script supplies correctness: guard-clean YAML, full vocabulary
+coverage for every choice field, dates generated relative to *today* rather
+than a hard-coded year, and formulas emitted in dependency order so the studio
+binder never sees a forward reference. If the agent starts hand-writing
+`col*`/`func*` declarations instead of fields in `model.yaml`, or the script
+starts inventing field names no domain sentence implied, that is the division
+breaking down.
 
-**Identifiers stay generic** — `colItems`, `funcLoadItems`, `funcSaveItem`, `locItem`,
-`gal_List_Items`, `enumEntity.Items`. Only the header title takes the app name. The
-scaffold is the pattern you copy once per entity; a second entity is a second
-`col*` / `funcLoad*` / `funcSave*` / `funcDelete*` set, a registry row and a copy of
-the two screens, named for that entity in its own commit.
+A model with **N** entities under `entities:` produces **N** list screens and
+**N** form screens, one navigation registry row per entity, and one
+`col*`/`funcLoad*`/`funcSave*`/`funcDelete*` set per entity — all in the single
+`new_app.py --model` run.
+
+**Generated identifiers are entity-derived; the skill's own templates and the
+`--name`-only path stay generic.** A `--model` build with an `Asset` entity
+writes `colAssets`, `funcSaveAsset`, `AssetsListScreen.pa.yaml`,
+`AssetFormScreen.pa.yaml`. `templates/`, `components/`, and the legacy
+`--name`-only scaffold below keep `colItems` / `funcSaveItem` / `locItem` on
+purpose — they are the pattern to read and copy, not a finished domain app.
 
 `--components none` scaffolds the formula layer alone, for when you will write
 your own screens.
@@ -53,6 +85,33 @@ deprecated and crashes on real apps; `pac canvas validate` reports every file of
 a *working published* app as invalid. So: create a blank tablet app in studio,
 `connect`, then `compile_canvas` to push the tree — which is also its first real
 compile. The command prints these steps with your paths filled in.
+
+**The generator's own output has not yet been validated against a live
+`compile_canvas` run.** The five local guards (below) prove the emitted YAML is
+structurally sound, contract-clean and internally consistent — they do not
+prove Power Apps accepts it. Treat the first push of any `--model` build as a
+debugging session and expect to consult
+`references/compile-error-playbook.md`.
+
+## The generic pattern (no model, `--name` only)
+
+```bash
+python3 scripts/new_app.py --name "Vendor Register" --brand "#0F6CBD" --out ./Src
+```
+
+Writes a complete one-entity tree: `App.pa.yaml` with the design tokens **inlined
+at the top** (so they cannot land below their first use), both screens already
+wired to the components, `Components/`, and `_EditorState.pa.yaml`. It then runs
+every guard against what it just wrote and exits non-zero rather than leaving a
+broken tree behind.
+
+**Identifiers stay generic** — `colItems`, `funcLoadItems`, `funcSaveItem`, `locItem`,
+`gal_List_Items`, `enumEntity.Items`. Only the header title takes the app name. The
+scaffold is the pattern you copy once per entity; a second entity is a second
+`col*` / `funcLoad*` / `funcSave*` / `funcDelete*` set, a registry row and a copy of
+the two screens, named for that entity in its own commit. Prefer `--model` over
+copying this by hand whenever the app has more than one entity — that copying
+is exactly what the model-driven path automates.
 
 ## The six rules
 
@@ -170,15 +229,27 @@ within two sprints, and the second time it rots nobody notices.
 There is no offline compile. Local guards are the only pre-push signal, so run them
 all, then close the loop against a live session:
 
-    draft model → generate → local guards → push (compile_canvas)
-                                   ↑                    ↓
-                                   └──── fix ──── parse errors
+    ask → draft model → generate → local guards → push (compile_canvas)
+                                         ↑                    ↓
+                                         └──── fix ──── parse errors
 
 The five `check_*.py` guards catch architecture, tokens, data layer, collection
-columns and control contracts. Each prints what it does NOT cover. Everything else
-needs `compile_canvas`.
+columns and control contracts. Each prints what it does NOT cover. **They prove the
+YAML is structurally sound and contract-clean — they do not prove the app
+compiles.** Everything else needs `compile_canvas` against a live coauthoring
+session; there is no substitute, because `pac canvas pack` is deprecated and
+crashes and `pac canvas validate` rejects every file of a working published app.
+
+When `compile_canvas` (or `get_appchecker_errors`) returns a parse error, look it
+up in `references/compile-error-playbook.md` before improvising a fix — it is
+keyed by the error text and maps straight to a cause and a remedy, which is what
+lets this loop run unattended instead of guessing fresh each time.
 
 ## Traps that cost real days
+
+These are the causes. `references/compile-error-playbook.md` is keyed the other
+way round — by the error text `compile_canvas` actually prints — for when you
+are staring at a failed push and need the fastest path back to one of these.
 
 - **A missing token reference takes the whole app down, not one control.** An
   unresolved name in `App.Formulas` drops the entire `Formulas` blob in the studio
@@ -240,6 +311,8 @@ needs `compile_canvas`.
 | `references/refactoring-legacy-apps.md` | **Brownfield ladder — six rungs with gates** |
 | `references/control-dialects.md` | The two control generations, their diverging property names and enum namespaces, and how to tell which one a tree is using |
 | `references/control-contracts.yaml` | Machine-readable control contracts `check_control_props.py` checks against — evidence-backed against a compiled app, not inferred |
+| `references/compile-error-playbook.md` | Lookup table: `compile_canvas` error text → cause → remedy, so a push failure turns into a fix instead of a guess |
+| `templates/model.example.yaml` | The `model.yaml` schema `--model` reads — two worked entities, every field attribute documented inline |
 
 **Visual spec sheet** — swatches, live-computed contrast, type scale and control specs,
 rendered: https://claude.ai/code/artifact/cdff9a80-7b84-4f56-9ce2-beaa4152424d
