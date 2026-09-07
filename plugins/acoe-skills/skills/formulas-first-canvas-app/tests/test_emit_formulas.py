@@ -16,6 +16,7 @@ sys.path.insert(0, str(SKILL / "scripts"))
 
 import model as m  # noqa: E402
 import emit_formulas as ef  # noqa: E402
+import emit_mock  # noqa: E402
 
 TODAY = datetime.date(2026, 9, 7)
 
@@ -154,6 +155,69 @@ class TestPerEntityLayer(unittest.TestCase):
 
     def test_switch_day_binding_is_present_but_commented(self):
         self.assertIn("// SWITCH DAY", self.text)
+
+
+class TestGeneratedKeyOnCreate(unittest.TestCase):
+    """Ruling 21/I4: every created record used to get Key: "" (the screen's
+    "Add" action always passes glSelectedKey, which is ""), so the SECOND
+    create's LookUp(col, Key = "") found the first blank-keyed row and
+    silently overwrote it — and that row could never be opened again.
+
+    There is no local Power Fx evaluator (there is no offline compile for
+    Canvas Apps), so distinctness is proven the way the emitted UDF's own
+    formula guarantees it: Key: (<prefix> & "|" & Text(CountRows(collection)
+    + 1)) is strictly increasing every time CountRows(collection) grows —
+    which it always does, by exactly 1, on every prior Collect. Simulating
+    two successive creates means evaluating that same expression once at the
+    existing mock row count and again one higher, exactly what the second
+    creates's CountRows() call would actually see after the first Collect.
+    """
+
+    def setUp(self):
+        self.model = two_entity_model()
+        self.entity = self.model.entities[0]  # Asset
+        self.mock_rows = emit_mock.mock_rows(self.entity, n=16, today=TODAY)
+
+    def _generated_key(self, row_count):
+        prefix = ef._key_prefix_literal(self.entity)
+        return "%s|%d" % (prefix, row_count + 1)
+
+    def test_two_successive_creates_get_distinct_keys(self):
+        existing = len(self.mock_rows)
+        first = self._generated_key(existing)
+        second = self._generated_key(existing + 1)  # after the first Collect
+        self.assertNotEqual(first, second)
+        mock_keys = {row["Key"].strip('"') for row in self.mock_rows}
+        self.assertNotIn(first, mock_keys)
+        self.assertNotIn(second, mock_keys)
+
+    def test_save_udf_create_branch_never_emits_a_blank_or_bare_pkey_as_key(self):
+        text = ef.emit_all(self.model, rows=8, today=TODAY)
+        match = re.search(
+            r"funcSaveAsset\([^)]*\): Void =.*?Collect\(\s*colAssets,\s*"
+            r"\{Key: \((.*?)\),", text, re.S)
+        self.assertIsNotNone(match, "could not locate funcSaveAsset's Collect() Key field")
+        key_expr = match.group(1)
+        self.assertNotIn('""', key_expr,
+                         "the create branch must never emit a blank Key literal")
+        self.assertNotEqual(key_expr.strip(), "pKey",
+                            "the create branch must never emit the bare (blank) "
+                            "pKey parameter as the new row's Key")
+        self.assertIn("CountRows(colAssets)", key_expr,
+                     "the generated key must depend on a quantity that changes "
+                     "on every Collect, which is what guarantees uniqueness "
+                     "across successive creates")
+
+    def test_save_udf_branches_on_isblank_pkey_not_a_lookup(self):
+        """The original bug routed create-vs-update through
+        IsBlank(LookUp(collection, Key = pKey)) — with pKey = "", that LookUp
+        could find a PRIOR blank-keyed row and take the UPDATE branch
+        instead, silently overwriting it. Branching on IsBlank(pKey) directly
+        removes the possibility entirely: blank always creates, non-blank
+        always updates."""
+        text = ef.emit_all(self.model, rows=8, today=TODAY)
+        self.assertIn("If(\n              IsBlank(pKey),", text)
+        self.assertNotIn("IsBlank(LookUp(", text)
 
 
 if __name__ == "__main__":

@@ -250,13 +250,45 @@ def _load_spec(entity, rows, today):
     return ("data", name, text)
 
 
+def _key_prefix_literal(entity):
+    """A static, per-entity Key prefix for records created at runtime.
+
+    Mirrors `emit_mock._key_prefix`'s FALLBACK branch (an entity-name
+    abbreviation) rather than its primary, per-row, choice-field-derived
+    branch: this is computed once here, in Python, at generation time, since
+    the entity name is already known — there is no per-row data to key off
+    of the way the mock generator has. The point is the composite
+    "<PREFIX>|<n>" SHAPE reading like the mock rows next to it, not bit-for-
+    bit parity with the mock's own prefix algorithm.
+    """
+    letters = "".join(ch for ch in entity.entity.upper() if ch.isalnum())
+    return letters[:3] or "REC"
+
+
 def _save_spec(entity):
     name = entity.func_save
     key_param = "pKey: Text"
     field_params = [key_param] + [_param_sig(f) for f in entity.fields]
     sig = ", ".join(field_params)
 
-    create_fields = ["Key: pKey"] + ["%s: %s" % (f.name, _param_name(f)) for f in entity.fields]
+    # Ruling 21/I4: a blank pKey (the screen's "Add" action always passes
+    # glSelectedKey, which is "" for a new record) used to be handed straight
+    # to Collect() as the literal Key, so EVERY created record got
+    # `Key: ""` — the second create then silently overwrote the first
+    # (LookUp(col, Key = "") found it), and the blank-keyed row could never
+    # be opened again. A generated key removes the collision at its root:
+    # CountRows(collection) strictly increases on every Collect below, so
+    # successive creates in the same session always get distinct keys, even
+    # across intervening deletes.
+    new_key_expr = "%s & \"|\" & Text(CountRows(%s) + 1)" % (
+        _quote(_key_prefix_literal(entity)), entity.collection)
+    # Parenthesised, not bare: tests (and a human scanning App.pa.yaml)
+    # distinguish a MOCK row's Key literal ('{Key: "...') from this UDF's
+    # own Key field by whether a quote immediately follows "Key: " — a bare
+    # `Key: "AST" & ...` would collide with that heuristic. The parens are
+    # semantically inert.
+    create_fields = ["Key: (%s)" % new_key_expr] + [
+        "%s: %s" % (f.name, _param_name(f)) for f in entity.fields]
     update_fields = ["%s: %s" % (f.name, _param_name(f)) for f in entity.fields]
 
     text = (
@@ -264,10 +296,14 @@ def _save_spec(entity):
         "      // Takes scalars, not a record: record params on UDFs are\n"
         "      // unreliable. Every param is p-prefixed so it cannot shadow\n"
         "      // a column of the same name inside UpdateIf's row scope.\n"
+        "      // A blank pKey (the screen's \"Add\" action) ALWAYS creates —\n"
+        "      // it is never looked up by Key, and a fresh Key is generated\n"
+        "      // for it below (Ruling 21). A non-blank pKey always updates\n"
+        "      // the one existing row with that Key.\n"
         "      %s(%s): Void =\n"
         "      {\n"
         "          If(\n"
-        "              IsBlank(LookUp(%s, Key = pKey)),\n"
+        "              IsBlank(pKey),\n"
         "              Collect(\n"
         "                  %s,\n"
         "                  {%s}\n"
@@ -282,7 +318,6 @@ def _save_spec(entity):
         "      };"
     ) % (
         entity.entity, name, sig,
-        entity.collection,
         entity.collection, ", ".join(create_fields),
         entity.collection, ", ".join(update_fields),
         entity.collection, entity.collection,
