@@ -50,34 +50,30 @@ ComponentDefinitions:
         DisplayName: Screens
         Description: The routing registry. Defaults to the app-wide constScreens.
         DataType: Table
-        # LIVE 2026-09-07 (third run): `=constScreens` is an app-scope named
-        # formula reference and does NOT establish a schema at
-        # component-declaration time — the Studio cannot resolve an
-        # app-scope name that early, so it fell back to the placeholder
-        # schema (SampleBooleanField/SampleNumberField/SampleStringField)
-        # and the real registry table (below) failed to type-match it. 2 of
-        # the run's 7 errors were this, on both cmp_*_Navigation instances.
-        # A literal row establishes the schema instead. Every column here is
-        # a plain Text value at runtime — enumScreenType/enumEntity (see
-        # scripts/emit_formulas.py) are named-formula RECORDS of string
-        # literals (`{List: "list", Form: "form"}`), not real Power Fx enum
-        # types — except `Screen`, a genuine screen reference. This
-        # component library is generic across apps (no fixed screen name to
-        # reference), so `App.ActiveScreen` stands in as a value of the
-        # right type; it is always available at runtime and carries no
-        # app-specific meaning here.
-        Default: |-
-          =Table(
-              {
-                  Screen: App.ActiveScreen,
-                  DisplayName: "",
-                  Icon: "",
-                  Entity: "",
-                  Type: "",
-                  Group: "",
-                  BackLabel: ""
-              }
-          )
+        # LIVE 2026-09-07 (fourth run): `=constScreens` IS correct here and
+        # is proven live — bisecting the fourth run's crash (see the
+        # playbook's "no-diagnostic crash" entry) confirmed a plain reverted
+        # `=constScreens` compiles with zero errors. The third run's 2
+        # `cmp_*_Navigation.Screens` errors were a CASCADE from
+        # `cmp_FilterButton.Choices` shipping a blank Default in that same
+        # push, not an independent defect of a bare app-scope reference —
+        # once that unrelated component had a typed default, this bare
+        # reference type-resolved on its own. The earlier claim that a bare
+        # name "cannot establish a schema at component-declaration time" was
+        # wrong; see the corrected third-run playbook entry.
+        #
+        # Do NOT "fix" this to a literal `Table(...)` default containing
+        # `App.ActiveScreen` — that was tried in the (unpushed) fourth-round
+        # draft and CRASHES the validator outright ("Validation FAILED with
+        # no diagnostics"). A component custom-property `Default` is
+        # evaluated in isolated component scope; `App.ActiveScreen` (or any
+        # app-scope reference) inside it is not merely a type error, it is
+        # the specific shape that took down the validator with no
+        # attributable diagnostic. `=constScreens` is a bare app-scope
+        # named-formula reference too, but that shape is fine — only a
+        # literal expression that itself REACHES into app scope (like
+        # `App.ActiveScreen` inside a `Table({...})` literal) crashes it.
+        Default: =constScreens
     Properties:
       Fill: =If(cmp_Navigation.Navigation, constBackdropColor.RGBA, constTransparent.RGBA)
       Width: =If(cmp_Navigation.Navigation, 250, 60)
