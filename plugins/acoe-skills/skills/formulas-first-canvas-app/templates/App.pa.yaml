@@ -11,6 +11,12 @@ App:
       =// ############ 1-4. TOKENS, STYLE, VOCABULARIES ############
       // >>> PASTE templates/design-tokens.pa.yaml HERE <<<
 
+      // >>> SPLICE: emit_formulas vocabulary BEGIN <<<
+      // A `new_app.py --model` build replaces this whole span (down to the
+      // matching END line below) with emit_formulas.emit_all()'s vocabulary
+      // region (enums + choices tables, entity-derived). A `--name` scaffold
+      // leaves the generic block below exactly as written — a pattern to
+      // copy per entity, not finished domain code. See Task 5 / Ruling 5.
       // ---- vocabularies: closed sets, defined once ----------------
       // Every dropdown, filter and validation reads these. A value that
       // exists in the UI but not here is a value nothing can validate.
@@ -38,6 +44,7 @@ App:
 
       // ---- scalar constants --------------------------------------
       constPageSize = 50;
+      // >>> SPLICE: emit_formulas vocabulary END <<<
 
       // ############ 5. PURE HELPER UDFs ############
       // Scalar in, scalar out. No side effects, no table returns.
@@ -48,9 +55,21 @@ App:
               DateDiff(fromDate, toDate, TimeUnit.Days)
           );
 
+      // ---- loading indicator: one pair, every operation -----------
+      // Entity-agnostic, so emit_formulas.py does not own it — it stays
+      // here, unchanged, for BOTH a --name scaffold and a --model build.
+      funcStartLoading(): Void = Set(glBoolIsLoading, true);
+      funcStopLoading(): Void = Set(glBoolIsLoading, false);
+
       // ############ 6. DERIVED VALUES ############
       // Named formulas, because these return TABLES — a UDF cannot.
 
+      // >>> SPLICE: emit_formulas data-layer+registry BEGIN <<<
+      // A `new_app.py --model` build replaces this whole span (down to the
+      // matching END line below) with emit_formulas.emit_all()'s data-access
+      // layer and constScreens registry (entity-derived). A `--name`
+      // scaffold leaves the generic block below exactly as written. See
+      // Task 5 / Ruling 5.
       // ############ 7. DATA ACCESS LAYER ############
       // ============================================================
       // ===== DATA ACCESS LAYER — BEGIN ============================
@@ -135,10 +154,6 @@ App:
           RemoveIf(colItems, Key = key);
       };
 
-      // ---- loading indicator: one pair, every operation -----------
-      funcStartLoading(): Void = Set(glBoolIsLoading, true);
-      funcStopLoading(): Void = Set(glBoolIsLoading, false);
-
       // ============================================================
       // ===== DATA ACCESS LAYER — END ==============================
       // ============================================================
@@ -166,8 +181,11 @@ App:
               BackLabel: "Item"
           }
       ];
+      // >>> SPLICE: emit_formulas data-layer+registry END <<<
 
       // ---- navigation stack --------------------------------------
+      // Entity-agnostic, so emit_formulas.py does not own it — it stays
+      // here, unchanged, for BOTH a --name scaffold and a --model build.
       constLastBack = Last(colBack);
 
       funcAddBack(): Void =

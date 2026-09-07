@@ -40,7 +40,7 @@ ComponentDefinitions:
       Choices:
         PropertyKind: Input
         DisplayName: Choices
-        Description: Closed vocabulary for this column, e.g. constStatusChoices
+        Description: Closed vocabulary for this column, e.g. a status choices table
         DataType: Table
         Default: =
       DataType:
