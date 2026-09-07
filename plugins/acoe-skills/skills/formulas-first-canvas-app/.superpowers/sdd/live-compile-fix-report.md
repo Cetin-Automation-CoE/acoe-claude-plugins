@@ -542,3 +542,181 @@ enum types, verified by reading `scripts/emit_formulas.py`'s generation
 code) rather than a live compile confirming it — flagged explicitly per the
 task's instruction to report exactly what was tried rather than assume it
 works.
+
+---
+
+# Fourth run — 2026-09-07: revert a validator crash, correct a wrong diagnosis, close the loop with app-checker
+
+The live-compile loop had closed: the generated app validated with zero
+errors and landed in a real environment (19 files, 34 mock rows, both
+entities). Then a follow-up push of an **unverified** change — replacing
+`cmp_Navigation.Screens`'s `Default: =constScreens` with a literal
+`Table({Screen: App.ActiveScreen, …})` — came back:
+
+```
+✗ Validation FAILED with no diagnostics — the server likely hit an
+unhandled exception.
+```
+
+The task author bisected it: reverting only that one line back to
+`=constScreens` (keeping every `cmp_FilterButton` fix from the third round)
+produced **zero errors** on the same tree.
+
+## Root cause — `App.ActiveScreen` inside a component custom-property `Default` crashes the validator
+
+A component custom-property `Default` is evaluated in isolated component
+scope. `App.ActiveScreen` — any app-scope reference — used inside that
+default is not an ordinary type error; it crashes the validator outright
+with **no attributable diagnostic**, which is why the second push named no
+file or control at all. This is a strictly worse failure mode than the
+"table passed in has none of the expected columns" errors elsewhere in this
+skill's playbook: those at least point at a control.
+
+## The third run's diagnosis was wrong, and is corrected in place
+
+The third run had claimed `cmp_Navigation.Screens`'s bare `=constScreens`
+default was independently bad — "not resolvable at component-declaration
+time" — alongside `cmp_FilterButton.Choices`'s genuinely-blank default,
+and "fixed" it with the literal that went on to crash the validator this
+round. The fourth run's bisection disproves that claim directly: reverting
+*only* `cmp_Navigation.Screens` while keeping `cmp_FilterButton`'s fix
+produced zero errors, meaning the third run's 2 `cmp_*_Navigation.Screens`
+errors were a **cascade** from `cmp_FilterButton.Choices`'s blank default in
+that same push, not an independent defect of the bare-reference shape.
+`references/compile-error-playbook.md`'s third-run row for this error is
+corrected in place (struck through, not silently rewritten) rather than
+left standing with a cause now known to be false.
+
+## Fix
+
+`components/cmp_Navigation.pa.yaml`, `Screens`:
+
+```yaml
+Default: =constScreens
+```
+
+reverted from the crashing literal, with the explanatory comment rewritten
+to record: `=constScreens` is correct and proven live; the earlier errors
+attributed to it were a cascade from `cmp_FilterButton`; and a literal
+containing `App.ActiveScreen` crashes the validator with no diagnostic — do
+not "fix" this again the same way.
+
+`cmp_FilterButton`'s `Choices`/`Items` fixes (typed `Table({Value: ""})`
+literal defaults) are untouched — those are proven correct and were never
+in question.
+
+## Guard correction — `find_bad_table_defaults()` no longer flags a bare app-scope reference
+
+The guard added in the third round flagged two shapes as bad: a blank
+`Default: =`, and a bare name/dotted reference (`=constScreens`,
+`=App.Foo`). The second shape is now proven **correct** by the live
+compiler, so a guard that still flagged it would reject the exact thing the
+compiler accepts — contradicting live evidence is worse than having no
+guard at all.
+
+`scripts/check_control_props.py`'s `_table_default_is_bad()` is narrowed to
+flag only a genuinely blank Default (nothing after stripping a leading `=`)
+— the one shape that actually caused live errors (`cmp_FieldChoice.Choices`
+before its fix, `cmp_FilterButton.Choices`/`.Items`). The now-dead
+`RE_BARE_REFERENCE` regex was removed along with the check that used it.
+
+`tests/test_table_default_guard.py` updated to match: the two former
+"is an error" tests for bare references (`test_bare_app_scope_name_
+reference_is_an_error`, `test_dotted_bare_reference_is_also_an_error`) are
+now `TestBareReferencesAreNotFlagged`, asserting the guard does **not** flag
+`=constScreens` or `=App.SomeGlobal`. The blank-default test and the
+standing "every shipped component passes the guard" regression test are
+unchanged in intent (still pass, now against the reverted
+`cmp_Navigation.Screens`).
+
+No other guard was touched or weakened.
+
+## Playbook and SKILL.md
+
+`references/compile-error-playbook.md`:
+- New top section, "A no-diagnostic crash means malformed input, not '0
+  errors'": the exact crash text, its cause (app-scope reference inside a
+  component custom-property `Default`), the remedy, and the bisection
+  method for a no-diagnostic failure.
+- The third-run `cmp_Navigation.Screens` row is corrected in place (struck
+  through original claim, annotated with the real cascade cause and a
+  pointer to the fourth-run correction) rather than deleted.
+- The paragraph under that table describing what `find_bad_table_defaults()`
+  catches is updated to say "blank only," matching the guard change.
+- New section, "The verification loop has three stages, not two": documents
+  `get_appchecker_errors` as a required third stage after a clean
+  `compile_canvas`, plus the three app-checker findings from this run's live
+  app (`App.glScopeFilter`, `AssetFormScreen.locConfirmDelete`,
+  `SiteFormScreen.locConfirmDelete`) and the decision/finding for each (see
+  below).
+
+`SKILL.md`: the verification-loop diagram now ends in `get_appchecker_errors`
+after `compile_canvas`, with a short paragraph stating a clean compile is not
+the end of the loop and pointing at the playbook's worked example.
+
+## App-checker findings (`get_appchecker_errors`, zero errors, 3 Medium/Performance)
+
+```
+App.glScopeFilter: Unused variable
+AssetFormScreen.locConfirmDelete: Unused variable
+SiteFormScreen.locConfirmDelete: Unused variable
+```
+
+**`App.glScopeFilter`** — expected, and a direct consequence of Ruling 6:
+the generated per-entity scope formula (`scripts/emit_formulas.py`,
+`_scope_spec`) is a literal `Filter(col, true)` because the model has no
+scope concept yet — the same deliberate wart already documented as an
+"expected warning" (`warning: […] This predicate is a literal value…`).
+`templates/App.pa.yaml`'s `OnStart` still unconditionally `Set(glScopeFilter,
+"")`s the global (untouched by the `--model` splice), but no generated scope
+formula reads it any more, so it is genuinely dead in `--model` output.
+**Decision: keep it.** It is the documented seam a real per-entity scope
+condition will read the moment the model has one (`Owner = glScopeFilter`
+is literally the pattern already used in the hand-written `--name` scaffold
+template); removing it now would mean re-adding both the global and its
+`OnStart` line later, and would leave the two deliberate warts
+inconsistent with each other for no present benefit. Left as an accepted
+Medium/Performance finding, not fixed.
+
+**`AssetFormScreen.locConfirmDelete` / `SiteFormScreen.locConfirmDelete`** —
+investigated whether the delete-confirmation dialog is actually wired to it,
+per the task's instruction to check before deciding. Traced every
+read/write site in `scripts/emit_screens.py` (and the matching hand-written
+`templates/FormScreen.pa.yaml`):
+
+- `OnVisible` sets `locConfirmDelete: false` (screen load).
+- `btn_*Form_Delete`'s `OnSelect` sets it `true` (open the dialog).
+- `cmp_*Form_Dialog` (`ComponentName: cmp_Dialog`) binds its own built-in
+  `Visible` property — `Visible` is a universal instance property on any
+  control/component (`UNIVERSAL_INSTANCE_PROPS` in
+  `check_control_props.py`), not something `cmp_Dialog` declares itself —
+  to `=locConfirmDelete`. This is what actually shows/hides the dialog.
+- `OnCancel` and `OnSubmit` both reset it to `false` (close the dialog).
+
+**Conclusion: this is a false positive, not a functional gap.** The dialog
+is fully and correctly wired to the context variable in both directions.
+No code change made. Best guess at why the checker still flags it: it may
+have a blind spot for a context variable whose only *read* is inside a
+child canvas-component instance's built-in property binding, as opposed to
+a top-level screen control's — plausible but not independently confirmed
+against Microsoft's checker internals. Recorded in the playbook so a future
+run does not "fix" a dialog that already works.
+
+## Verification
+
+1. `python3 -m unittest discover -s tests` — **252 tests, all green**
+   (unchanged count from the third round: 2 tests renamed/repurposed in
+   place, none added or removed).
+2. `python3 scripts/new_app.py --model templates/model.example.yaml --out /tmp/live8`
+   — exit 0, all 6 local guards PASS.
+3. `grep -rn "ActiveScreen" components/` — every hit is a runtime usage
+   inside a control property expression (`cmp_Navigation`'s `Appearance`/
+   `FontColor` `If(...)` comparisons) or inside a comment; none inside a
+   `CustomProperties.*.Default`. Confirmed identically in the freshly
+   generated `/tmp/live8/Components/cmp_Navigation.pa.yaml`.
+4. Reverted default, pasted above: `Default: =constScreens`.
+
+**Unverified**: this fix has not yet been re-pushed against a live
+`compile_canvas` session by this agent — the task author holds the only live
+session and will re-push to confirm. Per this run's own lesson, treat that
+confirmation as required before calling the crash closed, not optional.
