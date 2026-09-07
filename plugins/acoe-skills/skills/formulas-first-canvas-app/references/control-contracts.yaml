@@ -8,6 +8,15 @@
 # app at /Users/krystofpe/powerapps-work/canvas-src. Where they disagreed, the
 # compiled app won.
 #
+# 2026-09-07: check_control_props.py's first real run against templates/ and
+# components/ surfaced several properties the guard rejected as invalid that are
+# in fact used repeatedly, on the exact same control type, in the compiled
+# reference app: LayoutMinWidth/LayoutMinHeight and the four Padding sides on
+# several controls, Button.FontWeight, and VerticalAlign on ModernText and Button
+# (not only on previous-generation Text, as this file previously claimed). Each
+# was re-verified by counting enclosing-control occurrences in the compiled app
+# before being added.
+#
 # COVERAGE LIMIT: absence from this file means "not verified", not "invalid".
 # check_control_props.py reports properties on unlisted controls as unchecked.
 
@@ -36,12 +45,12 @@ controls:
     generation: modern
     properties:
       - Color, Size, FontWeight, Align, Wrap, AutoHeight, Text, Visible, OnSelect
-      - Italic, Underline, Strikethrough
+      - Italic, Underline, Strikethrough, VerticalAlign
       - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
       - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
       - Fill, BorderColor, BorderThickness, BorderStyle
       - AlignInContainer, FillPortions, Height, Width, X, Y
-      - AccessibleLabel, TabIndex, Live
+      - AccessibleLabel, TabIndex, Live, LayoutMinWidth, LayoutMinHeight
     enums:
       FontWeight: FontWeight
       Align: TextCanvas.Align
@@ -66,7 +75,7 @@ controls:
       - Fill, BorderColor, BorderThickness, BorderStyle
       - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
       - AlignInContainer, FillPortions, Height, Width, X, Y
-      - AccessibleLabel, TabIndex, DisplayMode
+      - AccessibleLabel, TabIndex, DisplayMode, LayoutMinWidth, LayoutMinHeight
     enums:
       Weight: TextCanvas.Weight
       Align: TextCanvas.Align
@@ -84,8 +93,10 @@ controls:
       - Placeholder, Default, Text, Type, TriggerOutput, MaxLength, Required
       - ValidationState, Appearance, Color, Size, FontWeight, Align
       - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
       - AccessibleLabel, OnChange, OnSelect, DisplayMode, BasePaletteColor
       - AlignInContainer, FillPortions, Height, Width, X, Y, Visible, TabIndex
+      - LayoutMinWidth, LayoutMinHeight
     enums:
       Type: TextInputType
       TriggerOutput: TriggerOutput
@@ -106,8 +117,10 @@ controls:
       - Items, ItemDisplayText, DefaultSelectedItems, InputTextPlaceholder
       - SelectMultiple, IsSearchable, MultiValueDelimiter, DelayOutput
       - Required, ValidationState, Appearance, Color, Size
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
       - AccessibleLabel, TabIndex, OnChange, DisplayMode, Visible
       - AlignInContainer, FillPortions, Height, Width, X, Y
+      - LayoutMinWidth, LayoutMinHeight
     enums:
       Appearance: Appearance
       DisplayMode: DisplayMode
@@ -121,8 +134,10 @@ controls:
       - DefaultDate, SelectedDate, Format, DateTimeZone, StartDate, EndDate
       - StartOfWeek, IsEditable, Placeholder, Appearance
       - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
       - ValidationState, AccessibleLabel, OnChange, DisplayMode, Visible
       - AlignInContainer, FillPortions, Height, Width, X, Y, TabIndex
+      - LayoutMinWidth, LayoutMinHeight
     enums:
       Appearance: Appearance
       DisplayMode: DisplayMode
@@ -133,16 +148,19 @@ controls:
       Previous-generation modern button — what this skill's eight bundled components
       use. Takes the PLAIN Align enum, unlike the text controls. No Color, no Fill.
     properties:
-      - FontColor, FontSize, BorderRadius, BorderThickness, BorderColor
-      - BasePaletteColor, Icon, Appearance, Layout, IconStyle, Align
+      - FontColor, FontSize, FontWeight, BorderRadius, BorderThickness, BorderColor
+      - BasePaletteColor, Icon, Appearance, Layout, IconStyle, Align, VerticalAlign
       - Text, AccessibleLabel, TabIndex, DisplayMode, OnSelect, Visible
       - AlignInContainer, FillPortions, Height, Width, X, Y
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
+      - LayoutMinWidth, LayoutMinHeight
     enums:
       Appearance: ButtonCanvas.Appearance
       Layout: ButtonCanvas.Layout
       IconStyle: ButtonCanvas.IconStyle
       Align: Align
       DisplayMode: DisplayMode
+      FontWeight: FontWeight
     absent: [Color, Fill]
 
   ModernButton@1.0.0:

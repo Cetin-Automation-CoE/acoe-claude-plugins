@@ -136,6 +136,16 @@ class TestEnumNamespaces(unittest.TestCase):
         f = errors(self._check("ModernText", "Align", "='TextCanvas.Align'.Right"))
         self.assertEqual(len(f), 1)
 
+    def test_token_path_on_enum_property_is_unchecked_not_an_error(self):
+        """`constStyle.Something.FontWeight` is a named-formula token reference,
+        not a literal `Namespace.Member` enum value. RE_ENUM's dotted-path match
+        can mistake its last two segments for one — e.g. namespace
+        `constStyle.Header`, member `FontWeight` — which isn't a known enum
+        namespace at all, so it must be reported as unchecked, not wrong."""
+        findings = self._check("ModernText", "FontWeight", "=constStyle.Something.FontWeight")
+        self.assertEqual(errors(findings), [])
+        self.assertEqual(warns(findings), [])
+
 
 class TestLeafControls(unittest.TestCase):
     def setUp(self):

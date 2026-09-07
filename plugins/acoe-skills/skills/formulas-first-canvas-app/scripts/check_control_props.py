@@ -217,6 +217,8 @@ def _check_enum(site, spec, contracts, resolver):
     if not m:
         return []  # Not a literal enum reference — unchecked.
     actual_ns, member = m.group(1), m.group(2)
+    if actual_ns not in contracts["enums"]:
+        return []  # token path or variable, not an enum literal — unchecked
     if actual_ns == expected_ns:
         if member not in contracts["enums"].get(expected_ns, set()):
             return [Finding(
