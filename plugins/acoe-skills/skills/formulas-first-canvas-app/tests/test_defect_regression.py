@@ -147,6 +147,50 @@ class TestParserSeesRealControlShapes(unittest.TestCase):
         self.assertLess(no_ctx, 15, "too many property sites lost control context")
 
 
+class TestInstanceDottedReferencesAreNotEnums(unittest.TestCase):
+    """Ruling 15 (C3): Ruling 6 taught `_check_enum` that a dotted value is not
+    necessarily an enum literal; `_check_instance` (added later, in Task 7)
+    never received that fix and did not even receive `contracts`. Verified
+    against a real DataType: Text custom input (cmp_FilterButton.Align):
+    ThisItem/Parent/Self/token-path references all hard-errored as "enums"."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.contracts = ccp.load_contracts()
+        cls.components = ccp.parse_component_defs(
+            sorted((SKILL / "components").glob("cmp_*.pa.yaml")))
+
+    def _check(self, value):
+        text = control("CanvasComponent", [("Align", value)],
+                       component="cmp_FilterButton")
+        return ccp.check_text(text, "t.pa.yaml", self.contracts,
+                              components=self.components)
+
+    def test_thisitem_reference_is_unchecked(self):
+        self.assertEqual(
+            [f for f in self._check("=ThisItem.Title") if f.severity == "error"], [])
+
+    def test_parent_reference_is_unchecked(self):
+        self.assertEqual(
+            [f for f in self._check("=Parent.Width") if f.severity == "error"], [])
+
+    def test_self_reference_is_unchecked(self):
+        self.assertEqual(
+            [f for f in self._check("=Self.Text") if f.severity == "error"], [])
+
+    def test_token_path_reference_is_unchecked(self):
+        self.assertEqual(
+            [f for f in self._check("=constStyle.Header.Title")
+             if f.severity == "error"], [])
+
+    def test_real_enum_into_the_same_text_input_still_errors(self):
+        """The fix must not blunt the check it is patched onto — a genuine
+        bare enum literal into this DataType: Text input is still an error."""
+        errs = [f for f in self._check("=Align.Center") if f.severity == "error"]
+        self.assertEqual(len(errs), 1)
+        self.assertIn("Text", errs[0].message)
+
+
 class TestDefect7DataLayer(unittest.TestCase):
     """Defect 7 is a data-layer rule, not a control-property one."""
 

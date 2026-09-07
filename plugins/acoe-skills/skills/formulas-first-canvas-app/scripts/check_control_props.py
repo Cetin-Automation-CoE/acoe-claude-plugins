@@ -51,6 +51,10 @@ Finding = collections.namedtuple(
 
 RE_ITEM = re.compile(r"^(\s*)- ([A-Za-z_][\w@.]*):\s*$")
 RE_KEY = re.compile(r"^(\s*)([A-Za-z_][\w@.]*):\s*(.*)$")
+# Used both for a control property's enum literal (_check_enum) and a component
+# instance property's bare enum literal (_check_instance) — one pattern, two
+# call sites; kept as a single name so there is nothing to accidentally let
+# drift apart.
 RE_ENUM = re.compile(r"^=\s*'?([A-Za-z][\w.]*?)'?\.([A-Za-z]\w*)\s*$")
 BLOCK_SCALAR = ("|", "|-", "|+", ">", ">-", ">+")
 
@@ -125,9 +129,6 @@ def make_resolver(mapping):
 RE_CMP_NAME = re.compile(r"^(\s*)(cmp_[\w]+):\s*$")
 RE_PROP_NAME = re.compile(r"^(\s*)([A-Za-z_]\w*):\s*$")
 RE_DATATYPE = re.compile(r"^\s*DataType:\s*(\w+)\s*$")
-
-# Bare enum literals that are NOT valid in a Text-typed component input.
-RE_BARE_ENUM = re.compile(r"^=\s*'?([A-Za-z][\w.]*?)'?\.([A-Za-z]\w*)\s*$")
 
 
 def parse_component_defs_text(text):
@@ -320,7 +321,8 @@ def check_text(text, filename, contracts, resolver=None, components=None, counts
             continue
         if site.control_type == "CanvasComponent":
             if components and site.component_name in components:
-                findings.extend(_check_instance(site, components[site.component_name]))
+                findings.extend(_check_instance(
+                    site, components[site.component_name], contracts))
             continue
         spec = contracts["controls"].get(site.control_type)
         if spec is None:
@@ -434,8 +436,19 @@ UNIVERSAL_INSTANCE_PROPS = {
 }
 
 
-def _check_instance(site, declared):
-    """Check one CanvasComponent instance property against its declaration."""
+def _check_instance(site, declared, contracts):
+    """Check one CanvasComponent instance property against its declaration.
+
+    Ruling 15 (C3): Ruling 6 taught `_check_enum` that ANY dotted value is not
+    necessarily an enum literal — `ThisItem.Title`, `Parent.Width`, `Self.Text`
+    and `constStyle.Header.Title` all match the same regex shape as a real
+    `Namespace.Member` enum reference but are property/record/token paths, not
+    enums. That fix never reached `_check_instance` (added later, Task 7),
+    which received no `contracts` at all — so every one of those hard-errored
+    as DataType-Text-gets-an-enum on any Text-typed component input. Same
+    fix, same reasoning: a namespace this contract file has never heard of is
+    not a literal enum reference, so it is unchecked, not wrong.
+    """
     if site.prop not in declared:
         if site.prop in UNIVERSAL_INSTANCE_PROPS:
             return []  # Universal control property, not a custom input — unchecked.
@@ -447,13 +460,16 @@ def _check_instance(site, declared):
     datatype = declared[site.prop]
     if datatype != "Text":
         return []
-    m = RE_BARE_ENUM.match(site.value)
-    if m:
-        return [Finding(
-            "error", site.file, site.line, site.control, site.prop,
-            "%s.%s is DataType Text — pass the string \"%s\", not the enum %s.%s"
-            % (site.component_name, site.prop, m.group(2), m.group(1), m.group(2)))]
-    return []
+    m = RE_ENUM.match(site.value)
+    if not m:
+        return []
+    actual_ns = m.group(1)
+    if actual_ns not in contracts["enums"]:
+        return []  # ThisItem/Parent/Self/token path, not an enum literal — unchecked.
+    return [Finding(
+        "error", site.file, site.line, site.control, site.prop,
+        "%s.%s is DataType Text — pass the string \"%s\", not the enum %s.%s"
+        % (site.component_name, site.prop, m.group(2), m.group(1), m.group(2)))]
 
 
 def main():
