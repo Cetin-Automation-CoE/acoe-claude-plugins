@@ -15,8 +15,24 @@ import check_control_props as ccp  # noqa: E402
 TOKENS = (SKILL / "templates" / "design-tokens.pa.yaml").read_text(encoding="utf-8")
 
 
-def control(ctype, props, name="c1", component=None):
+def control(ctype, props, name="c1", component=None, variant=None):
+    """Build a fixture control block in the REAL `.pa.yaml` shape.
+
+    Ruling 13 (C1): every regression fixture in this file used to omit the
+    `Variant:` line that real GroupContainer and Gallery blocks always carry
+    between `Control:` and `Properties:` — the exact sibling key that wiped
+    control context and made the guard blind to `gal_List_Items`. A fixture
+    without `Variant:` cannot exercise that bug, which is how it survived 10
+    tasks and 9 reviews. `variant` defaults to a real value for Gallery so
+    every gallery fixture below exercises the actual shape, not an idealized
+    one; pass `variant=None` explicitly only for controls that genuinely have
+    no Variant in this repo's shipped tree (ModernText, Button, etc.).
+    """
+    if variant is None and ctype == "Gallery":
+        variant = "Vertical"
     head = "      - %s:\n          Control: %s\n" % (name, ctype)
+    if variant:
+        head += "          Variant: %s\n" % variant
     if component:
         head += "          ComponentName: %s\n" % component
     head += "          Properties:\n"
@@ -85,6 +101,50 @@ class TestNineDefectClasses(unittest.TestCase):
     def test_direct_wrong_namespace_enum(self):
         self.assertRejected(
             control("ModernText", [("Align", "=Align.Right")]), "End")
+
+
+class TestParserSeesRealControlShapes(unittest.TestCase):
+    """Ruling 13 (C1): `Control:` followed by a sibling `Variant:` (the shape
+    every real GroupContainer and Gallery block uses) must not wipe control
+    context before `Properties:` is reached. A test suite that only asserts
+    "the guard rejected this" passes vacuously if the parser silently skipped
+    the block entirely with zero findings — this is a POSITIVE assertion that
+    the parser actually attributed properties to the control, which is the
+    class of test that was missing when this bug shipped."""
+
+    def test_gallery_with_variant_line_keeps_control_context(self):
+        text = control("Gallery", [("Items", "=colItems"), ("FillPortions", "=1")])
+        sites = list(ccp.iter_properties(text, "t.pa.yaml"))
+        self.assertTrue(sites, "no property sites found at all")
+        for site in sites:
+            self.assertEqual(site.control_type, "Gallery",
+                              "control context lost: %r" % (site,))
+        self.assertIn("FillPortions", [s.prop for s in sites])
+
+    def test_real_listscreen_sees_the_gallery(self):
+        """The exact regression: templates/ListScreen.pa.yaml's gal_List_Items
+        sits behind a `Variant: Vertical` line. Before the fix this yielded
+        ZERO property sites for it."""
+        path = SKILL / "templates" / "ListScreen.pa.yaml"
+        text = path.read_text(encoding="utf-8")
+        sites = [s for s in ccp.iter_properties(text, str(path))
+                 if s.control == "gal_List_Items"]
+        self.assertTrue(sites, "gal_List_Items produced no property sites")
+        self.assertTrue(all(s.control_type == "Gallery" for s in sites))
+        self.assertIn("FillPortions", [s.prop for s in sites])
+
+    def test_real_listscreen_site_count_floor(self):
+        """Before the fix, templates/ListScreen.pa.yaml yielded 129 sites with
+        40 lacking control context (31%) — the fix does not change the total
+        line count parsed, but it must sharply cut how many go unattributed.
+        A floor on total sites plus a ceiling on unattributed ones catches a
+        regression that silently drops sites again, in either direction."""
+        path = SKILL / "templates" / "ListScreen.pa.yaml"
+        text = path.read_text(encoding="utf-8")
+        sites = list(ccp.iter_properties(text, str(path)))
+        self.assertGreaterEqual(len(sites), 120)
+        no_ctx = sum(1 for s in sites if not s.control_type)
+        self.assertLess(no_ctx, 15, "too many property sites lost control context")
 
 
 class TestDefect7DataLayer(unittest.TestCase):

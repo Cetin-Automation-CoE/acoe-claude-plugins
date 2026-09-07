@@ -187,8 +187,17 @@ def iter_properties(text, filename):
 
         - lbl_Row_Title:
             Control: ModernText
+            Variant: SomeVariant   # optional, sits BEFORE Properties
             Properties:
               Color: =...
+
+    `Variant:` (and `ComponentName:`) are real siblings of `Control:` at the
+    SAME indent, appearing before `Properties:` — every GroupContainer and
+    Gallery in this repo's own templates carries one. The control-leaving
+    check below must not treat that sibling as "we left the block," or every
+    property under it is silently orphaned (control_type None) — this is
+    exactly what made the guard blind to `gal_List_Items`'s missing
+    `FillPortions` before the fix (Ruling 13).
 
     Multi-line block scalars (`Items: |-`) are consumed whole so their bodies are
     never mistaken for property lines.
@@ -233,8 +242,10 @@ def iter_properties(text, filename):
             props_indent = None
             continue
 
-        # Leaving the control's block entirely.
-        if indent <= control_indent and props_indent is None:
+        # Leaving the control's block entirely — but a sibling key of Control:
+        # (Variant, or anything else at the identical indent) is NOT that; only
+        # a shallower indent means we have actually stepped back out.
+        if indent < control_indent and props_indent is None:
             control_name = control_type = None
             continue
 

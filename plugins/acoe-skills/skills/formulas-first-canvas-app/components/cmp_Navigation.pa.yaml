@@ -121,6 +121,12 @@ ComponentDefinitions:
                   BorderColor: =constTransparent.RGBA
                   BorderStyle: =BorderStyle.None
                   DelayItemLoading: =false
+                  # Leaf control inside an AutoLayout container: without this it
+                  # defaults to FillPortions 0 and collapses to the ~200px control
+                  # default (the guard's I1 finding — same defect class as
+                  # gal_List_Items, just not visible until the parser could see
+                  # past this control's Variant: line).
+                  FillPortions: =1
                   # The registry drives the menu. No Switch, no per-screen edit.
                   Items: =Filter(cmp_Navigation.Screens, Type = enumScreenType.List)
                   LayoutMinWidth: =Parent.Width
