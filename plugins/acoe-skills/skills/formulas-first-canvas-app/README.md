@@ -49,14 +49,16 @@ way you get one confirmation round trip (a compact field table; "just go" accept
 as drafted) before anything is generated — not a long interview.
 
 **What you get:** a complete app on disk sized to your model — one list screen and one
-form screen **per entity**, the design tokens, eight reusable components, mock data
-that renders on first run, and a navigation registry covering every entity — all
-passing the local guard scripts.
+form screen **per entity**, a dashboard screen when the model calls for one, the
+design tokens, eight reusable components, mock data that renders on first run, and a
+navigation registry covering every entity — all passing the local guard scripts.
 
 **What happens**
 
 1. Claude writes your confirmed model to `model.yaml` beside the source tree (schema:
-   `templates/model.example.yaml`). This file is the app's spec — commit it.
+   `templates/model.example.yaml`, including the `role:`, `dashboard:` and
+   `description:` keys the confirmation questions map to). This file is the app's
+   spec — commit it.
 
 2. Claude runs the generator:
 
@@ -85,6 +87,7 @@ of the per-entity rows)
 | File | Contents |
 |---|---|
 | `App.pa.yaml` | Design tokens, vocabularies, enums, helper functions, a mock data-access layer with one region per entity, the screen registry, navigation stack, notification helpers |
+| `DashboardScreen.pa.yaml` (when `dashboard:` is on) | KPI band, status-chip pipeline, navigation tiles, trademark line — the app's `StartScreen` and the nav rail's first entry |
 | `<Entity>sListScreen.pa.yaml` (one per entity) | Header, collapsible navigation rail, search, status filter, command bar, sortable and filterable column headers, a gallery with status colours and right-aligned money, footer aggregates, empty state, toasts, spinner |
 | `<Entity>FormScreen.pa.yaml` (one per entity) | Header with back button, a card with the entity's fields, one validation formula shared by the error label and the Save button, Save, Cancel, Delete behind a confirm dialog |
 | `Components/` | The eight components below |
@@ -157,7 +160,7 @@ Studio binder rejects forward references that the compile service accepts. Each 
 those fails at runtime or shows up as dozens of unrelated errors. `check_control_props.py`
 adds a fourth class: a property name that belongs to the *other* control generation,
 or a design-token value from the wrong dialect, both of which read fine in the YAML
-and fail only at compile. `check_layout.py` adds a fifth: sizing that is individually
+and fail only at compile. `check_layout.py` adds a sixth: sizing that is individually
 valid but leaves a container or a leaf control with no resolvable size, which renders
 as a collapsed control rather than a compile error. None of the seven scripts replaces
 a live compile — they narrow what a `compile_canvas` push still needs to catch. When a
@@ -255,13 +258,15 @@ formulas-first-canvas-app/
   README.md             this file
   scripts/              new_app.py generator (--model or the generic --name path),
                         model.py (schema + validation + derived names),
-                        emit_mock.py / emit_formulas.py / emit_screens.py
-                        (the --model emitters), inventory.py, and six
-                        check_*.py guards including check_control_props.py
-                        and check_layout.py
-  templates/            App.pa.yaml, design-tokens.pa.yaml, ListScreen, FormScreen,
-                        model.example.yaml (the model.yaml schema, two worked
-                        entities), inventory.md and findings.csv report templates
+                        emit_mock.py / emit_formulas.py / emit_screens.py /
+                        emit_dashboard.py (the --model emitters), inventory.py,
+                        and six check_*.py guards including
+                        check_control_props.py and check_layout.py
+  templates/            App.pa.yaml, design-tokens.pa.yaml (design tokens,
+                        including the Dashboard token group), ListScreen,
+                        FormScreen, model.example.yaml (the model.yaml schema,
+                        two worked entities), inventory.md and findings.csv
+                        report templates
   components/           the eight cmp_*.pa.yaml files
   references/           layout order, Power Fx limits, data layer, design system,
                         component library, the refactoring ladder, control dialects

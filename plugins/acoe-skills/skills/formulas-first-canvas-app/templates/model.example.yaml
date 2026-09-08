@@ -38,7 +38,7 @@ entities:
     fields:
       - {name: Name,     type: text,     required: true, grid: flex, label: SITE, search: true, samples: [Prague Central, Brno North, Ostrava Depot]}
       - {name: Region,   type: choice,   required: true, grid: 130,  filter: true, vocab: [North, South, East, West]}
-      - {name: Status,   type: choice,   required: true, grid: 120,  filter: true, vocab: [Active, Decommissioned]}
+      - {name: Status,   type: choice,   required: true, grid: 120,  filter: true, vocab: [Active, Decommissioned], role: status}
       - {name: Capacity, type: number,   grid: 110, min: 0}
       - {name: OpenedOn, type: date,     grid: 112}
       - {name: Notes,    type: longtext, grid: hidden}

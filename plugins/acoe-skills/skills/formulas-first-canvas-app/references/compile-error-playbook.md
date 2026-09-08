@@ -25,6 +25,14 @@ compiles, confirm the session was active. If it was not, the push has not
 actually been validated — re-run it with a live session before believing
 either a pass or a fail.
 
+**A clean push does not mean the maker can see it yet.** `compile_canvas`
+lands in the live coauthoring session, not the saved app — the maker must
+**Save (Ctrl+S) in Studio before any refresh or Play**; a refresh without
+Save shows a blank/grey app, not the pushed content. `sync_canvas` returning
+files back is not evidence the app is visible either — it confirms the
+session has them, nothing about what Studio has rendered or saved. Only a
+Play-mode screenshot or a confirmed Save counts as evidence.
+
 Keyed by the error text `compile_canvas` (or `get_appchecker_errors`) puts in
 front of you, not by the underlying cause — you have the error first, this
 table gets you to the cause and the fix without re-deriving either from

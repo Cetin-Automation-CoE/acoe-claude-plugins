@@ -43,8 +43,15 @@ canvas app" request, run all six steps in order before touching a screen file.
                source's types; infer a vocab list from any choice column.
 2b. ABSENT   → infer 8-12 fields per table from the domain sentence, with
                plausible vocab lists and 3-5 realistic samples per text field.
-3. CONFIRM — show a compact field table. ONE round trip maximum. Accept
-             "just go". Do not conduct a long interview.
+3. CONFIRM — one message, one round trip. Show the field table, then ask only
+   the questions the sentence did not already answer:
+     • Which field identifies a record?        → role: title on that field
+     • Which status matters most?              → role: status (drives dashboard
+                                                  pipeline, semafor colour, default sort)
+     • Is there a deadline date?               → semantics: due on that field
+     • Do you want a dashboard? (default: yes when there is more than one table)
+                                               → dashboard:
+   Accept "just go". Do not ask a question whose answer is already in the model.
 4. WRITE   — model.yaml beside the source tree (see
              `templates/model.example.yaml` for the schema). It is the app's
              spec — commit it alongside the generated tree.
@@ -53,6 +60,31 @@ canvas app" request, run all six steps in order before touching a screen file.
              non-zero on failure. It does not by itself prove the app
              compiles — see "The verification loop" below.
 ```
+
+**What `role:`, `dashboard:` and `description:` drive.** `role: title` on a
+field marks the record's identifying label — default when absent: the first
+`text`/`longtext` field, else the first field. `role: status` on a `choice`
+field marks the primary status: it drives the dashboard's pipeline chips and
+status tiles, the semafor colour, and the default sort — left unset, the
+generator silently guesses the first `choice` field carrying `filter: true`.
+`templates/model.example.yaml`'s `Site` entity needs the explicit key for
+exactly this reason: `Region` is also a filterable choice and is listed
+first, so without `role: status` on `Status` the generator would treat
+Region as Site's status. `dashboard:` defaults to `true` once the model has
+more than one entity, `false` for one. `description:` is the KPI band's
+caption text; left blank, it falls back to `"<N> registers · live counts"`
+(N = the model's entity count).
+
+**The dashboard is gated by `dashboard:` and mirrors the baseline.** On, the
+generator writes `DashboardScreen.pa.yaml`, points `StartScreen` at it, and
+gives it the nav rail's first entry. It mirrors four of the baseline's five
+Dashboard regions — KPI band, pipeline chips, navigation tiles, trademark —
+never the baseline's domain-specific "Gates" region, which stays ungenerated.
+The baseline is the Regional Procurement Plan app
+(`acoe-3688-regional-procurement-plan`, source under
+`canvasapps/acoe_regionalprocurementplan_76cad/acoe_regionalprocurementplan_76cad_DocumentUri/Src/`)
+— the visual and structural target for every port in this skill. The older
+`powerapps-work/canvas-src` copy is STALE.
 
 **Division of labour — neither side does the other's job.** The agent supplies
 domain judgement: which fields belong on this entity, which vocabulary values
@@ -105,6 +137,14 @@ session open in Power Apps Studio (reported 7 errors, all real). Before
 believing any `compile_canvas` result — especially a clean one — confirm the
 app is open in Studio with coauthoring active. See the note at the top of
 `references/compile-error-playbook.md` for the full evidence.
+
+**A clean push does not mean the maker can see it yet.** `compile_canvas`
+lands in the live coauthoring session, not the saved app — the maker must
+**Save (Ctrl+S) in Studio before any refresh or Play**; a refresh without
+Save shows a blank/grey app, not the pushed content. `sync_canvas` returning
+files back is not evidence the app is visible either — it confirms the
+session has them, nothing about what Studio has rendered or saved. Only a
+Play-mode screenshot or a confirmed Save counts as evidence.
 
 **The six local guards (below) prove the emitted YAML is structurally sound,
 contract-clean and internally consistent — they do not prove Power Apps
@@ -281,6 +321,14 @@ section, 2026-09-07). Treat a sessionless clean result as **no signal at
 all** — not as "probably fine," not as grounds to commit or to tell the user
 the app compiles. Confirm the session is live before trusting either a pass
 or a fail out of this loop.
+
+**A clean push does not mean the maker can see it yet.** `compile_canvas`
+lands in the live coauthoring session, not the saved app — the maker must
+**Save (Ctrl+S) in Studio before any refresh or Play**; a refresh without
+Save shows a blank/grey app, not the pushed content. `sync_canvas` returning
+files back is not evidence the app is visible either — it confirms the
+session has them, nothing about what Studio has rendered or saved. Only a
+Play-mode screenshot or a confirmed Save counts as evidence.
 
 When `compile_canvas` (or `get_appchecker_errors`) returns a parse error, look it
 up in `references/compile-error-playbook.md` before improvising a fix — it is
