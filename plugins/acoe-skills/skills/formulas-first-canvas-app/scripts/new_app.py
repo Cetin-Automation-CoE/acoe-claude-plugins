@@ -436,6 +436,22 @@ def main():
         for c in chosen:
             shutil.copyfile(COMPONENTS / f"{c}.pa.yaml", out / "Components" / f"{c}.pa.yaml")
 
+        # Ruling 18: cmp_Navigation.Screens' shipped Default names the
+        # generic template's own ListScreen, which no --model build defines
+        # — repoint the COPY at this build's real first screen (the
+        # dashboard, when the model has one, else the first entity's list
+        # screen). _replace_once refuses to guess if that anchor shape ever
+        # changes, so template drift fails loudly here rather than shipping
+        # a component whose default references a screen the app never
+        # defines. The --name (legacy) path below copies the file unchanged
+        # — ListScreen is a real screen there.
+        nav_path = out / "Components" / "cmp_Navigation.pa.yaml"
+        nav_text = _replace_once(
+            nav_path.read_text(encoding="utf-8"),
+            "Screen: ListScreen", "Screen: %s" % first_screen,
+            "cmp_Navigation.pa.yaml's Screens default screen")
+        nav_path.write_text(nav_text, encoding="utf-8")
+
         # ---- frame: reference layout named by model.yaml's own frame: field
         frame_screen = write_frame(out, model.frame)
 

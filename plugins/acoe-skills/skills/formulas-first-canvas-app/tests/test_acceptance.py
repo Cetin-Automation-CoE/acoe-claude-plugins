@@ -283,6 +283,15 @@ class TestOneEntityModel(_AcceptanceBase, unittest.TestCase):
         app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
         self.assertIn("StartScreen: =%s" % self.model.entities[0].list_screen, app)
 
+    def test_cmp_navigation_default_points_at_its_list_screen(self):
+        # Ruling 18: the copied component's Screens default is rewritten to
+        # name this build's real first screen — never left pointing at the
+        # generic shipped template's ListScreen, a name this app never
+        # defines.
+        nav = (self.out / "Components" / "cmp_Navigation.pa.yaml").read_text(encoding="utf-8")
+        self.assertIn("Screen: %s" % self.model.entities[0].list_screen, nav)
+        self.assertNotIn("Screen: ListScreen", nav)
+
 
 class TestThreeEntityModel(_AcceptanceBase, unittest.TestCase):
     @classmethod
@@ -338,6 +347,14 @@ class TestThreeEntityModel(_AcceptanceBase, unittest.TestCase):
         first_row = registry[registry.index("{"):registry.index("}") + 1]
         self.assertIn("Screen: DashboardScreen,", first_row)
         self.assertIn("Type: enumScreenType.List,", first_row)
+
+    def test_cmp_navigation_default_points_at_the_dashboard(self):
+        # Ruling 18: same rewrite as the one-entity case, but the build's
+        # real first screen here is the dashboard, not any entity's list
+        # screen.
+        nav = (self.out / "Components" / "cmp_Navigation.pa.yaml").read_text(encoding="utf-8")
+        self.assertIn("Screen: DashboardScreen", nav)
+        self.assertNotIn("Screen: ListScreen", nav)
 
 
 def _yaml_load(text):
