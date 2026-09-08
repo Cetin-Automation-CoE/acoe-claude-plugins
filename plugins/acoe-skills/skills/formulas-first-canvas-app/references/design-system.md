@@ -62,7 +62,7 @@ a stated business requirement. It is to **split fill from text**:
 | Fills and dots | `constSemaforColors.*` | — | keeps the literal traffic-light hues |
 
 Dots, chips and fills keep the vivid colours. Text takes the dark variants. Route it
-through one function — `funcStatusColor(status)`, `funcMoneyTextColor(value)` — so a
+through one function — `funcStatusTextColor(status)`, `funcMoneyTextColor(value)` — so a
 future palette change is one edit, not a sweep.
 
 ## Semantic overload of red
@@ -107,8 +107,10 @@ For any app whose audience reads figures all day:
 - **Right-align money and quantities**, in cells *and* headers. Left-aligned currency in
   a grid is the single worst typographic error in a business app — it destroys the
   vertical scan that makes a column of numbers comparable at a glance.
-- The `NumberInput` token carries `Align.End`. Grid cells are labels, not inputs, so
-  they do not inherit it. Set it explicitly.
+- The `NumberInput` token carries two fields, because one cannot serve both dialects:
+  `AlignModern` (`'TextCanvas.Align'.End`, for `ModernText`/`ModernTextInput`) and
+  `AlignLegacy` (`Align.Right`, for the previous-generation `Button`). Grid cells are
+  labels, not inputs, so they do not inherit it. Set it explicitly.
 - Format with an explicit locale: `Text(v, "[$-en-US]#,##0")`. Locale-default formats
   render decimals inconsistently.
 - Power Fx treats `%` in a format string as a **literal** — no ×100. Multiply
@@ -121,7 +123,11 @@ Canvas apps are usually fixed-frame, so responsive rules do not apply, but these
 - **`AccessibleLabel` on every icon-only button.** This is normally the largest single
   finding count in the app checker, and it is mechanical to fix — a sweep can take a
   finding count from the hundreds to single digits in one pass.
-- **`TabIndex`** deliberate on interactive controls; `-1` on decorative ones.
+- **Do NOT set `TabIndex`** on `ModernTextInput`, `ModernCombobox`, `ModernDatePicker`,
+  or `Button` — a live `compile_canvas` run (2026-09-07) rejected it on all four with
+  "Unknown property 'TabIndex'" (see `references/control-contracts.yaml`'s provenance
+  comment and `references/compile-error-playbook.md`). Tab order is document order;
+  there is no substitute property.
 - **Never colour alone** for state. Pair the dot with a word.
 - Re-run `get_appchecker_errors` after the sweep — it uses a laxer engine than compile
   and is the only place these findings surface.

@@ -14,7 +14,8 @@
 # navigation from a list, so they carry Group = "" and stay out of the menu.
 #
 # Requires: constScreens, enumScreenType, constPrimaryColor, constPaperColor,
-#           constReactGray, constStyle, constTransparent, constBackdropColor
+#           constReactGray, constStyle, constTransparent, constBackdropColor,
+#           constBorderRadius
 ComponentDefinitions:
   cmp_Navigation:
     DefinitionType: CanvasComponent
@@ -37,7 +38,7 @@ ComponentDefinitions:
         DisplayName: OnBack
         Description: Raised by the back button — normally funcGoBack()
         ReturnType: None
-        Default: =
+        Default: =false
       OnClose:
         PropertyKind: Event
         DisplayName: OnClose
@@ -49,7 +50,44 @@ ComponentDefinitions:
         DisplayName: Screens
         Description: The routing registry. Defaults to the app-wide constScreens.
         DataType: Table
-        Default: =constScreens
+        # CORRECTED 2026-09-07 (fifth run): this used to default to the bare
+        # reference `=constScreens`, on the strength of a fourth-run claim
+        # that shape was "proven live". A cold coauthoring session (the only
+        # kind this skill's compile-error playbook says can be trusted — see
+        # its top note) disproved that claim: retested on its own, with no
+        # `cmp_FilterButton` blank default left in the same push to blame,
+        #   Default: =constScreens                                    -> 2 errors
+        #     ("The table passed in has none of the expected columns" on
+        #     EVERY cmp_*_Navigation instance — the same shape the third run
+        #     saw; the fourth run's "that was only ever a cascade from an
+        #     unrelated component" theory does not hold as a general claim)
+        #   Default: =Table({...}) with no Screen column at all       -> 10 errors
+        #   Default: =Table({Screen: <a real screen>, DisplayName: "",
+        #             Icon: "", Entity: "", Type: "", Group: "",
+        #             BackLabel: ""})                                  -> 0 errors
+        # Full trail: references/compile-error-playbook.md.
+        #
+        # Do NOT "fix" this to a literal `Table(...)` default containing
+        # `App.ActiveScreen` — that CRASHES the validator outright
+        # ("Validation FAILED with no diagnostics"). A component
+        # custom-property `Default` is evaluated in isolated component
+        # scope; `App.ActiveScreen` (or any app-scope reference) inside it
+        # is not merely a type error, it is the specific shape that takes
+        # down the validator with no attributable diagnostic.
+        #
+        # The literal below names ListScreen — the legacy `--name`
+        # template's own screen, real and defined in that build, so this
+        # shipped default is correct for it unchanged. A --model build's
+        # generator (scripts/new_app.py, Ruling 18) rewrites the Screen
+        # column's value on the COPY it writes to that build's own real
+        # first screen (DashboardScreen when the model has one, else the
+        # first entity's list screen) — via `_replace_once`, which requires
+        # this exact line to appear exactly once below, so never duplicate
+        # its literal shape elsewhere in this file — never ship a
+        # model-driven app with a component default that references a
+        # screen it does not define.
+        Default: |-
+          =Table({Screen: ListScreen, DisplayName: "", Icon: "", Entity: "", Type: "", Group: "", BackLabel: ""})
     Properties:
       Fill: =If(cmp_Navigation.Navigation, constBackdropColor.RGBA, constTransparent.RGBA)
       Width: =If(cmp_Navigation.Navigation, 250, 60)
@@ -100,7 +138,6 @@ ComponentDefinitions:
                         IconStyle: ='ButtonCanvas.IconStyle'.Filled
                         Layout: ='ButtonCanvas.Layout'.IconOnly
                         OnSelect: =cmp_Navigation.OnBack()
-                        TabIndex: =0
                         Text: ="Back"
                         Width: =32
                   - lbl_Navigation_Back:
@@ -120,11 +157,16 @@ ComponentDefinitions:
                   BorderColor: =constTransparent.RGBA
                   BorderStyle: =BorderStyle.None
                   DelayItemLoading: =false
+                  # Leaf control inside an AutoLayout container: without this it
+                  # defaults to FillPortions 0 and collapses to the ~200px control
+                  # default (the guard's I1 finding — same defect class as
+                  # gal_List_Items, just not visible until the parser could see
+                  # past this control's Variant: line).
+                  FillPortions: =1
                   # The registry drives the menu. No Switch, no per-screen edit.
                   Items: =Filter(cmp_Navigation.Screens, Type = enumScreenType.List)
                   LayoutMinWidth: =Parent.Width
                   LoadingSpinner: =LoadingSpinner.None
-                  TabIndex: =0
                   TemplatePadding: =0
                   TemplateSize: =50
                 Children:
@@ -151,18 +193,18 @@ ComponentDefinitions:
                             Properties:
                               AccessibleLabel: =ThisItem.DisplayName
                               Align: =Align.Center
-                              # Active state compares the registry's LogicalName
-                              # to the live screen — no global to keep in sync.
+                              # Active state compares the registry's Screen to the
+                              # live screen — no global to keep in sync.
                               Appearance: |-
                                 =If(
-                                    ThisItem.LogicalName = App.ActiveScreen.Name,
+                                    ThisItem.Screen.Name = App.ActiveScreen.Name,
                                     'ButtonCanvas.Appearance'.Primary,
                                     'ButtonCanvas.Appearance'.Outline
                                 )
                               BorderRadius: =constBorderRadius
                               FontColor: |-
                                 =If(
-                                    ThisItem.LogicalName = App.ActiveScreen.Name,
+                                    ThisItem.Screen.Name = App.ActiveScreen.Name,
                                     constPaperColor.RGBA,
                                     constPrimaryColor.RGBA
                                 )
@@ -173,7 +215,6 @@ ComponentDefinitions:
                               OnSelect: |-
                                 =cmp_Navigation.OnClose();
                                 Navigate(ThisItem.Screen)
-                              TabIndex: =0
                               Text: =ThisItem.DisplayName
                               Width: =32
                         - lbl_Navigation_DisplayName:
@@ -182,7 +223,7 @@ ComponentDefinitions:
                               AccessibleLabel: =Self.Text
                               Color: |-
                                 =If(
-                                    ThisItem.LogicalName = App.ActiveScreen.Name,
+                                    ThisItem.Screen.Name = App.ActiveScreen.Name,
                                     constPrimaryColor.RGBA,
                                     constStyle.BasicStyle.FontColor
                                 )
@@ -191,6 +232,13 @@ ComponentDefinitions:
                               Height: =Parent.Height
                               LayoutMinWidth: =96
                               Size: =constStyle.BasicStyle.FontSize.Small
-                              Text: =ThisItem.DisplayName
-                              Visible: =cmp_Navigation.Navigation
+                              # Blank the text rather than toggle Visible:
+                              # this is a FLEXIBLE (FillPortions: =1) child —
+                              # Power Apps drops an invisible child from
+                              # auto-layout entirely, which collapses the gap
+                              # it held instead of just hiding its content
+                              # (check_layout.py's Rule 4). btn_Navigation's
+                              # own AccessibleLabel already carries the name
+                              # when collapsed, so blanking here loses nothing.
+                              Text: =If(cmp_Navigation.Navigation, ThisItem.DisplayName, "")
                               Width: =96

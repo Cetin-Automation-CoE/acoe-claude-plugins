@@ -95,7 +95,7 @@ ComponentDefinitions:
         DisplayName: OnAdd
         Description: Raised by the create action
         ReturnType: None
-        Default: =
+        Default: =false
       OnChangeStatus:
         PropertyKind: Event
         DisplayName: OnChangeStatus
@@ -125,19 +125,19 @@ ComponentDefinitions:
         DisplayName: OnEdit
         Description: Raised by the edit action
         ReturnType: None
-        Default: =
+        Default: =false
       OnRemoveFilter:
         PropertyKind: Event
         DisplayName: OnRemoveFilter
         Description: Raised by clear-filters
         ReturnType: None
-        Default: =
+        Default: =false
       OnShare:
         PropertyKind: Event
         DisplayName: OnShare
         Description: Raised by the share action
         ReturnType: None
-        Default: =
+        Default: =false
       ShowCommandBar:
         PropertyKind: Input
         DisplayName: ShowCommandBar
@@ -181,7 +181,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_CommandBar.OnRemoveFilter()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_CommandBar.CanRemoveFilters
                   Width: =cmp_CommandBar.Size
@@ -195,7 +194,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_CommandBar.OnChangeStatus()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_CommandBar.CanChangeStatus
                   Width: =cmp_CommandBar.Size
@@ -209,7 +207,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_CommandBar.OnShare()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_CommandBar.CanShare
                   Width: =cmp_CommandBar.Size
@@ -223,7 +220,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_CommandBar.OnAdd()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_CommandBar.CanAdd
                   Width: =cmp_CommandBar.Size
@@ -237,7 +233,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_CommandBar.OnEdit()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_CommandBar.CanEdit
                   Width: =cmp_CommandBar.Size
@@ -253,7 +248,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_CommandBar.OnDelete()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_CommandBar.CanDelete
                   Width: =cmp_CommandBar.Size
@@ -267,7 +261,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_CommandBar.OnConfirm()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_CommandBar.CanConfirm
                   Width: =cmp_CommandBar.Size
@@ -282,7 +275,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_CommandBar.OnCustom()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_CommandBar.CanCustom
                   Width: =cmp_CommandBar.Size

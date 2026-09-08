@@ -1,0 +1,44 @@
+# model.yaml is the app's SPEC — commit it beside the generated source tree.
+#
+# The agent writes this file (from what the user pasted, or inferred from a
+# domain sentence); scripts/model.py validates it and derives every name the
+# emitters use, so no two emitters can ever disagree about what a collection,
+# a function or a screen is called. Edit this file and re-run the generator —
+# never hand-edit a generated identifier, it is derived from here.
+#
+# This is the full worked example from the spec's "Model schema" section,
+# with two entities (Asset, Site) so the multi-entity shape is documented by
+# example. A single-table app is the same schema with one entry under
+# `entities:`.
+
+app_name: Site Equipment Register
+brand: "#300091"
+frame: headermainfooter          # headermain | headermainfooter | headerrailmain
+dashboard: true                  # defaults on anyway with two entities; explicit here for documentation
+entities:
+  - entity: Asset
+    plural: Assets
+    icon: AppsListDetail
+    group: Operations            # nav grouping in constScreens
+    key: composite               # composite = "<prefix>|<id>", or: single
+    fields:
+      - {name: Tag,         type: text,   required: true, grid: 100,  label: TAG, samples: [EQ-10041, EQ-10042]}
+      - {name: Title,       type: text,   required: true, grid: flex, label: EQUIPMENT, search: true, role: title}
+      - {name: Category,    type: choice, required: true, grid: 130,  filter: true, vocab: [Antenna, Radio Unit, Router]}
+      - {name: Status,      type: choice, required: true, grid: 120,  filter: true, vocab: [In Service, Faulty], role: status}
+      - {name: Health,      type: choice, grid: 118, filter: chips, vocab: [green, amber, red], semantics: semafor}
+      - {name: Amount,      type: number, grid: 118, money: true, currency: EUR, min: 0}
+      - {name: ServiceDate, type: date,   grid: 112, semantics: due, warn_days: 45}
+      - {name: Owner,       type: text,   search: true, grid: hidden}
+  - entity: Site
+    plural: Sites
+    icon: MapPin
+    group: Operations
+    key: single                  # single = the row's own id column, no prefix
+    fields:
+      - {name: Name,     type: text,     required: true, grid: flex, label: SITE, search: true, samples: [Prague Central, Brno North, Ostrava Depot]}
+      - {name: Region,   type: choice,   required: true, grid: 130,  filter: true, vocab: [North, South, East, West]}
+      - {name: Status,   type: choice,   required: true, grid: 120,  filter: true, vocab: [Active, Decommissioned], role: status}
+      - {name: Capacity, type: number,   grid: 110, min: 0}
+      - {name: OpenedOn, type: date,     grid: 112}
+      - {name: Notes,    type: longtext, grid: hidden}

@@ -35,6 +35,16 @@ DEF_PATTERNS = [
     re.compile(r"^\s*(func[A-Z][A-Za-z0-9_]*)\s*\(", re.M),
 ]
 SET_PATTERN = re.compile(r"\bSet\(\s*(gl[A-Z][A-Za-z0-9_]*)\s*,")
+# A Void-returning UDF is only valid as a BEHAVIOR UDF, which requires the
+# body to be wrapped in { }. `funcX(): Void = Set(...)` (no braces) compiles
+# on the compile service's tolerant path but is rejected by the strict
+# engine with "Void return type is only supported with behavior
+# user-defined functions." — confirmed LIVE 2026-09-07 (second run), where
+# it was the root cause of 16 of 34 errors. Captures the function name and
+# the first non-whitespace character of the body so callers can tell a
+# brace body (matches "{") from a bare expression body (anything else).
+VOID_UDF_PATTERN = re.compile(
+    r"(func[A-Z][A-Za-z0-9_]*)\s*\([^)]*\)\s*:\s*Void\s*=\s*(\S)")
 # Component definitions and the screens that instantiate them.
 CMPDEF_PATTERN = re.compile(r"^\s{2}(cmp_[A-Za-z0-9_]+)\s*:\s*$", re.M)
 CMPUSE_PATTERN = re.compile(r"^\s*ComponentName:\s*(cmp_[A-Za-z0-9_]+)\s*$", re.M)
@@ -50,6 +60,18 @@ def strip_comments(text: str) -> str:
     # YAML comments too: a '#' opening a line. Not mid-line, which would eat
     # hex colour literals like "#300091".
     return re.sub(r"^\s*#.*$", "", text, flags=re.M)
+
+
+def find_braceless_void_udfs(block: str):
+    """Names of `func*(): Void = ...` declarations whose body is a bare
+    expression instead of a `{ ... }` block. A Void UDF is only valid as a
+    behavior UDF, and behavior UDFs require the brace form — a bare body is
+    rejected by the strict engine with 'Void return type is only supported
+    with behavior user-defined functions.' (LIVE 2026-09-07, second run:
+    the root cause of 16 of 34 errors, from exactly two hand-authored UDFs
+    that had sat broken in templates/App.pa.yaml since Phase 1)."""
+    return [m.group(1) for m in VOID_UDF_PATTERN.finditer(block)
+            if m.group(2) != "{"]
 
 
 def formulas_block(app_text: str) -> str:
@@ -159,6 +181,21 @@ def main():
         print(f"\n  Defined here: {', '.join(sorted(defined_cmps)) or '(none)'}\n"
               f"  Copy the missing component .pa.yaml into Src/Components/.")
 
+    # --- Void UDFs must be behavior UDFs (brace body) -------------------------
+    braceless_void = find_braceless_void_udfs(block)
+    if braceless_void:
+        fail = True
+        print(f"\nFAIL: {len(braceless_void)} Void UDF(s) declared without a brace body\n")
+        for name in braceless_void:
+            print(f"  {name}(): Void = ...   (missing the '{{ }}' body)")
+        print("\n  A Void-returning UDF is only valid as a BEHAVIOR UDF, and behavior\n"
+              "  UDFs require the body to be wrapped in { ... } even for a single\n"
+              "  statement. A bare-expression body is rejected outright ('Void return\n"
+              "  type is only supported with behavior user-defined functions.'), and\n"
+              "  the failed declaration then makes every CALL SITE report the function\n"
+              "  as unknown — go fix the declaration, not the calls.\n"
+              "  Fix: funcX(): Void = { <statement>; };")
+
     # --- forward references inside App.Formulas ------------------------------
     if not args.no_order_check:
         pos = {n: p for n, p in order}
@@ -192,6 +229,8 @@ def main():
 
     print(f"PASS: every const/enum/func/gl reference resolves, and App.Formulas "
           f"declares in dependency order ({len(files)} files, {len(defined)} names)")
+    print("  Not covered: whether a resolved name has the right TYPE or arity; "
+          "control property names (see check_control_props.py); runtime nulls.")
 
 
 if __name__ == "__main__":

@@ -64,6 +64,18 @@ Screens:
                   Navigation: =locNavigation
                   OnClose: |-
                     =UpdateContext({locNavigation: false})
+                  # C1 (final review, CRITICAL): the component's own Screens
+                  # Default is only a one-row typed seed (proven live) — its
+                  # menu gallery reads Filter(cmp_Navigation.Screens, Type =
+                  # enumScreenType.List), so without this override the rail
+                  # renders empty and constScreens is never read.
+                  Screens: =constScreens
+                  # Fixed child of a Horizontal auto-layout container: the
+                  # main axis (Width) must be explicit, matching whichever
+                  # branch cmp_Navigation's own root Width formula picks —
+                  # an un-restated Width here is what let the rail flex to
+                  # half the screen (check_layout.py's Rule 1).
+                  Width: =If(locNavigation, 250, 60)
 
             - con_List_Body:
                 Control: GroupContainer
@@ -100,8 +112,7 @@ Screens:
                               Appearance: =constStyle.Label.TextInput.Appearance
                               FillPortions: =0
                               Height: =constStyle.Label.TextInput.Height.SingleLine
-                              HintText: ="Search"
-                              TabIndex: =0
+                              Placeholder: ="Search"
                               Width: =280
                         - com_List_StatusFilter:
                             Control: ModernCombobox
@@ -109,11 +120,10 @@ Screens:
                               AccessibleLabel: ="Filter by status"
                               FillPortions: =0
                               Height: =constStyle.Combobox.Height.Medium
+                              ItemDisplayText: =ThisItem.Value
                               # The vocabulary, not a re-typed list of strings.
                               Items: =constStatusChoices
                               SelectMultiple: =true
-                              TabIndex: =0
-                              Value: ="Value"
                               Width: =200
                         # Each verb is gated on the SAME expression that guards
                         # the function behind it. A hidden button is not a
@@ -174,7 +184,7 @@ Screens:
                             Properties:
                               # Money headers align with money cells, or the
                               # column stops being scannable.
-                              Align: =Align.Right
+                              Align: ="Right"
                               DataType: ="number"
                               Field: ="Amount"
                               Height: =constStyle.List.HeaderHeight
@@ -191,6 +201,10 @@ Screens:
                       Properties:
                         AccessibleLabel: ="Items table"
                         BorderColor: =constTransparent.RGBA
+                        # Gallery is a leaf control: inside an auto-layout container it
+                        # defaults to FillPortions 0 and collapses to the ~200px control
+                        # default. This line is what makes the grid fill the screen.
+                        FillPortions: =1
                         # Items reads the SCOPE formula, not the raw collection.
                         # Gallery, counter and filter chips must share one base
                         # or they drift apart.
@@ -230,7 +244,7 @@ Screens:
                               - lbl_Row_Title:
                                   Control: ModernText
                                   Properties:
-                                    FontColor: =constStyle.BasicStyle.FontColor
+                                    Color: =constStyle.BasicStyle.FontColor
                                     Size: =constStyle.BasicStyle.FontSize.Medium
                                     Text: =funcEllipsis(ThisItem.Title, 48)
                                     Width: =360
@@ -240,15 +254,15 @@ Screens:
                                     # One function owns status colour. Never a
                                     # Switch inline on a screen — that is the
                                     # same decision authored in N places.
-                                    FontColor: =funcStatusTextColor(ThisItem.Status)
+                                    Color: =funcStatusTextColor(ThisItem.Status)
                                     Size: =constStyle.BasicStyle.FontSize.Small
                                     Text: =ThisItem.Status
                                     Width: =140
                               - lbl_Row_Amount:
                                   Control: ModernText
                                   Properties:
-                                    Align: =constStyle.Label.NumberInput.Align
-                                    FontColor: =funcMoneyTextColor(ThisItem.Amount)
+                                    Align: =constStyle.Label.NumberInput.AlignModern
+                                    Color: =funcMoneyTextColor(ThisItem.Amount)
                                     Size: =constStyle.BasicStyle.FontSize.Medium
                                     Text: =funcAsCurrency(ThisItem.Amount)
                                     Width: =160
@@ -264,7 +278,6 @@ Screens:
                                       =Set(glSelectedKey, ThisItem.Key);
                                       funcAddBack();
                                       Navigate(FormScreen)
-                                    TabIndex: =0
                                     Text: ="Open"
 
                   # ---- empty state: same base as the gallery ----------------

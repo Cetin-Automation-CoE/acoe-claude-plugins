@@ -1,6 +1,6 @@
 ---
 name: formulas-first-canvas-app
-description: Use when building, editing, reviewing or refactoring a Power Apps Canvas App — .pa.yaml source, App.Formulas, Power Fx named formulas, user-defined functions, canvas components, msapp unpack — or when a canvas app has duplicated colour literals, magic numbers, data source names on screens, copy-pasted screen logic, Switch arms that keep growing, or a UI that drifted from its design tokens.
+description: Use when building, editing, reviewing or refactoring a Power Apps Canvas App — including generating a brand-new multi-screen app from a user-supplied or inferred data model — .pa.yaml source, App.Formulas, Power Fx named formulas, user-defined functions, canvas components, msapp unpack — or when a canvas app has duplicated colour literals, magic numbers, data source names on screens, copy-pasted screen logic, Switch arms that keep growing, or a UI that drifted from its design tokens.
 ---
 
 # Formulas-First Canvas Apps
@@ -19,36 +19,161 @@ catches duplication; the only thing standing between an app and 10,000 lines of
 copy-paste is the discipline of putting every value and every behaviour in exactly one
 place. Apps that skip it become unmaintainable at roughly the third screen.
 
-## Two entry paths
+## Entry paths
 
 | Situation | Path |
 |---|---|
-| **New app** | `python3 scripts/new_app.py --name "…" --entity … --out ./Src` — see below. |
+| **New app** | Ask for the data model first (below), then `python3 scripts/new_app.py --model model.yaml --out ./Src`. |
+| New app, no model at all after asking | `python3 scripts/new_app.py --name "…" --out ./Src` — generic one-entity pattern, see below. |
 | New screen in a conforming app | Copy a screen out of `templates/`; it already consumes the components. |
 | Existing app that does not follow this | **`references/refactoring-legacy-apps.md`.** Rungs 1–2 are read-only and end in a human sign-off gate. Do not edit first. |
 | Unsure which | Run `scripts/inventory.py` over the source. Its literal counts answer it in ten seconds. |
 
-## Starting a new app
+## Starting a new app: ask for the data model first
 
-```bash
-python3 scripts/new_app.py --name "Vendor Register" --entity Vendor \
-        --brand "#0F6CBD" --out ./Src
+This is a required sequence, not background reading. For any "build me a new
+canvas app" request, run all six steps in order before touching a screen file.
+
+```
+1. ASK  — "Do you have a data model? Paste it in any form — a table, a
+           SharePoint list, a Dataverse table, CSV headers, or just field
+           names. If not, say so and I'll draft one."
+2a. PROVIDED → normalise whatever arrived into model.yaml. Infer archetypes
+               (text, longtext, choice, number, date, boolean) from the
+               source's types; infer a vocab list from any choice column.
+2b. ABSENT   → infer 8-12 fields per table from the domain sentence, with
+               plausible vocab lists and 3-5 realistic samples per text field.
+3. CONFIRM — one message, one round trip. Show the field table, then ask only
+   the questions the sentence did not already answer:
+     • Which field identifies a record?        → role: title on that field
+     • Which status matters most?              → role: status (drives dashboard
+                                                  pipeline, semafor colour, default sort)
+     • Is there a deadline date?               → semantics: due on that field
+     • Do you want a dashboard? (default: yes when there is more than one table)
+                                               → dashboard:
+   Accept "just go". Do not ask a question whose answer is already in the model.
+4. WRITE   — model.yaml beside the source tree (see
+             `templates/model.example.yaml` for the schema). It is the app's
+             spec — commit it alongside the generated tree.
+5. GENERATE— python3 scripts/new_app.py --model model.yaml --out ./Src
+6. VERIFY  — the script runs every guard on what it just wrote and exits
+             non-zero on failure. It does not by itself prove the app
+             compiles — see "The verification loop" below.
 ```
 
-Writes a complete tree: `App.pa.yaml` with the design tokens **inlined at the
-top** (so they cannot land below their first use), both screens already wired to
-the components, `Components/`, and `_EditorState.pa.yaml`. It renames the sample
-entity throughout, then runs every guard against what it just wrote and exits
-non-zero rather than leaving a broken tree behind.
+**What `role:`, `dashboard:` and `description:` drive.** `role: title` on a
+field marks the record's identifying label — default when absent: the first
+`text`/`longtext` field, else the first field. `role: status` on a `choice`
+field marks the primary status: it drives the dashboard's pipeline chips and
+status tiles, the semafor colour, and the default sort — left unset, the
+generator silently guesses the first `choice` field with a truthy `filter:`
+(`true` or `chips`).
+`templates/model.example.yaml`'s `Site` entity needs the explicit key for
+exactly this reason: `Region` is also a filterable choice and is listed
+first, so without `role: status` on `Status` the generator would treat
+Region as Site's status. `dashboard:` defaults to `true` once the model has
+more than one entity, `false` for one. `description:` is the KPI band's
+caption text; left blank, it falls back to `"<N> registers · live counts"`
+(N = the model's entity count).
+
+**The dashboard is gated by `dashboard:` and mirrors the baseline.** On, the
+generator writes `DashboardScreen.pa.yaml`, points `StartScreen` at it, and
+gives it the nav rail's first entry. It mirrors four of the baseline's five
+Dashboard regions — KPI band (only when an entity has both a `money: true`
+field and a status field), pipeline chips, navigation tiles, trademark —
+never the baseline's domain-specific "Gates" region, which stays ungenerated.
+The baseline is the Regional Procurement Plan app
+(`acoe-3688-regional-procurement-plan`, source under
+`canvasapps/acoe_regionalprocurementplan_76cad/acoe_regionalprocurementplan_76cad_DocumentUri/Src/`)
+— the visual and structural target for every port in this skill. The older
+`powerapps-work/canvas-src` copy is STALE.
+
+**Division of labour — neither side does the other's job.** The agent supplies
+domain judgement: which fields belong on this entity, which vocabulary values
+are plausible, which sample strings read as real data instead of `Item 1`,
+`Item 2`. The script supplies correctness: guard-clean YAML, full vocabulary
+coverage for every choice field, dates generated relative to *today* rather
+than a hard-coded year, and formulas emitted in dependency order so the studio
+binder never sees a forward reference. If the agent starts hand-writing
+`col*`/`func*` declarations instead of fields in `model.yaml`, or the script
+starts inventing field names no domain sentence implied, that is the division
+breaking down.
+
+**There is deliberately no `--domain` flag on `new_app.py`.** An earlier
+plan named one; step 2b above supersedes it by design, not by omission.
+Turning a domain sentence into fields, archetypes and plausible vocab is
+agent judgement — exactly what step 2b already does — not script work a CLI
+flag could do better. Writing that judgement into `model.yaml` and calling
+`--model` on it does everything a `--domain` flag would have, without
+teaching the script to guess at domain semantics it has no way to get right.
+
+A model with **N** entities under `entities:` produces **N** list screens and
+**N** form screens, one navigation registry row per entity, and one
+`col*`/`funcLoad*`/`funcSave*`/`funcDelete*` set per entity — all in the single
+`new_app.py --model` run.
+
+**Generated identifiers are entity-derived; the skill's own templates and the
+`--name`-only path stay generic.** A `--model` build with an `Asset` entity
+writes `colAssets`, `funcSaveAsset`, `AssetsListScreen.pa.yaml`,
+`AssetFormScreen.pa.yaml`. `templates/`, `components/`, and the legacy
+`--name`-only scaffold below keep `colItems` / `funcSaveItem` / `locItem` on
+purpose — they are the pattern to read and copy, not a finished domain app.
 
 `--components none` scaffolds the formula layer alone, for when you will write
 your own screens.
 
 **There is no local path to an importable `.msapp`.** `pac canvas pack` is
 deprecated and crashes on real apps; `pac canvas validate` reports every file of
-a *working published* app as invalid. So: create a blank tablet app in studio,
-`connect`, then `compile_canvas` to push the tree — which is also its first real
-compile. The command prints these steps with your paths filled in.
+a *working published* app as invalid. So: create a blank tablet app in studio
+**and open it there with coauthoring enabled**, `connect`, then `compile_canvas`
+to push the tree — which is also its first real compile. The command prints
+these steps with your paths filled in.
+
+**A `compile_canvas` push with no active coauthoring session proves nothing —
+do not treat its result as validation, pass or fail.** This is a precondition
+of the whole loop, not a footnote: on 2026-09-07 the identical generated tree
+was pushed twice, once with no active session (reported 0 errors, and carried
+the warning "No active coauthoring canvas designer session detected.
+Validation results may be inaccurate.") and immediately after with a live
+session open in Power Apps Studio (reported 7 errors, all real). Before
+believing any `compile_canvas` result — especially a clean one — confirm the
+app is open in Studio with coauthoring active. See the note at the top of
+`references/compile-error-playbook.md` for the full evidence.
+
+**A clean push does not mean the maker can see it yet.** `compile_canvas`
+lands in the live coauthoring session, not the saved app — the maker must
+**Save (Ctrl+S) in Studio before any refresh or Play**; a refresh without
+Save shows a blank/grey app, not the pushed content. `sync_canvas` returning
+files back is not evidence the app is visible either — it confirms the
+session has them, nothing about what Studio has rendered or saved. Only a
+Play-mode screenshot or a confirmed Save counts as evidence.
+
+**The six local guards (below) prove the emitted YAML is structurally sound,
+contract-clean and internally consistent — they do not prove Power Apps
+accepts it.** Three live `compile_canvas` runs against this generator's own
+output (all with an active session) have each found real defects the guards
+could not see; treat every push as a debugging session and expect to consult
+`references/compile-error-playbook.md`.
+
+## The generic pattern (no model, `--name` only)
+
+```bash
+python3 scripts/new_app.py --name "Vendor Register" --brand "#0F6CBD" --out ./Src
+```
+
+Writes a complete one-entity tree: `App.pa.yaml` with the design tokens **inlined
+at the top** (so they cannot land below their first use), both screens already
+wired to the components, `Components/`, and `_EditorState.pa.yaml`. It then runs
+every guard against what it just wrote and exits non-zero rather than leaving a
+broken tree behind.
+
+**Identifiers stay generic** — `colItems`, `funcLoadItems`, `funcSaveItem`, `locItem`,
+`gal_List_Items`, `enumEntity.Items`. Only the header title takes the app name. The
+scaffold is the pattern you copy once per entity; a second entity is a second
+`col*` / `funcLoad*` / `funcSave*` / `funcDelete*` set, a registry row and a copy of
+the two screens, named for that entity in its own commit. Prefer `--model` over
+copying this by hand whenever the app has more than one entity — that copying
+is exactly what the model-driven path automates.
 
 ## The six rules
 
@@ -64,8 +189,9 @@ by hand: `references/component-library.md`.
 No `RGBA(...)`, no `#hex`, no font sizes, no padding numbers, no list or table names.
 Screens read `constStyle.*` / `const*Color` and call `func*`. A screen that names a
 data source has welded the app to that backend; changing backends then means editing
-every screen instead of one region. `scripts/check_tokens.py` and
-`scripts/check_data_layer.py` enforce both.
+every screen instead of one region. `scripts/check_tokens.py` enforces colours, font
+sizes and radii; `scripts/check_data_layer.py` enforces data-source names. Spacing
+literals are only *reported*, by `scripts/inventory.py`.
 
 **3. Named formula vs UDF is decided by type limits, not taste.** See the table below.
 
@@ -129,7 +255,19 @@ with section banners: `references/app-formulas-layout.md`.
 
 ## Guard scripts
 
-Copy `scripts/` into the target repo and run all five alongside every compile.
+| Script | Checks |
+|---|---|
+| `check_tokens.py` | No colour, font-size or radius literal on a screen — everything routes through `constStyle` / `const*Color`. |
+| `check_data_layer.py` | No data-source name outside the data-access region. |
+| `check_collection_columns.py` | Every column a gallery or form reads off a collection actually exists on it. |
+| `check_references.py` | Every name resolves, and `App.Formulas` declaration order is safe for the Studio binder. |
+| `check_control_props.py` | Control properties match `references/control-contracts.yaml` — property names, renamed-away names, and enum namespaces, resolved through design tokens and component declarations. |
+| `check_layout.py` | Auto-layout sizing that actually renders: every fixed (`FillPortions: =0`) child of an auto-layout container carries an explicit main-axis size, every auto-layout container itself resolves a size, and a leaf control is never left with no sizing at all. |
+
+Copy `scripts/` into the target repo and run all seven alongside every compile: the
+six `check_*.py` guards plus `inventory.py`. All seven are standalone; `new_app.py`
+reads `templates/` and `components/` relative to itself, so run it from the skill
+tree.
 
 ```bash
 python3 scripts/inventory.py           --src <Src/>   # read-only census (rung 1)
@@ -137,9 +275,12 @@ python3 scripts/check_tokens.py        --src <Src/>   # no literals outside the 
 python3 scripts/check_data_layer.py    --src <Src/> --datasource-pattern 'PP_[A-Za-z]'
 python3 scripts/check_collection_columns.py --src <Src/>
 python3 scripts/check_references.py    --src <Src/>   # names resolve; declaration order is safe
+python3 scripts/check_control_props.py --src <Src/> --tokens-file <Src/>/App.pa.yaml
+python3 scripts/check_layout.py        --src <Src/>   # auto-layout sizing that actually renders
 ```
 
-`new_app.py` runs all four on its own output, so a fresh scaffold starts clean.
+`new_app.py` runs all six `check_*.py` guards on its own output, so a fresh
+scaffold starts clean.
 
 Each takes `--help`. `check_*` exit non-zero on violation, so they drop straight into
 CI or a pre-commit hook.
@@ -147,7 +288,60 @@ CI or a pre-commit hook.
 **Write the guard before the sweep it protects.** A convention with no script rots back
 within two sprints, and the second time it rots nobody notices.
 
+## The verification loop
+
+There is no offline compile. Local guards are the only pre-push signal, so run them
+all, then close the loop against a live session:
+
+    ask → draft model → generate → local guards → push (compile_canvas) → get_appchecker_errors
+                                         ↑                    ↓                      ↓
+                                         └──── fix ──── parse errors        lint/perf findings
+
+The six `check_*.py` guards catch architecture, tokens, data layer, collection
+columns, control contracts and auto-layout sizing. Each prints what it does NOT
+cover. **They prove the YAML is structurally sound and contract-clean — they do
+not prove the app compiles.** Everything else needs `compile_canvas` against a live coauthoring
+session; there is no substitute, because `pac canvas pack` is deprecated and
+crashes and `pac canvas validate` rejects every file of a working published app.
+
+**A clean `compile_canvas` is not the end of the loop.** Once the app compiles
+with zero errors, run `get_appchecker_errors` against the same live app — a
+third, separate stage that lints for unused variables, accessibility gaps and
+performance issues on an app that already type-checks. `compile_canvas` proving
+the formulas are valid says nothing about whether the app-checker pass is also
+clean; treat both as required before calling a live app finished. See
+`references/compile-error-playbook.md`'s "verification loop has three stages"
+section for a worked example (`App.glScopeFilter`, `locConfirmDelete`).
+
+**"Push (compile_canvas)" in that loop means an app open in Power Apps
+Studio with coauthoring enabled — not just a `connect()` that succeeds.** A
+`compile_canvas` run with no active coauthoring session comes back marked
+"Validation results may be inaccurate," and that warning is not decorative:
+the identical tree pushed sessionless reported 0 errors and, moments later
+with a live session, reported 7 (`references/compile-error-playbook.md`, top
+section, 2026-09-07). Treat a sessionless clean result as **no signal at
+all** — not as "probably fine," not as grounds to commit or to tell the user
+the app compiles. Confirm the session is live before trusting either a pass
+or a fail out of this loop.
+
+**A clean push does not mean the maker can see it yet.** `compile_canvas`
+lands in the live coauthoring session, not the saved app — the maker must
+**Save (Ctrl+S) in Studio before any refresh or Play**; a refresh without
+Save shows a blank/grey app, not the pushed content. `sync_canvas` returning
+files back is not evidence the app is visible either — it confirms the
+session has them, nothing about what Studio has rendered or saved. Only a
+Play-mode screenshot or a confirmed Save counts as evidence.
+
+When `compile_canvas` (or `get_appchecker_errors`) returns a parse error, look it
+up in `references/compile-error-playbook.md` before improvising a fix — it is
+keyed by the error text and maps straight to a cause and a remedy, which is what
+lets this loop run unattended instead of guessing fresh each time.
+
 ## Traps that cost real days
+
+These are the causes. `references/compile-error-playbook.md` is keyed the other
+way round — by the error text `compile_canvas` actually prints — for when you
+are staring at a failed push and need the fastest path back to one of these.
 
 - **A missing token reference takes the whole app down, not one control.** An
   unresolved name in `App.Formulas` drops the entire `Formulas` blob in the studio
@@ -171,6 +365,12 @@ within two sprints, and the second time it rots nobody notices.
   (flexible — `Width`/`Height` then ignored); leaf controls default to `0`. A fixed
   child (`FillPortions: 0`) **must** carry an explicit `Height` — `LayoutMinHeight` is
   ignored for it and the ~200px control default wrecks the layout.
+- **Two text generations, two property vocabularies.** `Control: Text` takes
+  `FontColor` / `Weight: ='TextCanvas.Weight'.*`; `Control: ModernText` takes
+  `Color` / `FontWeight: =FontWeight.*`. **Both take `Align: ='TextCanvas.Align'.*`**
+  (Start/Center/End) — only `Button` takes the plain `Align.*` enum (Left/Center/Right).
+  Mixing them is a compile error. See `references/control-dialects.md`, and let
+  `scripts/check_control_props.py` enforce it rather than trusting memory.
 - **`Ungroup(t, Rows)` takes an identifier, not `"Rows"`.** The quoted form fails with
   `Expected identifier name`. (`SortByColumns` still takes quoted strings — the
   inconsistency is real.)
@@ -201,6 +401,10 @@ within two sprints, and the second time it rots nobody notices.
 | `references/design-system.md` | Token layer, AA contrast, type scale, spacing grid |
 | `references/component-library.md` | The eight components: contracts, what changed, what is missing |
 | `references/refactoring-legacy-apps.md` | **Brownfield ladder — six rungs with gates** |
+| `references/control-dialects.md` | The two control generations, their diverging property names and enum namespaces, and how to tell which one a tree is using |
+| `references/control-contracts.yaml` | Machine-readable control contracts `check_control_props.py` checks against — evidence-backed against a compiled app, not inferred |
+| `references/compile-error-playbook.md` | Lookup table: `compile_canvas` error text → cause → remedy, so a push failure turns into a fix instead of a guess |
+| `templates/model.example.yaml` | The `model.yaml` schema `--model` reads — two worked entities, every field attribute documented inline |
 
 **Visual spec sheet** — swatches, live-computed contrast, type scale and control specs,
 rendered: https://claude.ai/code/artifact/cdff9a80-7b84-4f56-9ce2-beaa4152424d

@@ -1,0 +1,101 @@
+# Numeric field: a label over a right-aligned ModernTextInput. HAND-AUTHORING
+# LIBRARY — emit_screens.py emits its form fields inline and is not wired to
+# this. Drop an instance onto a form screen yourself when you want it.
+#
+#   - cmp_Form_AmountField:
+#       Control: CanvasComponent
+#       ComponentName: cmp_FieldNumber
+#       Properties:
+#         Label: ="Amount"
+#         Value: =locRecord.Amount
+#         Required: =true
+#         Placeholder: ="0.00"
+#         OnChange: =UpdateContext({locDirty: true})
+#         Width: =Parent.Width
+#
+# Read cmp_FieldNumber.Output for the current value. ModernTextInput has no
+# numeric Format (classic TextInput only, see control-contracts.yaml) — numeric
+# entry stays a text input, right-aligned via the token, parsed with Value(),
+# exactly like FormScreen's txt_Form_Amount.
+#
+# ONE scalar output (Number) of a known type. Do NOT fold this and its three
+# siblings (cmp_FieldText, cmp_FieldChoice, cmp_FieldDate) into a single
+# generic cmp_Field switching over control types and returning a Record — that
+# is exactly the whole-record output shape that caused a 247-error type-cycle
+# cascade (see references/powerfx-limits.md, "Whole-record output resolution").
+#
+# Requires: constStyle
+ComponentDefinitions:
+  cmp_FieldNumber:
+    DefinitionType: CanvasComponent
+    AccessAppScope: true
+    CustomProperties:
+      Label:
+        PropertyKind: Input
+        DisplayName: Label
+        Description: Text shown above the input
+        DataType: Text
+        Default: ="Label"
+      Value:
+        PropertyKind: Input
+        DisplayName: Value
+        Description: Initial numeric value
+        DataType: Number
+        Default: =0
+      Required:
+        PropertyKind: Input
+        DisplayName: Required
+        Description: Shows a required marker on the label and flags the input
+        DataType: Boolean
+        Default: =false
+      Placeholder:
+        PropertyKind: Input
+        DisplayName: Placeholder
+        Description: Hint text inside the empty input
+        DataType: Text
+        Default: =""
+      OnChange:
+        PropertyKind: Event
+        DisplayName: OnChange
+        Description: Raised on blur, matching ModernTextInput's own OnChange
+        ReturnType: None
+        Default: =false
+      Output:
+        PropertyKind: Output
+        DisplayName: Output
+        Description: The current numeric value, parsed with Value() — never
+          resolve this component as a whole record (powerfx-limits.md).
+        DataType: Number
+    Properties:
+      Height: =constStyle.Label.Height.Small + constStyle.Label.TextInput.Height.SingleLine + constStyle.Spacing.XS
+      Output: =Value(txt_FieldNumber_Input.Text)
+      Width: =280
+    Children:
+      - con_FieldNumber:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            BorderStyle: =BorderStyle.None
+            Height: =Parent.Height
+            LayoutDirection: =LayoutDirection.Vertical
+            LayoutGap: =constStyle.Spacing.XS
+            Width: =Parent.Width
+          Children:
+            - lbl_FieldNumber_Label:
+                Control: ModernText
+                Properties:
+                  AutoHeight: =true
+                  FontWeight: =FontWeight.Semibold
+                  Size: =constStyle.BasicStyle.FontSize.Small
+                  Text: =cmp_FieldNumber.Label & If(cmp_FieldNumber.Required, " *", "")
+            - txt_FieldNumber_Input:
+                Control: ModernTextInput
+                Properties:
+                  AccessibleLabel: =cmp_FieldNumber.Label
+                  Align: =constStyle.Label.NumberInput.AlignModern
+                  Appearance: =constStyle.Label.TextInput.Appearance
+                  Default: =Text(cmp_FieldNumber.Value)
+                  Height: =constStyle.Label.TextInput.Height.SingleLine
+                  OnChange: =cmp_FieldNumber.OnChange()
+                  Placeholder: =cmp_FieldNumber.Placeholder
+                  Required: =cmp_FieldNumber.Required

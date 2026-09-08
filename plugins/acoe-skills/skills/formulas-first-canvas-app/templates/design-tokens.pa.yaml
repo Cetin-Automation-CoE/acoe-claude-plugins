@@ -88,7 +88,15 @@ constStyle = {
             Style: BorderStyle.Solid,
             Color: constPrimaryColor.RGBA
         },
-        FontColor: constInkColor.RGBA
+        FontColor: constInkColor.RGBA,
+        // Ruling 17 (Phase 3 Task 7 fix round): the baseline's own muted
+        // secondary-text colour (App.pa.yaml's constStyle.Button.ColorGrey,
+        // RGBA(89, 91, 95, 1) / #595b5f) — this skill's own tokens had no
+        // equivalent, so captions/units/the trademark rendered as full body
+        // ink and the text hierarchy flattened. Unlike FontColor above (already
+        // a bare RGBA value), this is the {RGBA, HEX} object shape every other
+        // const*Color carries, hence the `.RGBA` at every call site.
+        FontColorMuted: {RGBA: RGBA(89, 91, 95, 1), HEX: "#595b5f"}
     },
     Spacing: {
         XS: 4, S: 8, M: 12, L: 16, XL: 24, XXL: 32
@@ -109,14 +117,22 @@ constStyle = {
         Radius: 10,
         Gap: 5,
         Padding: 0,
-        HeaderHeight: 32
+        HeaderHeight: 32,
+        // I2 (final review): the grid row's trailing Open-button column
+        // (btn_<Plural>Row_Open) and the header row's matching blank
+        // spacer — both need the SAME fixed width so the row's own
+        // LayoutMinWidth (column sum + inter-child gaps + this) reserves
+        // real space for them instead of clipping them below ~1050px.
+        // Baseline: Activities.pa.yaml's own btn_Row_Open, Width: =32.
+        RowOpenWidth: 32
     },
     Label: {
         Fill: constTransparent.RGBA,
         Radius: 10,
         Height: {Large: 40, Medium: 32, Small: 27},
         TextLabel: {
-            Align: 'TextCanvas.Align'.Start,
+            AlignModern: 'TextCanvas.Align'.Start,
+            AlignLegacy: Align.Left,
             VerticalAlign: VerticalAlign.Middle,
             PaddingLeft: 8,
             PaddingRight: 8,
@@ -124,7 +140,8 @@ constStyle = {
             PaddingBottom: 4
         },
         TextInput: {
-            Align: 'TextCanvas.Align'.Start,
+            AlignModern: 'TextCanvas.Align'.Start,
+            AlignLegacy: Align.Left,
             VerticalAlign: VerticalAlign.Middle,
             PaddingLeft: 0,
             PaddingRight: 0,
@@ -136,8 +153,13 @@ constStyle = {
         },
         // Money and quantities are right-aligned. Grid cells are Labels, not
         // NumberInputs, so they do NOT inherit this — set it explicitly there.
+        // Alignment splits by control family: text controls take
+        // 'TextCanvas.Align'.{Start|Center|End}, Buttons take Align.{Left|Center|Right}.
+        // Two fields, because one token cannot serve both. See
+        // references/control-dialects.md.
         NumberInput: {
-            Align: 'TextCanvas.Align'.End,
+            AlignModern: 'TextCanvas.Align'.End,
+            AlignLegacy: Align.Right,
             VerticalAlign: VerticalAlign.Middle,
             PaddingLeft: 8,
             PaddingRight: 8
@@ -148,7 +170,10 @@ constStyle = {
         BorderRadius: 10,
         FontWeight: FontWeight.Semibold,
         IconStyle: 'Icon.IconStyle'.Filled,
-        Align: Align.Center,
+        // No AlignModern here: Button takes the plain Align enum only (Left|
+        // Center|Right), never 'TextCanvas.Align' — that namespace is for text
+        // controls. AlignLegacy carries the value Button actually needs.
+        AlignLegacy: Align.Center,
         VerticalAlign: VerticalAlign.Middle
     },
     Combobox: {
@@ -157,6 +182,29 @@ constStyle = {
         Appearance: Appearance.FilledDarker,
         PaddingLeft: 8,
         PaddingRight: 8
+    },
+    // Phase 3 Task 7: the dashboard screen's own dimensions — a KPI band,
+    // a status-chip pipeline and a navigation-tile grid, none of which
+    // shares a size with any other screen's controls, so none of them
+    // belongs under an existing group above.
+    Dashboard: {
+        TileSize: 200,
+        TileHeight: 170,
+        // BandTileSize (140) retired (final review, bundled fidelity item):
+        // gal_Dash_Band's TemplateSize now divides Self.Width by the band
+        // entity's own status vocab count, the same shape the pipeline
+        // gallery already used — a fixed pixel width never adapted to a
+        // model with a different vocab size. grep confirmed no other
+        // reference before removal.
+        BandHeight: 120,
+        ChipHeight: 32,
+        Radius: 15,
+        Gap: 20,
+        // Ruling 17: the baseline's btn_ScreenTiles_Navigate carries
+        // FontSize: =40 (an icon-only button's icon glyph size) — tokenized
+        // here rather than left a literal so check_tokens.py's FontSize
+        // check (default allow-list 28,20,14,12,11) never has to special-case it.
+        TileIconSize: 40
     }
 };
 

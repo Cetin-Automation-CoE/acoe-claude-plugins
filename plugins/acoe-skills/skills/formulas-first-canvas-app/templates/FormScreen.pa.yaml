@@ -70,9 +70,14 @@ Screens:
                   - lbl_Form_TitleLabel:
                       Control: ModernText
                       Properties:
+                        # AutoHeight: without it (or an explicit Height), a
+                        # leaf control in an auto-layout container has no
+                        # sizing info at all and collapses to its control
+                        # default — check_layout.py's Rule 3.
+                        AutoHeight: =true
                         Size: =constStyle.BasicStyle.FontSize.Small
                         Text: ="Title"
-                        Weight: =FontWeight.Semibold
+                        FontWeight: =FontWeight.Semibold
                   - txt_Form_Title:
                       Control: ModernTextInput
                       Properties:
@@ -82,44 +87,45 @@ Screens:
                         Height: =constStyle.Label.TextInput.Height.SingleLine
                         OnChange: |-
                           =UpdateContext({locDirty: true})
-                        TabIndex: =0
 
                   - lbl_Form_StatusLabel:
                       Control: ModernText
                       Properties:
+                        AutoHeight: =true
                         Size: =constStyle.BasicStyle.FontSize.Small
                         Text: ="Status"
-                        Weight: =FontWeight.Semibold
+                        FontWeight: =FontWeight.Semibold
                   - com_Form_Status:
                       Control: ModernCombobox
                       Properties:
                         AccessibleLabel: ="Item status"
                         DefaultSelectedItems: =Filter(constStatusChoices, Value = locItem.Status)
                         Height: =constStyle.Combobox.Height.Medium
+                        ItemDisplayText: =ThisItem.Value
                         Items: =constStatusChoices
                         OnChange: |-
                           =UpdateContext({locDirty: true})
                         SelectMultiple: =false
-                        TabIndex: =0
-                        Value: ="Value"
 
                   - lbl_Form_AmountLabel:
                       Control: ModernText
                       Properties:
+                        AutoHeight: =true
                         Size: =constStyle.BasicStyle.FontSize.Small
                         Text: ="Amount"
-                        Weight: =FontWeight.Semibold
+                        FontWeight: =FontWeight.Semibold
                   - txt_Form_Amount:
                       Control: ModernTextInput
                       Properties:
                         AccessibleLabel: ="Item amount"
-                        Align: =constStyle.Label.NumberInput.Align
+                        Align: =constStyle.Label.NumberInput.AlignModern
                         Default: =Text(locItem.Amount)
-                        Format: =TextFormat.Number
+                        # ModernTextInput has no Format property (that is the classic
+                        # TextInput). Numeric entry stays a text input: right-aligned
+                        # via the token above, parsed with Value() in funcSaveItem.
                         Height: =constStyle.Label.TextInput.Height.SingleLine
                         OnChange: |-
                           =UpdateContext({locDirty: true})
-                        TabIndex: =0
 
             # ---- validation summary: one source of truth ------------------
             - lbl_Form_Errors:
@@ -168,7 +174,6 @@ Screens:
                         # confirmation; this button only opens it.
                         OnSelect: |-
                           =UpdateContext({locConfirmDelete: true})
-                        TabIndex: =0
                         Text: ="Delete"
                         Visible: =!IsBlank(glSelectedKey)
                   - btn_Form_Cancel:
@@ -177,12 +182,14 @@ Screens:
                         AccessibleLabel: ="Discard changes and go back"
                         Height: =constStyle.Button.Height.Medium
                         OnSelect: =funcGoBack()
-                        TabIndex: =0
                         Text: ="Cancel"
                   - btn_Form_Save:
                       Control: Button
                       Properties:
                         AccessibleLabel: ="Save item"
+                        # Modern Button has no Fill: colour comes from the palette.
+                        Appearance: ='ButtonCanvas.Appearance'.Primary
+                        BasePaletteColor: =constPrimaryColor.RGBA
                         # Same expression as the error label, so the button can
                         # never be enabled while an error is displayed.
                         DisplayMode: |-
@@ -191,7 +198,6 @@ Screens:
                               DisplayMode.Edit,
                               DisplayMode.Disabled
                           )
-                        Fill: =constPrimaryColor.RGBA
                         Height: =constStyle.Button.Height.Medium
                         # The screen calls the data-access UDF. It does not
                         # Patch, does not name a data source, and does not know
@@ -208,7 +214,6 @@ Screens:
                           UpdateContext({locDirty: false});
                           funcNotifySuccess("Item saved.");
                           funcGoBack()
-                        TabIndex: =0
                         Text: ="Save"
 
 

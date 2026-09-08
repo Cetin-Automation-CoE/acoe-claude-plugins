@@ -1,0 +1,248 @@
+# Machine-readable control contracts. Read by scripts/check_control_props.py and,
+# from Phase 2, by the generator's emitter — one source of truth, so generated
+# output cannot contain a property the guard would reject.
+#
+# Prose version and the reasoning: references/control-dialects.md
+#
+# Provenance: seeded from Microsoft Learn, reconciled against the Phase 1
+# reference-app corpus (an older copy of the Regional Procurement Plan app;
+# superseded by the baseline named in SKILL.md). Where they disagreed, the
+# compiled app won.
+#
+# 2026-09-07: check_control_props.py's first real run against templates/ and
+# components/ surfaced several properties the guard rejected as invalid that are
+# in fact used on the compiled app's exact same control type: LayoutMinWidth/
+# LayoutMinHeight and some Padding sides on several controls, Button.FontWeight,
+# and VerticalAlign on ModernText and Button (not only on previous-generation
+# Text, as this file previously claimed).
+#
+# Discipline for this list and any future one like it: a property is added only
+# when it was directly counted against a Control: block of that exact type in
+# the compiled app — never inferred by symmetry with a sibling property (e.g.
+# "PaddingLeft is valid, so the other three Padding sides must be too") or with
+# a sibling control. A first pass here over-generalized exactly that way and had
+# to be corrected after review; some Padding/LayoutMin entries that looked
+# plausible were removed for having zero counted occurrences. If a property
+# looks likely on symmetry grounds but hasn't been counted, that is a ruling to
+# ask for, not something to add on your own judgment.
+#
+# 2026-09-07 (Ruling 14, final whole-branch review): running the guard against
+# the full compiled reference app (not just this skill's own templates) surfaced
+# 142 hard errors on properties that are genuinely valid but simply hadn't been
+# counted yet. Counted and added: Button.{LayoutMaxHeight,LayoutMaxWidth} (23
+# each), Button.Font (19), Button.FontUnderline, Button.{BorderRadiusTopRight,
+# BorderRadiusBottomRight}; Text.{LayoutMaxHeight,LayoutMaxWidth} (14 each),
+# Text.Wrap (3); ModernText.Font (5), ModernText.{LayoutMaxHeight,
+# LayoutMaxWidth}; ModernTextInput.{BorderColor,BorderStyle,BorderThickness,
+# Font} (2 each); ModernCombobox.{BorderColor,BorderStyle,BorderThickness,Font}
+# (1 each). Enum members added: ButtonCanvas.IconStyle.Outline (7),
+# TextCanvas.Weight.Semibold (4). Also curated two properties that previously
+# relied on plain absence-from-`properties` to be caught as errors under the
+# now-changed severity split (see SEVERITY below): ModernTextInput.Format and
+# ModernCombobox.Value are explicit `absent:` entries.
+#
+# SEVERITY (Ruling 14, final whole-branch review): absence from this file means
+# "not verified", not "invalid" — a property missing from a listed control's
+# `properties` is a WARNING, not an error. check_control_props.py hard-errors
+# only on the CURATED negatives below: `renamed_from`, `removed`, and `absent`
+# entries are things this file KNOWS are wrong. Properties on a control type
+# that is not listed here AT ALL are unchecked, not warned or failed.
+#
+# 2026-09-07 (live compile, first real compile_canvas run against a pushed
+# app): `TabIndex` is NOT a valid property on ModernTextInput, ModernCombobox,
+# ModernDatePicker, or Button — the live compiler rejected it with "Unknown
+# property 'TabIndex'" on all four (52 of 59 errors in that run). It had been
+# carried on 8 controls in this file since the file's original seeding from
+# Microsoft Learn and was never corpus-verified: it appears ZERO times in the
+# Phase 1 reference-app corpus (an older copy of the Regional Procurement Plan
+# app; superseded by the baseline named in SKILL.md), which is exactly the
+# discipline violation the header above warns about.
+# Removed from every control's `properties` list and curated as an `absent`
+# negative everywhere it appeared (ModernText, Text, ModernTextInput,
+# ModernCombobox, ModernDatePicker, Button, ModernButton@1.0.0, Gallery) so a
+# reintroduction hard-fails the guard instead of silently warning. Do not
+# substitute another property for it — tab order reverts to document order.
+
+enums:
+  # This namespace validates only Button.Align — every text control uses
+  # TextCanvas.Align instead. Members are added only when verified against a
+  # compiled app; do not add Justify back without that verification.
+  Align: [Left, Center, Right]
+  TextCanvas.Align: [Start, Center, End]
+  FontWeight: [Bold, Semibold, Normal, Lighter]
+  TextCanvas.Weight: [Bold, Regular, Semibold]
+  ButtonCanvas.Appearance: [Primary, Secondary, Outline, Subtle, Transparent]
+  ButtonCanvas.Layout: [IconBefore, IconAfter, IconOnly, TextOnly]
+  ButtonCanvas.IconStyle: [Filled, Regular, Outline]
+  TextInputType: [SingleLine, Multiline, Password, Search]
+  TriggerOutput: [Keypress, FocusOut, Delayed]
+  Appearance: [FilledDarker, FilledLighter, Outline]
+  VerticalAlign: [Top, Middle, Bottom]
+  BorderStyle: [None, Solid, Dashed, Dotted]
+  LayoutDirection: [Horizontal, Vertical]
+  DisplayMode: [Edit, View, Disabled]
+
+controls:
+
+  ModernText:
+    generation: modern
+    properties:
+      - Color, Size, FontWeight, Align, Wrap, AutoHeight, Text, Visible, OnSelect
+      - Italic, Underline, Strikethrough, VerticalAlign, Font
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
+      - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - Fill, BorderColor, BorderThickness, BorderStyle
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+      - AccessibleLabel, Live, LayoutMinWidth, LayoutMinHeight
+      - LayoutMaxHeight, LayoutMaxWidth
+    enums:
+      FontWeight: FontWeight
+      Align: TextCanvas.Align
+      BorderStyle: BorderStyle
+      VerticalAlign: VerticalAlign
+    renamed_from:
+      FontColor: Color
+      FontSize: Size
+      Weight: FontWeight
+      FontItalic: Italic
+      FontUnderline: Underline
+      FontStrikethrough: Strikethrough
+      BorderRadius: [RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight]
+    removed: [DisplayMode]
+    absent: [TabIndex]
+
+  Text:
+    generation: previous
+    note: >-
+      Previous-generation modern text. Still valid, a DIFFERENT control from
+      ModernText — not a version of it.
+    properties:
+      - FontColor, Size, Weight, Align, VerticalAlign, AutoHeight, Text, Visible, OnSelect
+      - Fill, BorderColor, BorderThickness, BorderStyle, Wrap
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+      - AccessibleLabel, DisplayMode, LayoutMinWidth, LayoutMinHeight
+      - LayoutMaxHeight, LayoutMaxWidth
+    enums:
+      Weight: TextCanvas.Weight
+      Align: TextCanvas.Align
+      VerticalAlign: VerticalAlign
+      BorderStyle: BorderStyle
+      DisplayMode: DisplayMode
+    absent: [TabIndex]
+
+  ModernTextInput:
+    generation: modern
+    note: >-
+      No HintText (classic TextInput only) and no Format (also classic). For numeric
+      entry keep it a text input, right-align via the token, parse with Value().
+      OnChange fires on BLUR, not per keystroke.
+    properties:
+      - Placeholder, Default, Text, Type, TriggerOutput, MaxLength, Required
+      - ValidationState, Appearance, Color, Size, FontWeight, Align, Font
+      - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - BorderColor, BorderStyle, BorderThickness
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
+      - AccessibleLabel, OnChange, OnSelect, DisplayMode, BasePaletteColor
+      - AlignInContainer, FillPortions, Height, Width, X, Y, Visible
+    enums:
+      Type: TextInputType
+      TriggerOutput: TriggerOutput
+      Appearance: Appearance
+      FontWeight: FontWeight
+      Align: TextCanvas.Align
+      DisplayMode: DisplayMode
+    renamed_from:
+      HintText: Placeholder
+    absent: [Format, TabIndex]
+
+  ModernCombobox:
+    generation: modern
+    note: >-
+      SelectMultiple DEFAULTS TO TRUE — set it false explicitly for single-select.
+      InputTextPlaceholder's factory default is the literal "Find items".
+      Outputs: SelectedItems, Selected, SearchText. There is NO Value property.
+    properties:
+      - Items, ItemDisplayText, DefaultSelectedItems, InputTextPlaceholder
+      - SelectMultiple, IsSearchable, MultiValueDelimiter, DelayOutput
+      - Required, ValidationState, Appearance, Color, Size, Font
+      - BorderColor, BorderStyle, BorderThickness
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
+      - AccessibleLabel, OnChange, DisplayMode, Visible
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+    enums:
+      Appearance: Appearance
+      DisplayMode: DisplayMode
+    renamed_from:
+      Fields: ItemDisplayText
+      TriggerOutput: DelayOutput
+    absent: [Value, TabIndex]
+
+  ModernDatePicker:
+    generation: modern
+    properties:
+      - DefaultDate, SelectedDate, Format, DateTimeZone, StartDate, EndDate
+      - StartOfWeek, IsEditable, Placeholder, Appearance
+      - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - ValidationState, AccessibleLabel, OnChange, DisplayMode, Visible
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+      - LayoutMinWidth, LayoutMinHeight
+    enums:
+      Appearance: Appearance
+      DisplayMode: DisplayMode
+    absent: [TabIndex]
+
+  Button:
+    generation: previous
+    note: >-
+      Previous-generation modern button — what this skill's eight bundled components
+      use. Takes the PLAIN Align enum, unlike the text controls. No Color, no Fill.
+    properties:
+      - FontColor, FontSize, FontWeight, BorderRadius, BorderThickness, BorderColor
+      - BasePaletteColor, Icon, Appearance, Layout, IconStyle, Align, VerticalAlign
+      - Text, AccessibleLabel, DisplayMode, OnSelect, Visible
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+      - PaddingTop, PaddingBottom, PaddingLeft, PaddingRight
+      - LayoutMinWidth, LayoutMinHeight, LayoutMaxHeight, LayoutMaxWidth
+      - Font, FontUnderline, BorderRadiusTopRight, BorderRadiusBottomRight
+    enums:
+      Appearance: ButtonCanvas.Appearance
+      Layout: ButtonCanvas.Layout
+      IconStyle: ButtonCanvas.IconStyle
+      Align: Align
+      DisplayMode: DisplayMode
+      FontWeight: FontWeight
+      VerticalAlign: VerticalAlign
+    absent: [Color, Fill, TabIndex]
+
+  ModernButton@1.0.0:
+    generation: updated
+    note: A different control again, per Learn. Not used by this skill's components.
+    properties:
+      - Color, Size, Text, Icon, IconStyle, Appearance, Layout, Tooltip
+      - RadiusTopLeft, RadiusTopRight, RadiusBottomLeft, RadiusBottomRight
+      - AccessibleLabel, DisplayMode, OnSelect, Visible
+      - AlignInContainer, FillPortions, Height, Width, X, Y
+    enums:
+      DisplayMode: DisplayMode
+    absent: [TabIndex]
+
+  Gallery:
+    generation: modern
+    note: >-
+      LEAF CONTROL. Inside an auto-layout container it defaults to FillPortions 0 and
+      collapses to the ~200px control default — always set FillPortions or an explicit
+      Height. No ShowScrollbar (classic only).
+    properties:
+      - Items, TemplateSize, TemplatePadding, Transition, WrapCount
+      - DelayItemLoading, LoadingSpinner, LoadingSpinnerColor
+      - BorderColor, BorderThickness, BorderStyle
+      - AccessibleLabel, Visible, FillPortions
+      - LayoutDirection, LayoutGap, LayoutJustifyContent, LayoutAlignItems
+      - LayoutMinHeight, LayoutMinWidth, LayoutOverflowX, LayoutOverflowY
+      - Height, Width, X, Y, AlignInContainer, Default, Selectable, ShowNavigation
+    enums:
+      BorderStyle: BorderStyle
+      LayoutDirection: LayoutDirection
+    absent: [ShowScrollbar, TabIndex]
+    requires_one_of: [FillPortions, Height]

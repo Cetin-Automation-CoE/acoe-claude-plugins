@@ -18,7 +18,8 @@
 # app. The INTERFACE is preserved so screens port unchanged; the domain-coupled
 # body is gone. Add your own scope control as an extra child if you need one.
 #
-# Requires: constPrimaryColor, constPaperColor, constStyle, constTransparent
+# Requires: constPrimaryColor, constSecondaryColor, constPaperColor, constStyle,
+#           constTransparent
 ComponentDefinitions:
   cmp_Header:
     DefinitionType: CanvasComponent
@@ -83,19 +84,19 @@ ComponentDefinitions:
         DisplayName: OnSelectHelp
         Description: Raised by the help action
         ReturnType: None
-        Default: =
+        Default: =false
       OnSelectNotifications:
         PropertyKind: Event
         DisplayName: OnSelectNotifications
         Description: Raised by the notifications action
         ReturnType: None
-        Default: =
+        Default: =false
       OnSelectRefresh:
         PropertyKind: Event
         DisplayName: OnSelectRefresh
         Description: Raised by the refresh action
         ReturnType: None
-        Default: =
+        Default: =false
       ShowCommandBar:
         PropertyKind: Input
         DisplayName: ShowCommandBar
@@ -104,7 +105,6 @@ ComponentDefinitions:
         Default: =true
     Properties:
       Height: =constStyle.Header.Height
-      Width: =App.Width
     Children:
       - con_Header:
           Control: GroupContainer
@@ -136,7 +136,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_Header.OnNavigate()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_Header.AllowNavigation
                   Width: =32
@@ -152,7 +151,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_Header.OnBack()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_Header.AllowBack
                   Width: =32
@@ -181,7 +179,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_Header.OnSelectRefresh()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_Header.ShowCommandBar And cmp_Header.CanRefresh
                   Width: =32
@@ -204,7 +201,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_Header.OnSelectNotifications()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_Header.ShowCommandBar
                   Width: =32
@@ -238,7 +234,6 @@ ComponentDefinitions:
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_Header.OnSelectHelp()
-                  TabIndex: =0
                   Text: =""
                   Visible: =cmp_Header.ShowCommandBar
                   Width: =32

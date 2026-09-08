@@ -14,8 +14,8 @@
 #         Height: =Parent.Height
 #         Width: =Parent.Width
 #
-# Requires: constPaperColor, constPrimaryColor, constSecondaryColor,
-#           constStyle, constTransparent, constBackdropColor
+# Requires: constPaperColor, constSecondaryColor, constStyle, constTransparent,
+#           constBackdropColor, constBorderRadius
 ComponentDefinitions:
   cmp_Dialog:
     DefinitionType: CanvasComponent
@@ -49,13 +49,13 @@ ComponentDefinitions:
         DisplayName: OnCancel
         Description: Raised on dismiss
         ReturnType: None
-        Default: =
+        Default: =false
       OnSubmit:
         PropertyKind: Event
         DisplayName: OnSubmit
         Description: Raised on confirm
         ReturnType: None
-        Default: =
+        Default: =false
       ShowDatePicker:
         PropertyKind: Input
         DisplayName: ShowDatePicker
@@ -128,6 +128,12 @@ ComponentDefinitions:
                       Control: Text
                       Properties:
                         Align: ='TextCanvas.Align'.Start
+                        # AutoHeight: without it (or an explicit Height), a
+                        # leaf control in an auto-layout container has no
+                        # sizing info at all and collapses to its control
+                        # default — check_layout.py's Rule 3. Its sibling
+                        # lbl_Dialog_Description already carries this.
+                        AutoHeight: =true
                         Size: =constStyle.BasicStyle.FontSize.Large
                         Text: =cmp_Dialog.Title
                         VerticalAlign: =VerticalAlign.Middle
@@ -137,7 +143,8 @@ ComponentDefinitions:
                       Properties:
                         Align: ='TextCanvas.Align'.Start
                         AutoHeight: =true
-                        # NOTE: classic Text uses FontColor; ModernText uses Color.
+                        # NOTE: this previous-generation Text control uses FontColor / Weight /
+                        # 'TextCanvas.*' enums; ModernText uses Color / FontWeight / Align.*.
                         # Getting this wrong is one of the few things compile catches.
                         FontColor: =constStyle.BasicStyle.FontColor
                         Size: =constStyle.BasicStyle.FontSize.Medium
@@ -148,6 +155,11 @@ ComponentDefinitions:
                       Control: ModernDatePicker
                       Properties:
                         AccessibleLabel: ="Date"
+                        # ModernDatePicker has no AutoHeight — without an
+                        # explicit Height it has no sizing info at all as a
+                        # leaf of this auto-layout container and collapses to
+                        # its control default (check_layout.py's Rule 3).
+                        Height: =constStyle.Label.TextInput.Height.SingleLine
                         RadiusBottomLeft: =constStyle.Button.BorderRadius
                         RadiusBottomRight: =constStyle.Button.BorderRadius
                         RadiusTopLeft: =constStyle.Button.BorderRadius
@@ -179,7 +191,6 @@ ComponentDefinitions:
                               BorderRadius: =constStyle.Button.BorderRadius
                               Height: =constStyle.Button.Height.Medium
                               OnSelect: =Reset(dp_Dialog_DatePicker); cmp_Dialog.OnCancel()
-                              TabIndex: =0
                               Text: =cmp_Dialog.CancelLabel
                               Width: =100
                         - btn_Dialog_Submit:
@@ -190,6 +201,5 @@ ComponentDefinitions:
                               BorderRadius: =constStyle.Button.BorderRadius
                               Height: =constStyle.Button.Height.Medium
                               OnSelect: =Reset(dp_Dialog_DatePicker); cmp_Dialog.OnSubmit()
-                              TabIndex: =0
                               Text: =cmp_Dialog.SubmitLabel
                               Width: =100

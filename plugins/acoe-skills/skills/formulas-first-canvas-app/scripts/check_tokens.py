@@ -32,7 +32,7 @@ STRUCTURAL = {"RGBA(0,0,0,0)"}
 COLOUR = re.compile(r"RGBA\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*\)")
 HEXCOL = re.compile(r"ColorValue\(\s*\"(#[0-9A-Fa-f]{3,8})\"\s*\)")
 SIZE = re.compile(r"\b(?:Size|FontSize)\s*:\s*=\s*([\d.]+)\b")
-RADIUS = re.compile(r"\bRadius\w*\s*:\s*=\s*([\d.]+)\b")
+RADIUS = re.compile(r"\b\w*Radius\w*\s*:\s*=\s*([\d.]+)\b")
 
 
 def code_only(line: str) -> str:
@@ -115,6 +115,8 @@ def main():
     print(msg + ")")
     for name, n in exempted.most_common():
         print(f"  exempt: {name} ({n})")
+    print("  Not covered: spacing literals (reported by inventory.py, not enforced); "
+          "literals inside token-exempt lines; values built at runtime.")
 
 
 if __name__ == "__main__":
