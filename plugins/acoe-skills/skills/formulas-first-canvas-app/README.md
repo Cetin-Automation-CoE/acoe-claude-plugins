@@ -160,7 +160,7 @@ Studio binder rejects forward references that the compile service accepts. Each 
 those fails at runtime or shows up as dozens of unrelated errors. `check_control_props.py`
 adds a fourth class: a property name that belongs to the *other* control generation,
 or a design-token value from the wrong dialect, both of which read fine in the YAML
-and fail only at compile. `check_layout.py` adds a sixth: sizing that is individually
+and fail only at compile. `check_layout.py` adds a fifth: sizing that is individually
 valid but leaves a container or a leaf control with no resolvable size, which renders
 as a collapsed control rather than a compile error. None of the seven scripts replaces
 a live compile — they narrow what a `compile_canvas` push still needs to catch. When a
