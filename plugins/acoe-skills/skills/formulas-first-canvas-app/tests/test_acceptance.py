@@ -321,9 +321,12 @@ class TestThreeEntityModel(_AcceptanceBase, unittest.TestCase):
     def test_start_screen_is_the_dashboard(self):
         app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
         self.assertIn("StartScreen: =DashboardScreen", app)
+
+    def test_dashboard_band_is_spliced_into_app(self):
         # Invoice has both a money field (Amount) and a filterable Status
         # field, so the KPI band is eligible and its named formula must be
         # spliced into App.pa.yaml.
+        app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
         self.assertIn("constDashboardBand", app)
 
     def test_editor_state_lists_dashboard_first(self):
@@ -355,6 +358,40 @@ class TestThreeEntityModel(_AcceptanceBase, unittest.TestCase):
         nav = (self.out / "Components" / "cmp_Navigation.pa.yaml").read_text(encoding="utf-8")
         self.assertIn("Screen: DashboardScreen", nav)
         self.assertNotIn("Screen: ListScreen", nav)
+
+
+class TestLegacyNamePath(unittest.TestCase):
+    """The --name (legacy) path is untouched by Task 8's dashboard wiring —
+    Ruling 18(b) says it "copies the file unchanged". No existing test class
+    runs this path once in setUpClass the way the --model classes above do,
+    so this one generates a single legacy build to guard that one invariant:
+    the copied Components/cmp_Navigation.pa.yaml must be byte-identical to
+    the shipped components/cmp_Navigation.pa.yaml — only a --model build may
+    rewrite its Screens default's Screen column (Ruling 18(b))."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.out = pathlib.Path(cls.tmp) / "Src"
+        cls.proc = subprocess.run(
+            [sys.executable, str(SKILL / "scripts" / "new_app.py"),
+             "--name", "Legacy", "--out", str(cls.out)],
+            capture_output=True, text=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_exits_zero(self):
+        self.assertEqual(self.proc.returncode, 0, self.proc.stdout + self.proc.stderr)
+
+    def test_cmp_navigation_is_copied_byte_identical(self):
+        shipped = (SKILL / "components" / "cmp_Navigation.pa.yaml").read_text(encoding="utf-8")
+        copied = (self.out / "Components" / "cmp_Navigation.pa.yaml").read_text(encoding="utf-8")
+        self.assertEqual(copied, shipped,
+                         "the --name (legacy) path must copy "
+                         "cmp_Navigation.pa.yaml unchanged — only a --model "
+                         "build rewrites its Screens default's Screen column")
 
 
 def _yaml_load(text):

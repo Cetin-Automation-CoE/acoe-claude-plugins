@@ -252,6 +252,18 @@ class TestRolesAndDashboard(unittest.TestCase):
     def test_dashboard_can_be_forced(self):
         self.assertTrue(self._model("dashboard: true\n" + MINIMAL).dashboard)
 
+    def test_start_screen_is_the_dashboard_when_it_defaults_on(self):
+        # Two entities, no explicit `dashboard:` key — dashboard defaults on
+        # from entity count alone, same fixture shape as the dashboard test
+        # above.
+        two = MINIMAL + "  - entity: Site\n    plural: Sites\n    fields:\n      - {name: Name, type: text}\n"
+        self.assertEqual(self._model(two).start_screen, "DashboardScreen")
+
+    def test_start_screen_is_the_first_entitys_list_screen_when_dashboard_is_off(self):
+        # MINIMAL is a single entity — dashboard defaults off, so
+        # start_screen falls back to that entity's own list screen.
+        self.assertEqual(self._model(MINIMAL).start_screen, "AssetsListScreen")
+
     def test_due_and_money_partitions(self):
         e = self._model(MINIMAL).entities[0]
         self.assertEqual([f.name for f in e.due_fields], ["Due"])

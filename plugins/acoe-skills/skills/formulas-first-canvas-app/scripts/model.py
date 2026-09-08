@@ -313,6 +313,18 @@ class Model(object):
         self.dashboard = bool(raw) if raw is not None else len(self.entities) > 1
         self.description = str(data.get("description") or "")
 
+    # ---- derived: the single source of truth for the app's first screen --
+    @property
+    def start_screen(self):
+        """The screen `new_app.py` points `StartScreen`, the OnStart colBack
+        seed, and _EditorState.pa.yaml's ScreensOrder at: the fixed name
+        `DashboardScreen` when this model has a dashboard (Task 6/7 already
+        build every dashboard named formula and the registry row around
+        that name), else the first entity's own list screen. Kept here, not
+        re-derived in new_app.py, so the App.pa.yaml builder and main() can
+        never disagree about which screen is "first"."""
+        return "DashboardScreen" if self.dashboard else self.entities[0].list_screen
+
 
 def load_model(path):
     path = pathlib.Path(path)

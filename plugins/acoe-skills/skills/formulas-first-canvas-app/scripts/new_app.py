@@ -197,16 +197,21 @@ def _splice_span(text, begin_marker, end_marker, replacement):
     return text[:line_start] + replacement.rstrip("\n") + "\n" + text[line_end:]
 
 
-def _replace_once(text, old, new, what):
+def _replace_once(text, old, new, what, where):
     """Like str.replace(old, new, 1), but refuses to guess when `old` isn't
     present exactly once — a template shape change should fail loudly here,
-    not silently emit a broken app."""
+    not silently emit a broken app. `where` names the file `text` came from
+    (e.g. "templates/App.pa.yaml", or a copied file's own path under the
+    output tree) so the failure message points the debugger at the actual
+    file with the problem — this helper has more than one caller since
+    Ruling 18, and a hardcoded filename in the message would be wrong for
+    the others."""
     n = text.count(old)
     if n != 1:
         sys.exit("error: expected exactly one occurrence of %s in "
-                  "templates/App.pa.yaml, found %d — the template shape "
+                  "%s, found %d — the template shape "
                   "changed; update new_app.py's assembly logic to match."
-                  % (what, n))
+                  % (what, where, n))
     return text.replace(old, new, 1)
 
 
@@ -222,11 +227,6 @@ def build_app_pa_yaml_for_model(model, rows, today, brand):
     helpers) — those stay put, unedited, from templates/App.pa.yaml. Only the
     vocabulary layer and the data-access-layer + constScreens registry are
     spliced in, at the two markers that file declares.
-
-    Returns (app_text, first_screen) — Task 8: the caller reuses
-    `first_screen` to write DashboardScreen.pa.yaml first in _EditorState.pa.yaml
-    and to repoint the copied Components/cmp_Navigation.pa.yaml's Screens
-    default at a screen this build actually defines (Ruling 18).
     """
     app = (TEMPLATES / "App.pa.yaml").read_text(encoding="utf-8")
     app = splice_tokens(app, inline_tokens(brand))
@@ -245,27 +245,26 @@ def build_app_pa_yaml_for_model(model, rows, today, brand):
     app = _splice_span(app, DATA_BEGIN, DATA_END, data_registry_part)
 
     # OnStart / StartScreen still name the template's generic ListScreen —
-    # repoint them at the app's real first screen, and load every entity's
-    # collection on start, not just one. Task 8: when the model has a
-    # dashboard, that IS the first screen — DashboardScreen, the fixed name
-    # Task 6/7 already build every dashboard named formula and the registry
-    # row around — otherwise the first entity's list screen, same as before
-    # Task 8.
-    first_screen = "DashboardScreen" if model.dashboard else model.entities[0].list_screen
+    # repoint them at the app's real first screen (model.py's own
+    # model.start_screen — DashboardScreen when the model has one, else the
+    # first entity's list screen; the single source of truth so this
+    # builder and main() can never disagree), and load every entity's
+    # collection on start, not just one.
     app = _replace_once(
         app,
         'ClearCollect(colBack, Table({Screen: ListScreen, Label: ""}));',
-        'ClearCollect(colBack, Table({Screen: %s, Label: ""}));' % first_screen,
-        "the colBack seed in OnStart")
+        'ClearCollect(colBack, Table({Screen: %s, Label: ""}));' % model.start_screen,
+        "the colBack seed in OnStart", "templates/App.pa.yaml")
 
     load_calls = ("%s();" % model.entities[0].func_load) + "".join(
         "\n      %s();" % e.func_load for e in model.entities[1:])
     app = _replace_once(app, "funcLoadItems();", load_calls,
-                        "the funcLoadItems(); call in OnStart")
+                        "the funcLoadItems(); call in OnStart", "templates/App.pa.yaml")
 
     app = _replace_once(app, "StartScreen: =ListScreen",
-                        "StartScreen: =%s" % first_screen, "StartScreen")
-    return app, first_screen
+                        "StartScreen: =%s" % model.start_screen, "StartScreen",
+                        "templates/App.pa.yaml")
+    return app
 
 
 class _PaYamlLoader(yaml.SafeLoader):
@@ -417,7 +416,7 @@ def main():
         # and data-layer/registry, spliced in at the two markers. ----------
         today = datetime.date.today()
         brand = model.brand if model.brand else args.brand
-        app, first_screen = build_app_pa_yaml_for_model(model, args.rows, today, brand)
+        app = build_app_pa_yaml_for_model(model, args.rows, today, brand)
         (out / "App.pa.yaml").write_text(app, encoding="utf-8")
 
         # ---- dashboard screen, when the model has one (Task 8) ------------
@@ -448,8 +447,8 @@ def main():
         nav_path = out / "Components" / "cmp_Navigation.pa.yaml"
         nav_text = _replace_once(
             nav_path.read_text(encoding="utf-8"),
-            "Screen: ListScreen", "Screen: %s" % first_screen,
-            "cmp_Navigation.pa.yaml's Screens default screen")
+            "Screen: ListScreen", "Screen: %s" % model.start_screen,
+            "cmp_Navigation.pa.yaml's Screens default screen", str(nav_path))
         nav_path.write_text(nav_text, encoding="utf-8")
 
         # ---- frame: reference layout named by model.yaml's own frame: field
@@ -459,7 +458,7 @@ def main():
         #      screen, entity by entity -------------------------------------
         editor = ["EditorState:", "  ScreensOrder:"]
         if model.dashboard:
-            editor.append("    - %s" % first_screen)
+            editor.append("    - %s" % model.start_screen)
         for entity in model.entities:
             editor += ["    - %s" % entity.list_screen, "    - %s" % entity.form_screen]
         if frame_screen:
