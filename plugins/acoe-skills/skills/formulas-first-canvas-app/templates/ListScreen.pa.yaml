@@ -64,6 +64,12 @@ Screens:
                   Navigation: =locNavigation
                   OnClose: |-
                     =UpdateContext({locNavigation: false})
+                  # Fixed child of a Horizontal auto-layout container: the
+                  # main axis (Width) must be explicit, matching whichever
+                  # branch cmp_Navigation's own root Width formula picks —
+                  # an un-restated Width here is what let the rail flex to
+                  # half the screen (check_layout.py's Rule 1).
+                  Width: =If(locNavigation, 250, 60)
 
             - con_List_Body:
                 Control: GroupContainer
