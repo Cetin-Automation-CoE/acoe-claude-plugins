@@ -203,6 +203,47 @@ class TestRolesAndDashboard(unittest.TestCase):
         with self.assertRaises(m.ModelError):
             self._model(bad)
 
+    def test_invalid_role_value_is_an_error(self):
+        bad = MINIMAL.replace("{name: Tag, type: text, required: true, grid: 100}",
+                              "{name: Tag, type: text, required: true, grid: 100, role: owner}")
+        with self.assertRaises(m.ModelError) as cm:
+            self._model(bad)
+        msg = str(cm.exception)
+        self.assertIn("title", msg)
+        self.assertIn("status", msg)
+
+    def test_role_title_on_a_non_text_field_is_an_error(self):
+        bad = MINIMAL.replace("{name: Amount, type: number, grid: 118, money: true}",
+                              "{name: Amount, type: number, grid: 118, money: true, role: title}")
+        with self.assertRaises(m.ModelError) as cm:
+            self._model(bad)
+        self.assertIn("title", str(cm.exception))
+
+    def test_two_status_roles_is_an_error(self):
+        bad = MINIMAL.replace(
+                "{name: Status, type: choice, grid: 120, filter: true, vocab: [Open, Shut]}",
+                "{name: Status, type: choice, grid: 120, filter: true, role: status, vocab: [Open, Shut]}") \
+            .replace(
+                "{name: Notes, type: text, grid: hidden}",
+                "{name: Notes, type: choice, grid: hidden, role: status, vocab: [A, B]}")
+        with self.assertRaises(m.ModelError) as cm:
+            self._model(bad)
+        msg = str(cm.exception)
+        self.assertIn("status", msg)
+        self.assertIn("Asset", msg)
+
+    def test_status_field_is_none_without_role_or_filterable_choice(self):
+        text = ("app_name: T\nentities:\n  - entity: A\n    plural: As\n"
+                "    fields:\n      - {name: Name, type: text}\n      - {name: Notes, type: text}\n")
+        e = self._model(text).entities[0]
+        self.assertIsNone(e.status_field)
+
+    def test_description_round_trips_and_defaults_to_empty(self):
+        self.assertEqual(self._model(MINIMAL).description, "")
+        self.assertEqual(
+            self._model("description: Track site equipment.\n" + MINIMAL).description,
+            "Track site equipment.")
+
     def test_dashboard_defaults_on_for_multiple_entities_off_for_one(self):
         self.assertFalse(self._model(MINIMAL).dashboard)
         two = MINIMAL + "  - entity: Site\n    plural: Sites\n    fields:\n      - {name: Name, type: text}\n"
