@@ -66,7 +66,8 @@ field marks the record's identifying label — default when absent: the first
 `text`/`longtext` field, else the first field. `role: status` on a `choice`
 field marks the primary status: it drives the dashboard's pipeline chips and
 status tiles, the semafor colour, and the default sort — left unset, the
-generator silently guesses the first `choice` field carrying `filter: true`.
+generator silently guesses the first `choice` field with a truthy `filter:`
+(`true` or `chips`).
 `templates/model.example.yaml`'s `Site` entity needs the explicit key for
 exactly this reason: `Region` is also a filterable choice and is listed
 first, so without `role: status` on `Status` the generator would treat
@@ -78,7 +79,8 @@ caption text; left blank, it falls back to `"<N> registers · live counts"`
 **The dashboard is gated by `dashboard:` and mirrors the baseline.** On, the
 generator writes `DashboardScreen.pa.yaml`, points `StartScreen` at it, and
 gives it the nav rail's first entry. It mirrors four of the baseline's five
-Dashboard regions — KPI band, pipeline chips, navigation tiles, trademark —
+Dashboard regions — KPI band (only when an entity has both a `money: true`
+field and a status field), pipeline chips, navigation tiles, trademark —
 never the baseline's domain-specific "Gates" region, which stays ungenerated.
 The baseline is the Regional Procurement Plan app
 (`acoe-3688-regional-procurement-plan`, source under
