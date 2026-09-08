@@ -14,6 +14,7 @@
 app_name: Site Equipment Register
 brand: "#300091"
 frame: headermainfooter          # headermain | headermainfooter | headerrailmain
+dashboard: true                  # defaults on anyway with two entities; explicit here for documentation
 entities:
   - entity: Asset
     plural: Assets
@@ -22,9 +23,9 @@ entities:
     key: composite               # composite = "<prefix>|<id>", or: single
     fields:
       - {name: Tag,         type: text,   required: true, grid: 100,  label: TAG, samples: [EQ-10041, EQ-10042]}
-      - {name: Title,       type: text,   required: true, grid: flex, label: EQUIPMENT, search: true}
+      - {name: Title,       type: text,   required: true, grid: flex, label: EQUIPMENT, search: true, role: title}
       - {name: Category,    type: choice, required: true, grid: 130,  filter: true, vocab: [Antenna, Radio Unit, Router]}
-      - {name: Status,      type: choice, required: true, grid: 120,  filter: true, vocab: [In Service, Faulty]}
+      - {name: Status,      type: choice, required: true, grid: 120,  filter: true, vocab: [In Service, Faulty], role: status}
       - {name: Health,      type: choice, grid: 118, filter: chips, vocab: [green, amber, red], semantics: semafor}
       - {name: Amount,      type: number, grid: 118, money: true, currency: EUR, min: 0}
       - {name: ServiceDate, type: date,   grid: 112, semantics: due, warn_days: 45}

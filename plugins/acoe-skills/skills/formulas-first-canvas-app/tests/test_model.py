@@ -166,5 +166,56 @@ class TestGridCap(unittest.TestCase):
         self.assertEqual(len(e.form_fields), 12)
 
 
+class TestRolesAndDashboard(unittest.TestCase):
+    def _model(self, text):
+        import tempfile
+        return m.load_model(write(tempfile.mkdtemp(), text))
+
+    def test_role_title_and_status_are_read(self):
+        mo = self._model(MINIMAL.replace("{name: Tag, type: text, required: true, grid: 100}",
+                                         "{name: Tag, type: text, required: true, grid: 100, role: title}")
+                                .replace("filter: true, vocab: [Open, Shut]",
+                                         "filter: true, role: status, vocab: [Open, Shut]"))
+        e = mo.entities[0]
+        self.assertEqual(e.title_field.name, "Tag")
+        self.assertEqual(e.status_field.name, "Status")
+
+    def test_title_defaults_to_first_text_field(self):
+        e = self._model(MINIMAL).entities[0]
+        self.assertEqual(e.title_field.name, "Tag")
+
+    def test_status_defaults_to_first_filterable_choice(self):
+        e = self._model(MINIMAL).entities[0]
+        self.assertEqual(e.status_field.name, "Status")
+
+    def test_two_title_roles_is_an_error(self):
+        bad = MINIMAL.replace("{name: Tag, type: text, required: true, grid: 100}",
+                              "{name: Tag, type: text, grid: 100, role: title}") \
+                     .replace("{name: Notes, type: text, grid: hidden}",
+                              "{name: Notes, type: text, grid: hidden, role: title}")
+        with self.assertRaises(m.ModelError) as cm:
+            self._model(bad)
+        self.assertIn("title", str(cm.exception))
+
+    def test_role_status_on_a_non_choice_is_an_error(self):
+        bad = MINIMAL.replace("{name: Tag, type: text, required: true, grid: 100}",
+                              "{name: Tag, type: text, grid: 100, role: status}")
+        with self.assertRaises(m.ModelError):
+            self._model(bad)
+
+    def test_dashboard_defaults_on_for_multiple_entities_off_for_one(self):
+        self.assertFalse(self._model(MINIMAL).dashboard)
+        two = MINIMAL + "  - entity: Site\n    plural: Sites\n    fields:\n      - {name: Name, type: text}\n"
+        self.assertTrue(self._model(two).dashboard)
+
+    def test_dashboard_can_be_forced(self):
+        self.assertTrue(self._model("dashboard: true\n" + MINIMAL).dashboard)
+
+    def test_due_and_money_partitions(self):
+        e = self._model(MINIMAL).entities[0]
+        self.assertEqual([f.name for f in e.due_fields], ["Due"])
+        self.assertEqual([f.name for f in e.money_fields], ["Amount"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -60,6 +60,21 @@ class Field(object):
         if self.type not in ARCHETYPES:
             raise ModelError("entity %r, field %r: unknown type %r — valid types are: %s"
                              % (entity_name, self.name, self.type, ", ".join(ARCHETYPES)))
+        self.role = spec.get("role")
+        if self.role not in (None, "title", "status"):
+            raise ModelError(
+                "entity %r, field %r: role %r is not valid — set it to 'title', "
+                "'status', or remove the key" % (entity_name, self.name, self.role))
+        if self.role == "status" and self.type != "choice":
+            raise ModelError(
+                "entity %r, field %r: role: status requires type: choice, got "
+                "type: %r — change the field's type to choice or remove role: status"
+                % (entity_name, self.name, self.type))
+        if self.role == "title" and self.type not in ("text", "longtext"):
+            raise ModelError(
+                "entity %r, field %r: role: title requires type: text or longtext, "
+                "got type: %r — change the field's type or remove role: title"
+                % (entity_name, self.name, self.type))
         self.required = bool(spec.get("required", False))
         self.search = bool(spec.get("search", False))
         self.filter = spec.get("filter", False)
@@ -129,6 +144,18 @@ class Entity(object):
                 raise ModelError("entity %r: duplicate field name %r"
                                  % (self.entity, f.name))
             seen.add(f.name)
+        titles = [f.name for f in self.fields if f.role == "title"]
+        if len(titles) > 1:
+            raise ModelError(
+                "entity %r: more than one field has role: title (%s) — an entity "
+                "may have only one; remove role: title from the extra fields"
+                % (self.entity, ", ".join(titles)))
+        statuses = [f.name for f in self.fields if f.role == "status"]
+        if len(statuses) > 1:
+            raise ModelError(
+                "entity %r: more than one field has role: status (%s) — an entity "
+                "may have only one; remove role: status from the extra fields"
+                % (self.entity, ", ".join(statuses)))
 
     # ---- derived names: the single source of truth -------------------------
     @property
@@ -205,6 +232,34 @@ class Entity(object):
     def choice_fields(self):
         return [f for f in self.fields if f.type == "choice"]
 
+    @property
+    def title_field(self):
+        for f in self.fields:
+            if f.role == "title":
+                return f
+        for f in self.fields:
+            if f.type in ("text", "longtext"):
+                return f
+        return self.fields[0]
+
+    @property
+    def status_field(self):
+        for f in self.fields:
+            if f.role == "status":
+                return f
+        for f in self.fields:
+            if f.type == "choice" and f.filter:
+                return f
+        return None
+
+    @property
+    def due_fields(self):
+        return [f for f in self.fields if f.type == "date" and f.semantics == "due"]
+
+    @property
+    def money_fields(self):
+        return [f for f in self.fields if f.type == "number" and f.money]
+
     def __repr__(self):
         return "<Entity %s (%d fields)>" % (self.entity, len(self.fields))
 
@@ -253,6 +308,10 @@ class Model(object):
                         "entities) so their names do not concatenate to the same "
                         "identifier" % (other_entity, other_field, e.entity, f.name, cname))
                 choices_owner[cname] = (e.entity, f.name)
+
+        raw = data.get("dashboard")
+        self.dashboard = bool(raw) if raw is not None else len(self.entities) > 1
+        self.description = str(data.get("description") or "")
 
 
 def load_model(path):
