@@ -71,7 +71,7 @@ class TestGenerateTwoEntityApp(unittest.TestCase):
         self.assertNotIn("Clear(colAssets)", app)
         self.assertNotIn("Clear(colSites)", app)
 
-    def test_navigation_registry_lists_all_four_screens(self):
+    def test_navigation_registry_lists_all_four_screens_plus_dashboard(self):
         app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
         # Ruling 13: TWO_ENTITY has two entities, so `dashboard` defaults on
         # (Task 5) — two entity list rows plus the dashboard row, which is

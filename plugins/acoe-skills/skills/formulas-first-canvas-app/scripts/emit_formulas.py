@@ -501,10 +501,17 @@ def _dashboard_specs(model):
 
     `constDashboardNavigation` is built as three priority tiers — entity
     totals, then per-entity overdue counts, then per-entity status-value
-    slices — concatenated in that order, then capped at 8 rows: a model
-    with several entities and long vocabularies must not overflow the
-    tile grid Task 7's screen renders them on. Rows past the cap are
-    dropped silently, lowest-priority first.
+    slices — concatenated HIGHEST priority first, in that order, then
+    capped at 8 rows with a plain positional `[:8]`: a model with several
+    entities and long vocabularies must not overflow the tile grid Task
+    7's screen renders them on. Because the cap is a slice of the
+    concatenated list rather than a per-tier budget, whatever tier lands
+    past row 8 is what gets cut, lowest priority first — status-value
+    slices (tier 3, listed last) are the first casualty, then overdue
+    tiles (tier 2); ordinarily entity totals (tier 1, listed first) never
+    lose a row. The one case that stops being true: if entity COUNT alone
+    already exceeds 8, some entities' tier-1 TOTAL tiles are themselves
+    silently dropped before tier 2 or 3 ever contribute a row.
     """
     if not model.dashboard:
         return []
@@ -542,6 +549,10 @@ def _dashboard_specs(model):
                    entity.scope_formula, status.name, _quote(value))
             )
 
+    # A positional slice of all 3 tiers concatenated, not a per-tier
+    # budget: past 8 CANDIDATES total, whatever tier they fall in gets
+    # cut — if entity count alone is > 8, tier-1 total tiles for the
+    # entities past the 8th never survive to tier 2 or 3 at all.
     nav_rows = nav_rows[:8]
     nav_text = (
         "      // ---- dashboard: navigation tiles -----------------------\n"

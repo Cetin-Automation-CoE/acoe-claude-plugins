@@ -110,6 +110,33 @@ class TestGenuineDependencyEdges(unittest.TestCase):
                          "constScreens must be ordered after enumScreenType, which "
                          "its own text references, even from a reversed input list")
 
+    def test_dashboard_sources_stay_after_their_scope_formulas_even_when_specs_are_scrambled(self):
+        # RULING 15 Important 4: the sibling of the test above, for the two
+        # dashboard blocks that carry a real edge to a scope formula.
+        # constDashboardNavigation's status-slice rows Filter() BOTH
+        # entities' scope formulas (Asset and Site each have a status
+        # field); constDashboardBand only ever references the FIRST
+        # qualifying entity (Asset alone has both money and a status field
+        # in dashboard_model()). Reversing puts both scope formulas (built
+        # early in _all_specs) LAST and both dashboard blocks (built late,
+        # right before the registry) FIRST — the worst case for a
+        # position-only tie-break.
+        mo = dashboard_model()
+        specs = ef._all_specs(mo, rows=4, today=TODAY)
+        scrambled = list(reversed(specs))
+        blocks, _ = ef._finalize(scrambled, ef._known_names(mo))
+        ordered = ef.topo_sort(blocks)
+        names = [b.name for b in ordered]
+        self.assertLess(names.index("constAssetsInScope"), names.index("constDashboardNavigation"),
+                         "constDashboardNavigation must be ordered after constAssetsInScope, "
+                         "which its own text references, even from a reversed input list")
+        self.assertLess(names.index("constSitesInScope"), names.index("constDashboardNavigation"),
+                         "constDashboardNavigation must be ordered after constSitesInScope, "
+                         "which its own text references, even from a reversed input list")
+        self.assertLess(names.index("constAssetsInScope"), names.index("constDashboardBand"),
+                         "constDashboardBand must be ordered after constAssetsInScope, which "
+                         "its own text references, even from a reversed input list")
+
 
 class TestPerEntityLayer(unittest.TestCase):
     def setUp(self):
@@ -320,6 +347,85 @@ def dashboard_model():
     return mo
 
 
+def due_and_status_model():
+    """A single entity with a due field AND a status field, dashboard
+    forced on. two_entity_model() has no date field at all — Ruling 15
+    Important 1: without a fixture like this, _dashboard_specs' tier 2
+    (the overdue navigation tile) never actually runs in the suite."""
+    mo = m.Model({
+        "app_name": "Tasks Only",
+        "entities": [
+            {"entity": "Task", "plural": "Tasks", "fields": [
+                {"name": "Title", "type": "text", "grid": "flex", "search": True},
+                {"name": "Status", "type": "choice", "grid": 120, "filter": True,
+                 "vocab": ["Open", "Done"]},
+                {"name": "Due", "type": "date", "grid": 112, "semantics": "due"},
+            ]},
+        ],
+    })
+    mo.dashboard = True
+    return mo
+
+
+def wide_dashboard_model():
+    """Two entities, each with a due field and a 5-value status vocab:
+    2 totals + 2 overdue + 10 status slices = 14 candidate navigation
+    rows. Ruling 15 Important 2: two_entity_model() tops out at 6
+    candidates and never reaches the 8-row cap; this fixture actually
+    exceeds it, so truncation is exercised for real."""
+    def entity(name, plural):
+        return {
+            "entity": name, "plural": plural, "fields": [
+                {"name": "Name", "type": "text", "grid": "flex", "search": True},
+                {"name": "Status", "type": "choice", "grid": 120, "filter": True,
+                 "vocab": ["S1", "S2", "S3", "S4", "S5"]},
+                {"name": "Due", "type": "date", "grid": 112, "semantics": "due"},
+            ],
+        }
+    mo = m.Model({
+        "app_name": "Wide Ops",
+        "entities": [entity("Alpha", "Alphas"), entity("Beta", "Betas")],
+    })
+    mo.dashboard = True
+    return mo
+
+
+def mixed_qualifying_entities_model():
+    """Four entities, Ruling 15 Important 3: Alpha has a status field but
+    no money field (must NOT contribute a band); Bravo and Charlie both
+    have money AND a status field (Bravo is first in model order — the
+    band must pick Bravo, not Alpha or Charlie); Delta has no choice
+    field at all, so no status_field and no constDashboardPipelineDelta
+    anywhere — neither in the emitted text nor in _known_names."""
+    mo = m.Model({
+        "app_name": "Mixed Ops",
+        "entities": [
+            {"entity": "Alpha", "plural": "Alphas", "fields": [
+                {"name": "Name", "type": "text", "grid": "flex"},
+                {"name": "Status", "type": "choice", "grid": 120, "filter": True,
+                 "vocab": ["Open", "Closed"]},
+            ]},
+            {"entity": "Bravo", "plural": "Bravos", "fields": [
+                {"name": "Name", "type": "text", "grid": "flex"},
+                {"name": "Status", "type": "choice", "grid": 120, "filter": True,
+                 "vocab": ["Active", "Inactive"]},
+                {"name": "Amount", "type": "number", "grid": 118, "money": True},
+            ]},
+            {"entity": "Charlie", "plural": "Charlies", "fields": [
+                {"name": "Name", "type": "text", "grid": "flex"},
+                {"name": "Status", "type": "choice", "grid": 120, "filter": True,
+                 "vocab": ["Up", "Down"]},
+                {"name": "Amount", "type": "number", "grid": 118, "money": True},
+            ]},
+            {"entity": "Delta", "plural": "Deltas", "fields": [
+                {"name": "Name", "type": "text", "grid": "flex"},
+            ]},
+        ],
+    })
+    mo.dashboard = True
+    return mo
+
+
 class TestDashboardFormulas(unittest.TestCase):
     def setUp(self):
         self.text = ef.emit_all(dashboard_model(), rows=4, today=TODAY)
@@ -356,6 +462,69 @@ class TestDashboardFormulas(unittest.TestCase):
         for e in mo.entities:
             e.fields = [f for f in e.fields if not f.money]
         self.assertNotIn("constDashboardBand", ef.emit_all(mo, rows=4, today=TODAY))
+
+    def test_navigation_overdue_tile_sits_between_total_and_status_slices(self):
+        # RULING 15 Important 1: dashboard_model() (built on
+        # two_entity_model()) has no date field at all, so tier 2 (overdue)
+        # never runs there. due_and_status_model() is the fixture that
+        # actually exercises it: one entity with both a due field and a
+        # status field.
+        text = ef.emit_all(due_and_status_model(), rows=4, today=TODAY)
+        nav = text.split("constDashboardNavigation =")[1].split("];")[0]
+        self.assertIn(
+            '{Screen: TasksListScreen, DisplayName: "Tasks overdue", Icon: "Clock", '
+            'Count: CountRows(Filter(constTasksInScope, Due < Today()))}',
+            nav)
+        total_idx = nav.index("CountRows(colTasks)")
+        overdue_idx = nav.index('"Tasks overdue"')
+        slice_idx = nav.index("Status =")
+        self.assertLess(total_idx, overdue_idx,
+                         "the overdue tile must come after the entity's total tile")
+        self.assertLess(overdue_idx, slice_idx,
+                         "the overdue tile must come before the entity's first status slice")
+
+    def test_navigation_cap_drops_status_slices_before_totals_or_overdue(self):
+        # RULING 15 Important 2: test_navigation_capped_at_eight_rows above
+        # only asserts <= 8 on a fixture that produces 6 candidates — the
+        # cap never actually engages there. wide_dashboard_model() produces
+        # 14 candidates (2 totals + 2 overdue + 10 status slices), so this
+        # exercises real truncation, and proves WHAT gets cut: entity
+        # totals and overdue tiles (the two higher-priority tiers) all
+        # survive; status-value slices (lowest priority) take the loss.
+        text = ef.emit_all(wide_dashboard_model(), rows=4, today=TODAY)
+        nav = text.split("constDashboardNavigation =")[1].split("];")[0]
+        self.assertEqual(nav.count("Screen:"), 8)
+        self.assertIn("CountRows(colAlphas)", nav)
+        self.assertIn("CountRows(colBetas)", nav)
+        self.assertIn('DisplayName: "Alphas overdue"', nav)
+        self.assertIn('DisplayName: "Betas overdue"', nav)
+        # 2 totals + 2 overdue = 4 rows already spent, leaving 4 of the 10
+        # candidate status-value slices (5 per entity) room to survive.
+        self.assertEqual(nav.count("Status ="), 4)
+
+    def test_band_picks_the_first_qualifying_entity_when_mixed(self):
+        # RULING 15 Important 3: Alpha (status, no money) and Charlie
+        # (money AND status, but third) must not be mistaken for the
+        # qualifying entity — only Bravo (money AND status, and first
+        # among qualifiers) may produce the band.
+        mo = mixed_qualifying_entities_model()
+        text = ef.emit_all(mo, rows=4, today=TODAY)
+        self.assertEqual(text.count("constDashboardBand ="), 1)
+        band = text.split("constDashboardBand =")[1].split(";")[0]
+        self.assertIn("constBravosInScope", band)
+        self.assertNotIn("constAlphasInScope", band)
+        self.assertNotIn("constCharliesInScope", band)
+
+    def test_pipeline_absent_for_entity_with_no_choice_field(self):
+        # RULING 15 Important 3: Delta has no choice field at all, so no
+        # status_field — constDashboardPipelineDelta must not appear in
+        # the emitted text, and _known_names must not claim it either
+        # (a name known but never defined would be harmless here since
+        # nothing else could reference it, but the two must stay in
+        # lockstep — see _known_names' own "hand-maintained mirror" note).
+        mo = mixed_qualifying_entities_model()
+        self.assertNotIn("constDashboardPipelineDelta", ef.emit_all(mo, rows=4, today=TODAY))
+        self.assertNotIn("constDashboardPipelineDelta", ef._known_names(mo))
 
     def test_dashboard_registry_row_is_typed_list_and_grouped_overview(self):
         # RULING 10: cmp_Navigation renders Filter(cmp_Navigation.Screens,
