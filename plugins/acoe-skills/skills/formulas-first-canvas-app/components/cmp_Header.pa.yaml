@@ -105,7 +105,6 @@ ComponentDefinitions:
         Default: =true
     Properties:
       Height: =constStyle.Header.Height
-      Width: =App.Width
     Children:
       - con_Header:
           Control: GroupContainer

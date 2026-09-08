@@ -14,14 +14,18 @@ static rules that catch the same failure family before it reaches a live app:
      carries an explicit size on the parent's MAIN axis — Width for a
      Horizontal parent, Height for a Vertical one. `LayoutMinHeight` (or
      `LayoutMinWidth`) does NOT substitute — it bounds auto-sizing, it does
-     not provide it, and a fixed child ignores it entirely.
+     not provide it, and a fixed child ignores it entirely. For a
+     `CanvasComponent` instance, FillPortions ABSENT also counts as fixed
+     (see COVERAGE LIMITS) — every other control type needs the explicit
+     `=0` to be checked here.
   R2 every auto-layout container has either an explicit size on itself
      (Width or Height) or at least one flexible child (`FillPortions` present
      and not `=0`) — otherwise its own size is undetermined.
-  R3 a leaf control (anything but a GroupContainer, CanvasComponent,
-     ModernText or Text — see COVERAGE LIMITS) that is a direct child of an
-     auto-layout container needs SOME sizing info — `FillPortions` or an
-     explicit Width/Height — or it collapses to its control default.
+  R3 a leaf control (anything but a GroupContainer, ModernText or Text — see
+     COVERAGE LIMITS) that is a direct child of an auto-layout container
+     needs SOME sizing info — `FillPortions` or an explicit Width/Height —
+     or it collapses to its control default. `CanvasComponent` is NOT
+     exempt here — see COVERAGE LIMITS.
   R4 `Visible:` on a flexible (`FillPortions` present and not `=0`) child is
      flagged. An invisible child is dropped from auto-layout ENTIRELY, not
      hidden in place — the gap it held collapses and the layout shifts with
@@ -60,18 +64,34 @@ COVERAGE LIMITS beyond what iter_properties already carries:
     Gallery's own `Variant: Vertical`/`Horizontal` template layout are out of
     scope for R1/R2/R4 (a Gallery's OWN sizing, as a leaf, is still covered by
     R3) — Power Apps' auto-layout distribution rules do not apply there.
-  * R1 and R3 do not apply to `CanvasComponent` instances. A component
-    definition's own root `Properties:` supply a real, working Height/Width
-    formula for every instance that does not override them — that is a
-    cross-file fact (the definition lives in a different `.pa.yaml` than the
-    instance) this guard cannot see, and check_control_props.py's own
-    UNIVERSAL_INSTANCE_PROPS precedent already treats Height/Width as
-    optional-to-restate at the instance site for exactly this reason (its own
-    comment cites a compiled reference app with 19 Width-setting instances
-    against a higher total instance count). Requiring every instance to
-    restate its own component's default would be checking something that is
-    already correct by construction. R2 and R4 still apply to a
-    `CanvasComponent` instance used AS an auto-layout container's child
+  * `CanvasComponent` instances are NOT exempt from R1 or R3. An earlier
+    version of this guard exempted them, reasoning that a component
+    definition's own root `Properties:` always supplies a working
+    Height/Width default for an instance that doesn't override it. That does
+    not hold in general: cmp_Header's baseline root sets `Height` but no
+    `Width` at all (a component root's width is normally the INSTANCE's job,
+    not the definition's, same as any other control), so an instance with no
+    Width and no default anywhere renders as nothing. The exemption hid
+    exactly this on a live push: a nav-rail instance with no Width flexed to
+    half the screen instead of failing loudly.
+      R1's fixed-child test is intentionally WIDER for `CanvasComponent` than
+    for every other control type because of this: a component instance is
+    "fixed" (R1-eligible) whenever it is not explicitly flexible
+    (`FillPortions` present and not `=0`) — FillPortions ABSENT counts as
+    fixed, the same default Power Apps itself applies (see the Gallery
+    example above). Every other control type keeps the narrower, explicit-
+    `FillPortions: =0` trigger: broadening THAT to every control would flag
+    emit_screens.py's own generated, unsized form labels (no FillPortions, no
+    Height, no Width — see the ModernText/Text carve-out below for the same
+    discovery) even though a text leaf's natural content size makes an unset
+    dimension a non-issue there. A `CanvasComponent` instance has no such
+    natural size this guard can see — closing that gap for components only,
+    without widening R1 for every control type, is not the narrowing Ruling
+    3 forbids; it is the opposite.
+      R3 applies its ordinary any-axis-or-FillPortions test to
+    `CanvasComponent`, unchanged from any other leaf — no special case was
+    needed there. R2 and R4 continue to apply to a `CanvasComponent`
+    instance used AS an auto-layout container's child exactly as before
     (R4: a flexible, conditionally-invisible component instance still drops
     the same way a primitive control would).
   * R3 does not apply to `ModernText`/`Text`. R1 (main-axis sizing on an
@@ -216,10 +236,18 @@ def check_text(text, filename, counts=None):
             direction = parent_props.get("LayoutDirection", "") or ""
 
             # ---- R1: fixed child needs the parent's main-axis size --------
-            # CanvasComponent instances are exempt: the component's own
-            # definition file supplies a working Height/Width default for
-            # any instance that doesn't override it (see COVERAGE LIMITS).
-            if m["type"] != "CanvasComponent" and cprops.get("FillPortions") == "=0":
+            # A CanvasComponent instance is "fixed" (R1-eligible) whenever it
+            # is not explicitly flexible — FillPortions ABSENT counts as
+            # fixed for a component, same as Power Apps' own default (see
+            # the Gallery example in the module docstring). Every other
+            # control type keeps the narrower, explicit-`FillPortions: =0`
+            # trigger (see COVERAGE LIMITS for why this asymmetry exists and
+            # is not itself a narrowing of the rule).
+            if m["type"] == "CanvasComponent":
+                is_fixed_child = not is_flexible(cprops)
+            else:
+                is_fixed_child = cprops.get("FillPortions") == "=0"
+            if is_fixed_child:
                 if "Horizontal" in direction:
                     needed = "Width"
                 elif "Vertical" in direction:
@@ -234,23 +262,29 @@ def check_text(text, filename, counts=None):
                         hint = (" (%s is set, but LayoutMin%s is ignored for "
                                 "a fixed child — it bounds auto-sizing, it "
                                 "does not provide it)" % (minprop, needed))
+                    # A CanvasComponent can land here with FillPortions
+                    # absent rather than literally "=0" (see is_fixed_child
+                    # above) — say so accurately instead of claiming a
+                    # property value that was never written.
+                    fixed_desc = ("FillPortions: =0"
+                                  if cprops.get("FillPortions") == "=0" else
+                                  "a fixed (FillPortions not set) CanvasComponent")
                     findings.append(Finding(
                         "R1", filename, line, name,
-                        "FillPortions: =0 child of %r (a %s auto-layout "
+                        "%s child of %r (a %s auto-layout "
                         "container) has no explicit %s%s"
-                        % (parent, direction.split(".")[-1] or "?",
+                        % (fixed_desc, parent, direction.split(".")[-1] or "?",
                            needed, hint)))
 
             # ---- R3: leaf control needs FillPortions or an explicit size --
             # GroupContainer is R2's concern instead (its own sizing, not a
-            # leaf-default collapse); CanvasComponent is exempt for the same
-            # cross-file reason as R1 (see COVERAGE LIMITS). ModernText/Text
-            # are exempt too — their own "control default" is their natural
-            # content height, not a Gallery-style forced collapse (see
-            # COVERAGE LIMITS for how this was discovered and why it is
-            # narrow to R3 only).
-            if m["type"] not in ("GroupContainer", "CanvasComponent",
-                                  "ModernText", "Text"):
+            # leaf-default collapse). ModernText/Text are exempt too — their
+            # own "control default" is their natural content height, not a
+            # Gallery-style forced collapse (see COVERAGE LIMITS for how
+            # this was discovered and why it is narrow to R3 only).
+            # CanvasComponent is NOT exempt here (or from R1 above) — see
+            # COVERAGE LIMITS for why that former exemption was removed.
+            if m["type"] not in ("GroupContainer", "ModernText", "Text"):
                 if not (("FillPortions" in cprops) or
                         any(p in cprops for p in SIZE_PROPS)):
                     findings.append(Finding(

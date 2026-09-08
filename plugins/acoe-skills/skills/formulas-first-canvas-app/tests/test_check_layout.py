@@ -202,13 +202,17 @@ class TestRule3LeafNeedsFillPortionsOrSize(unittest.TestCase):
 
 
 class TestRule3Carveouts(unittest.TestCase):
-    """Two principled exceptions discovered while running check_layout.py
+    """One principled exception discovered while running check_layout.py
     against this skill's own templates/components AND emit_screens.py's own
     generated output (see the module docstring's COVERAGE LIMITS):
     ModernText/Text are exempt from Rule 3 entirely (their own control
-    default is natural content height, not a Gallery-style collapse), and a
-    CanvasComponent instance's sizing is governed by its own definition file,
-    which this guard cannot see."""
+    default is natural content height, not a Gallery-style collapse).
+
+    A second carve-out used to live here for CanvasComponent instances,
+    reasoning that sizing was always governed by the component's own
+    definition file. That reasoning hid a live bug (a nav-rail instance with
+    no Width flexed to half the screen) and has been removed — see
+    TestComponentInstancesAreNotExempt below."""
 
     def test_moderntext_with_autoheight_is_exempt(self):
         text = screen(
@@ -277,24 +281,47 @@ class TestRule3Carveouts(unittest.TestCase):
         self.assertTrue(any(f.rule == "R1" and f.control == "lbl_Fixed" for f in findings),
                          findings)
 
-    def test_canvascomponent_instance_is_exempt_from_rule1_and_rule3(self):
-        text = screen(
-            "      - con_Row:\n"
-            "          Control: GroupContainer\n"
-            "          Variant: AutoLayout\n"
-            "          Properties:\n"
-            "            LayoutDirection: =LayoutDirection.Horizontal\n"
-            "            Height: =40\n"
+
+class TestComponentInstancesAreNotExempt(unittest.TestCase):
+    """The nav rail flexed to half the screen because its instance had no
+    Width and the guard exempted CanvasComponent children. The baseline
+    sizes every component instance explicitly.
+
+    Adapted from the task brief: `check_text(text, filename)` is already the
+    guard's real entry point (no rename needed). The assertions check
+    `f.control` rather than scanning `f.message` for the child's own name —
+    R1's message text (unlike R3's) never repeated the erroring child's
+    name, only the rule/control fields do, matching every other test in
+    this module."""
+
+    def test_unsized_component_in_horizontal_container_is_flagged(self):
+        text = (
+            "Screens:\n  S:\n    Children:\n"
+            "      - con_Row:\n          Control: GroupContainer\n          Variant: AutoLayout\n"
+            "          Properties:\n            LayoutDirection: =LayoutDirection.Horizontal\n"
+            "            Height: =40\n            Width: =Parent.Width\n"
             "          Children:\n"
-            "            - cmp_Rail:\n"
-            "                Control: CanvasComponent\n"
+            "            - cmp_X:\n                Control: CanvasComponent\n"
             "                ComponentName: cmp_Navigation\n"
-            "                Properties:\n"
-            "                  FillPortions: =0\n"
-            "                  Height: =Parent.Height\n"
+            "                Properties:\n                  Height: =Parent.Height\n"
         )
-        findings = findings_for(text)
-        self.assertFalse(any(f.rule in ("R1", "R3") for f in findings), findings)
+        findings = cl.check_text(text, "t.pa.yaml")
+        self.assertTrue(any(f.control == "cmp_X" for f in findings), findings)
+
+    def test_sized_component_passes(self):
+        text = (
+            "Screens:\n  S:\n    Children:\n"
+            "      - con_Row:\n          Control: GroupContainer\n          Variant: AutoLayout\n"
+            "          Properties:\n            LayoutDirection: =LayoutDirection.Horizontal\n"
+            "            Height: =40\n            Width: =Parent.Width\n"
+            "          Children:\n"
+            "            - cmp_X:\n                Control: CanvasComponent\n"
+            "                ComponentName: cmp_Navigation\n"
+            "                Properties:\n                  Height: =Parent.Height\n"
+            "                  Width: =60\n                  FillPortions: =0\n"
+        )
+        findings = [f for f in cl.check_text(text, "t.pa.yaml") if f.control == "cmp_X"]
+        self.assertEqual(findings, [])
 
 
 class TestRule4VisibleOnFlexibleSpacer(unittest.TestCase):
