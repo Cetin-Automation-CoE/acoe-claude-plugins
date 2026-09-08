@@ -66,7 +66,7 @@ time. `GroupContainer` is not in `references/control-contracts.yaml` at all
 """
 from __future__ import annotations
 
-from emit_screens import _block, _quote, _screen_chrome
+from emit_screens import _block, _quote, _render_prop_line, _screen_chrome
 
 
 # ---- eligibility: mirrors emit_formulas._dashboard_specs's own conditions -
@@ -308,14 +308,28 @@ def _pipeline_section(model, item_indent):
 # ---- region 4: navigation tiles --------------------------------------------
 
 def _tiles_section(model, item_indent):
-    """`con_Dash_Tiles` -> `gal_NavigationTiles` -> `con_ScreenTiles`, always
-    emitted (Task 6's `constDashboardNavigation` always has at least one row
-    — one per entity — so unlike the band/pipeline this is never
-    conditional). `con_ScreenTiles` is `Variant: ManualLayout`, matching the
-    baseline exactly: check_layout.py's own coverage limits mean R1/R2/R4
-    never apply to a ManualLayout container or its children, so the three
-    controls inside it reuse the baseline's own absolute-position formulas
-    verbatim, off `con_ScreenTiles`'s own Height/Width/X/Y.
+    """`con_Dash_Tiles` -> `gal_NavigationTiles` -> `con_ScreenTiles` plus
+    its two SIBLING buttons, always emitted (Task 6's
+    `constDashboardNavigation` always has at least one row — one per entity
+    — so unlike the band/pipeline this is never conditional).
+
+    I3 (final review, IMPORTANT): the baseline's own gallery template
+    (Dashboard.pa.yaml:303/333/349) has `con_ScreenTiles`,
+    `btn_ScreenTiles_Navigate` and `btn_ScreenTiles_Count` as three SIBLING
+    entries of `gal_NavigationTiles`'s template — not the two buttons
+    NESTED inside the container (an earlier version of this module did
+    that while keeping the baseline's absolute-position coordinates, which
+    is exactly the bug: `X: =con_ScreenTiles.X`/`Y: =con_ScreenTiles.Y - 10`
+    etc. position each button relative to the container FROM OUTSIDE it,
+    so nesting them inside doubles up the container's own offset and the
+    count badge overhangs the tile's corner instead of sitting pinned to
+    it). Only `lbl_ScreenTiles_Screen` stays a real child of the container.
+    `con_ScreenTiles` is `Variant: ManualLayout`, matching the baseline
+    exactly: check_layout.py's own coverage limits mean R1/R2/R4 never
+    apply to a ManualLayout container or its children, so every control
+    here reuses the baseline's own absolute-position formulas verbatim,
+    off `con_ScreenTiles`'s own Height/Width/X/Y — unchanged by this fix,
+    only WHERE each control sits in the tree changed.
     """
     lbl_screen = _block(
         "lbl_ScreenTiles_Screen", item_indent + 18, "ModernText",
@@ -335,7 +349,7 @@ def _tiles_section(model, item_indent):
             ("Y", "=Parent.Height - Self.Height - 8"),
         ])
     btn_navigate = _block(
-        "btn_ScreenTiles_Navigate", item_indent + 18, "Button",
+        "btn_ScreenTiles_Navigate", item_indent + 12, "Button",
         [
             ("AccessibleLabel", '=$"Open {ThisItem.DisplayName}"'),
             ("Appearance", "='ButtonCanvas.Appearance'.Transparent"),
@@ -352,7 +366,7 @@ def _tiles_section(model, item_indent):
             ("Y", "=con_ScreenTiles.Y"),
         ])
     btn_count = _block(
-        "btn_ScreenTiles_Count", item_indent + 18, "Button",
+        "btn_ScreenTiles_Count", item_indent + 12, "Button",
         [
             ("AccessibleLabel", "=Self.Text"),
             ("BasePaletteColor", "=constSecondaryColor.RGBA"),
@@ -380,7 +394,10 @@ def _tiles_section(model, item_indent):
             ("RadiusTopLeft", "=constStyle.Dashboard.Radius"),
             ("RadiusTopRight", "=constStyle.Dashboard.Radius"),
             ("Width", "=Parent.TemplateWidth"),
-        ], variant="ManualLayout", children=[lbl_screen, btn_navigate, btn_count])
+        # I3: lbl_ScreenTiles_Screen ONLY — btn_ScreenTiles_Navigate/_Count
+        # are siblings of this container in the gallery template below, not
+        # children of it (see this function's own docstring).
+        ], variant="ManualLayout", children=[lbl_screen])
 
     gallery_block = _block(
         "gal_NavigationTiles", item_indent + 6, "Gallery",
@@ -399,7 +416,10 @@ def _tiles_section(model, item_indent):
             ("WrapCount",
              "=Max(1, RoundDown(Self.Width / (constStyle.Dashboard.TileSize + "
              "constStyle.Dashboard.Gap), 0))"),
-        ], variant="Horizontal", children=[tile_block])
+        # I3 (final review): baseline order — con_ScreenTiles,
+        # btn_ScreenTiles_Navigate, btn_ScreenTiles_Count — as three SIBLING
+        # template children, not two of them nested inside the first.
+        ], variant="Horizontal", children=[tile_block, btn_navigate, btn_count])
 
     wrapper_block = _block(
         "con_Dash_Tiles", item_indent, "GroupContainer",
@@ -489,17 +509,28 @@ def emit_dashboard_screen(model):
             ("Y", "=%s.Height + 10" % header_name),
         ], variant="AutoLayout", children=body_children)
 
-    # Screen-level Properties (Fill/LoadingSpinnerColor): identical on every
-    # screen this skill emits (list, form) AND on the baseline's own
-    # Dashboard screen — never a control property, so never routed through
-    # _block/_check_control_prop (see emit_screens.py's own module docstring,
-    # M4, for why that split exists).
-    lines = [
-        "Screens:", "  DashboardScreen:", "    Properties:",
-        "      Fill: =constReactGray.RGBA",
-        "      LoadingSpinnerColor: =constPrimaryColor.RGBA",
-        "    Children:",
+    # Screen-level Properties (Fill/LoadingSpinnerColor/OnVisible): never a
+    # control property, so never routed through _block/_check_control_prop
+    # (see emit_screens.py's own module docstring, M4, for why that split
+    # exists) — rendered via _render_prop_line instead, exactly like
+    # emit_list_screen/emit_form_screen's own top_props, since OnVisible's
+    # value carries a `:` (inside `{locNavigation: false}`) that a bare
+    # string line would hand to a YAML reader as an ambiguous nested
+    # mapping (see _needs_block_scalar's own docstring in emit_screens.py).
+    top_props = [
+        ("Fill", "=constReactGray.RGBA"),
+        ("LoadingSpinnerColor", "=constPrimaryColor.RGBA"),
+        # I4 (final review): seeds locNavigation collapsed on entry, exactly
+        # like every list screen's own OnVisible tail (emit_list_screen) —
+        # without this, a dashboard-as-StartScreen app never resets the nav
+        # rail's expanded/collapsed state on entry the way every other
+        # screen does.
+        ("OnVisible", "=UpdateContext({locNavigation: false})"),
     ]
+    lines = ["Screens:", "  DashboardScreen:", "    Properties:"]
+    for name, value in sorted(top_props):
+        lines.extend(_render_prop_line("      ", name, value))
+    lines.append("    Children:")
     for block in (header_block, nav_block, body_block):
         lines.extend(block)
     return "\n".join(lines) + "\n"

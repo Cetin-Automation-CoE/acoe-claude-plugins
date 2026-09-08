@@ -61,6 +61,45 @@ class TestDashboardScreen(unittest.TestCase):
     def test_tile_navigates(self):
         self.assertIn("OnSelect: =Navigate(ThisItem.Screen, ScreenTransition.Fade)", self.text)
 
+    def test_tile_navigate_and_count_buttons_are_siblings_of_the_container(self):
+        """I3 (final review, IMPORTANT): the baseline's gallery template
+        (Dashboard.pa.yaml:303/333/349) has con_ScreenTiles,
+        btn_ScreenTiles_Navigate and btn_ScreenTiles_Count as three SIBLING
+        template children, in that order — not the two buttons nested
+        INSIDE the container. Nesting kept the baseline's absolute-position
+        coordinates (X/Y off con_ScreenTiles.X/.Y/.Width/.Height) but no
+        longer matched what they are positioned relative TO, which is how
+        the count badge ended up overhanging the tile from outside instead
+        of pinned to its corner."""
+        data = yaml.safe_load(self.text)
+        top_children = data["Screens"]["DashboardScreen"]["Children"]
+        body_children = next(c["con_Dashboard_Body"] for c in top_children
+                             if "con_Dashboard_Body" in c)["Children"]
+        tiles_body = next(c["con_Dash_Tiles"] for c in body_children
+                          if "con_Dash_Tiles" in c)
+        gallery_body = next(c["gal_NavigationTiles"] for c in tiles_body["Children"]
+                            if "gal_NavigationTiles" in c)
+        names = [list(c.keys())[0] for c in gallery_body["Children"]]
+        self.assertEqual(names, ["con_ScreenTiles", "btn_ScreenTiles_Navigate",
+                                 "btn_ScreenTiles_Count"])
+        # lbl_ScreenTiles_Screen stays INSIDE the container.
+        container_children = [list(c.keys())[0] for c in gallery_body["Children"][0]
+                              ["con_ScreenTiles"]["Children"]]
+        self.assertEqual(container_children, ["lbl_ScreenTiles_Screen"])
+
+    def test_dashboard_seeds_locnavigation_on_visible(self):
+        """I4 (final review): seeded exactly like every list screen's own
+        OnVisible tail (see emit_list_screen) — a dashboard-as-StartScreen
+        app must reset the nav rail to collapsed on entry same as every
+        other screen. Rendered as a block scalar (`OnVisible: |-`), not
+        inline: the value's embedded `:` (inside `{locNavigation: false}`)
+        is exactly the shape `_needs_block_scalar` exists to catch, the
+        same reason the nav instance's own OnClose (identical value)
+        already renders this way."""
+        self.assertIn("OnVisible: |-", self.text)
+        block = self.text.split("OnVisible: |-", 1)[1].split("\n", 2)[1]
+        self.assertIn("=UpdateContext({locNavigation: false})", block)
+
     def test_band_omitted_when_model_has_none(self):
         mo = dash_model()
         for e in mo.entities:
