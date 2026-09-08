@@ -1,5 +1,8 @@
 # Live-compile fix report — 2026-09-07
 
+> **Superseded 2026-09-07:** this report's fourth-run conclusion — `=constScreens` is correct on `cmp_Navigation.Screens`, and the `Navigation.Screens` errors were a cascade from `cmp_FilterButton` — did not hold on a cold coauthoring session.
+> See the fifth-run correction in `plugins/acoe-skills/skills/formulas-first-canvas-app/references/compile-error-playbook.md` (written by Phase 3 Task 8) for what actually fixed it.
+
 First real `compile_canvas` push of this generator's output returned 59 errors
 against a live environment, all attributable to exactly two root causes. Both
 fixed, both guarded against regression.
