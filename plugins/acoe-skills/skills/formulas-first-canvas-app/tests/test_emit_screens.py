@@ -544,10 +544,33 @@ class TestListScreenMatchesBaselineSkeleton(unittest.TestCase):
             self.assertIn("Width", p, f.name)
             self.assertIn("LayoutMinWidth", p, f.name)
 
-    def test_header_row_min_width_is_the_sum_of_column_widths(self):
+    def test_header_and_gallery_min_width_include_gaps_and_the_open_column(self):
+        """I2 (final review, IMPORTANT): the raw column-width sum alone
+        under-states the row's real rendered width — every inter-child
+        LayoutGap (one per gap; there are len(grid_fields) of them once the
+        trailing Open-width column counts as a child) and the row's own
+        Open-button width are just as much a part of it. Both rows must
+        carry the IDENTICAL formula, or the header and the gallery drift out
+        of column alignment below the shared floor."""
         widths = [es._column_px(f) for f in self.e.grid_fields]
-        p = self._props_of("con_%sList_Headers" % self.e.plural)
-        self.assertEqual(p["LayoutMinWidth"], "=%d" % sum(widths))
+        n = len(self.e.grid_fields)
+        expected = ("=%d + %d * constStyle.Spacing.S + constStyle.List.RowOpenWidth"
+                    % (sum(widths), n))
+        header = self._props_of("con_%sList_Headers" % self.e.plural)
+        gallery = self._props_of(self.e.gallery)
+        self.assertEqual(header["LayoutMinWidth"], expected)
+        self.assertEqual(gallery["LayoutMinWidth"], expected,
+                         "header and gallery must share the identical "
+                         "LayoutMinWidth or their columns drift apart")
+
+    def test_open_button_and_header_spacer_share_the_open_width_token(self):
+        """I2(a)/(b): the gallery row's Open button and the header row's
+        trailing spacer both need the SAME fixed width — the same token the
+        LayoutMinWidth formula above adds in as its trailing term."""
+        open_btn = self._props_of("btn_%sRow_Open" % self.e.plural)
+        spacer = self._props_of("lbl_%sList_HeaderSpacer" % self.e.plural)
+        self.assertEqual(open_btn["Width"], "=constStyle.List.RowOpenWidth")
+        self.assertEqual(spacer["Width"], "=constStyle.List.RowOpenWidth")
 
     def test_table_container_scrolls_horizontally(self):
         p = self._props_of("con_%sList_Table" % self.e.plural)

@@ -54,6 +54,11 @@ column is a bug" (it renders fine at full width).
    both the header instance and its row cell. `grid: flex` becomes a wide fixed column (240px) with
    `LayoutMinWidth`. The header row and the gallery carry `LayoutMinWidth` = sum of widths; the table
    container carries `LayoutOverflowX: =LayoutOverflow.Scroll`.
+   Erratum (2026-09-08, final review I2): LayoutMinWidth = sum of widths + inter-child gaps + the
+   row's Open button. "Sum of widths" alone under-counted the row's own `LayoutGap` between every
+   child and the gallery row's 8th child (`btn_<Plural>Row_Open`, previously unwidthed) — below
+   ~1050px this clipped the trailing column and the Open button. The header row also gained a
+   trailing spacer cell of the same width so its own child/gap count matches the gallery row's.
 4. **Sort** goes through two emitted UDFs, `funcTableSortColumn(pEntity)` and
    `funcTableSortOrder(pEntity)`, each `Coalesce`-defaulting to the first grid field / `"asc"`, so
    no state of `colSorts` can blank the grid. Matches the baseline's names.

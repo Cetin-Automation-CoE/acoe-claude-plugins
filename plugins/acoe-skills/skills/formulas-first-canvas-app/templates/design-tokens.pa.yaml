@@ -117,7 +117,14 @@ constStyle = {
         Radius: 10,
         Gap: 5,
         Padding: 0,
-        HeaderHeight: 32
+        HeaderHeight: 32,
+        // I2 (final review): the grid row's trailing Open-button column
+        // (btn_<Plural>Row_Open) and the header row's matching blank
+        // spacer — both need the SAME fixed width so the row's own
+        // LayoutMinWidth (column sum + inter-child gaps + this) reserves
+        // real space for them instead of clipping them below ~1050px.
+        // Baseline: Activities.pa.yaml's own btn_Row_Open, Width: =32.
+        RowOpenWidth: 32
     },
     Label: {
         Fill: constTransparent.RGBA,

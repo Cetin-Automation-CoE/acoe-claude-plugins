@@ -197,6 +197,35 @@ def _column_px(field):
     return FLEX_COLUMN_PX if field.grid_width == "flex" else int(field.grid_width)
 
 
+ROW_OPEN_WIDTH = "constStyle.List.RowOpenWidth"
+
+
+def _row_min_width_formula(grid_fields):
+    """LayoutMinWidth shared by the header row (`con_%sList_Headers`) and
+    the gallery (`entity.gallery`) — I2 (final review): the raw column-width
+    sum alone under-states the row's real rendered width. Both rows lay out
+    their children Horizontal with `LayoutGap: =constStyle.Spacing.S`
+    between every pair, and the gallery's row template has an (N+1)th child
+    (`btn_<Plural>Row_Open`, no width previously) the header has no
+    counterpart for at all — below ~1050px this clipped the trailing column
+    and the Open button, and `LayoutOverflowX: Scroll` only ever scrolled to
+    the (too-small) column sum.
+
+    The fix gives the header row its own trailing spacer cell of the SAME
+    width as the Open button (see `emit_list_screen`), so both rows have
+    identical child counts (`len(grid_fields) + 1`) and therefore identical
+    gap counts (`len(grid_fields)`) — the formula below is exactly that
+    shape: the column-width sum stays a plain literal (same discipline
+    `_column_dims` already uses for one column), but the gap multiplier and
+    the Open width are TOKEN REFERENCES, never their resolved literals, so a
+    future change to `constStyle.Spacing.S` or `constStyle.List.RowOpenWidth`
+    is reflected here without touching this generator.
+    """
+    total = sum(_column_px(f) for f in grid_fields)
+    return "=%d + %d * constStyle.Spacing.S + %s" % (
+        total, len(grid_fields), ROW_OPEN_WIDTH)
+
+
 def _column_dims(field):
     """`Width` + `LayoutMinWidth`, both pinned to the SAME pixel value
     (Task 1/baseline conformance): every grid column is fixed now, none
@@ -558,10 +587,11 @@ def emit_list_screen(entity, model):
     search_ctrl = "txt_%sList_Search" % entity.plural
     grid_fields = entity.grid_fields
     default_sort_field = grid_fields[0].name if grid_fields else entity.fields[0].name
-    # Sum of every grid column's own pixel width — the header row and the
-    # gallery both need this as their shared LayoutMinWidth so the table
-    # scrolls horizontally as one unit instead of squeezing columns.
-    grid_width_sum = sum(_column_px(f) for f in grid_fields)
+    # I2 (final review): the header row and the gallery share this ONE
+    # LayoutMinWidth formula so the table scrolls horizontally as one unit
+    # instead of squeezing columns — see _row_min_width_formula's own
+    # docstring for why the raw column-width sum alone is not enough.
+    row_min_width = _row_min_width_formula(grid_fields)
 
     # cmp_%sList_Header / cmp_%sList_Navigation: the baseline's own header +
     # nav-rail pair, via the shared _screen_chrome helper (Ruling 12, Phase 3
@@ -591,6 +621,12 @@ def emit_list_screen(entity, model):
                          "funcAddBack();\n"
                          "Navigate(%s)" % entity.form_screen),
             ("Text", "=%s" % _quote("Open")),
+            # I2 (final review): an explicit Width, via the same token the
+            # header's trailing spacer and the row's own LayoutMinWidth
+            # reserve space for — previously unset, so nothing accounted
+            # for this 8th child's own footprint in the row's rendered
+            # width. Baseline: Activities.pa.yaml btn_Row_Open, Width: =32.
+            ("Width", "=%s" % ROW_OPEN_WIDTH),
         ])
     row_children.append(open_btn)
     row_block = _block(
@@ -627,7 +663,7 @@ def emit_list_screen(entity, model):
             ("BorderColor", "=constTransparent.RGBA"),
             ("FillPortions", "=1"),
             ("Items", items_formula),
-            ("LayoutMinWidth", "=%d" % grid_width_sum),
+            ("LayoutMinWidth", row_min_width),
             ("TemplateSize", "=constStyle.List.TemplateHeight"),
         ], variant="Vertical", children=[row_block])
 
@@ -715,6 +751,22 @@ def emit_list_screen(entity, model):
             ("LayoutGap", "=constStyle.Spacing.S"),
         ], variant="AutoLayout", children=toolbar_children)
 
+    # I2 (final review): a trailing, blank spacer cell the same width as the
+    # gallery row's own Open button — the header has no per-column
+    # counterpart for that trailing column at all, so without this the
+    # header row has one fewer child (and one fewer gap) than the gallery
+    # row, and the two drift out of column alignment the moment the canvas
+    # narrows to the shared LayoutMinWidth floor. Baseline idea (not shape):
+    # Activities.pa.yaml's own header row ends in a trailing cell
+    # (lbl_Activities_HeaderProgress, LayoutMinWidth: =60) that plays the
+    # same "close out the row" role for whatever trails the last real
+    # column there.
+    header_spacer_block = _block(
+        "lbl_%sList_HeaderSpacer" % entity.plural, 24, "ModernText",
+        [
+            ("Text", "=%s" % _quote("")),
+            ("Width", "=%s" % ROW_OPEN_WIDTH),
+        ])
     headers_block = _block(
         "con_%sList_Headers" % entity.plural, 18, "GroupContainer",
         [
@@ -723,9 +775,10 @@ def emit_list_screen(entity, model):
             ("Height", "=constStyle.List.HeaderHeight"),
             ("LayoutDirection", "=LayoutDirection.Horizontal"),
             ("LayoutGap", "=constStyle.Spacing.S"),
-            ("LayoutMinWidth", "=%d" % grid_width_sum),
+            ("LayoutMinWidth", row_min_width),
         ], variant="AutoLayout",
-        children=[[l for f in grid_fields for l in _header_block(entity, f, 24)]])
+        children=[[l for f in grid_fields for l in _header_block(entity, f, 24)],
+                  header_spacer_block])
 
     # con_%sList_Table: header row + gallery + empty state, one scrolling
     # unit (Task 1/baseline conformance, modelled on the baseline's
