@@ -224,6 +224,76 @@ _HEADER_DATATYPE = {
 }
 
 
+# ---- screen chrome: header + nav rail, shared by every screen ------------
+
+def _screen_chrome(prefix, display_name, on_refresh=None):
+    """The `cmp_<prefix>_Header` / `cmp_<prefix>_Navigation` pair every
+    screen composes as direct SCREEN children — the baseline's own header +
+    nav-rail skeleton (Task 1/baseline conformance), factored out here
+    (Ruling 12, Phase 3 Task 7) so a SECOND screen family (the dashboard,
+    `emit_dashboard.py`) can produce the identical pair without copying
+    these absolute-position formulas into a second module. `emit_list_screen`
+    below is this function's only OTHER caller; `TestListScreenMatchesBaselineSkeleton`
+    (tests/test_emit_screens.py) is the byte-identical gate that proves this
+    refactor changed nothing about its output.
+
+    `prefix` is the screen's own naming stem — `"<Plural>List"` for a list
+    screen, `"Dashboard"` for the dashboard — and nothing else about it is
+    entity-derived: `cmp_AssetsList_Header`/`cmp_AssetsList_Navigation` and
+    `cmp_Dashboard_Header`/`cmp_Dashboard_Navigation` are both just
+    `"cmp_%s_Header" % prefix` / `"cmp_%s_Navigation" % prefix`.
+
+    `display_name` is the header's title text (a list screen shows its own
+    `entity.plural`; the dashboard shows `model.app_name`). `on_refresh`,
+    when given, is the OnSelectRefresh formula body — a list screen always
+    has exactly one entity's own reload action to run and so always passes
+    one; the dashboard has no single entity to reload and passes `None`,
+    which omits `CanRefresh`/`NotificationCount`/`OnSelectRefresh` entirely
+    rather than wiring a refresh button to nothing.
+
+    Returns `(header_block, nav_block, header_name, nav_name)` — the last
+    two so a caller's OWN direct children (the list screen's
+    `con_%sList_List`, the dashboard's `con_Dashboard_Body`) can position
+    themselves off `<header_name>.Height` / `<nav_name>.Width` exactly like
+    the baseline does.
+    """
+    header_name = "cmp_%s_Header" % prefix
+    nav_name = "cmp_%s_Navigation" % prefix
+
+    header_props = [
+        ("AllowNavigation", "=true"),
+        ("DisplayName", "=%s" % _quote(display_name)),
+        ("Height", "=constStyle.Header.Height"),
+        ("IsLoading", "=glBoolIsLoading"),
+        ("OnNavigate", "=UpdateContext({locNavigation: !locNavigation})"),
+        ("Width", "=Parent.Width"),
+    ]
+    if on_refresh is not None:
+        header_props.extend([
+            ("CanRefresh", "=true"),
+            ("NotificationCount", "=CountRows(colNotifications)"),
+            ("OnSelectRefresh", on_refresh),
+        ])
+    header_block = _block(header_name, 6, "CanvasComponent", header_props,
+                          component_name="cmp_Header")
+
+    # cmp_<prefix>_Navigation: a direct SCREEN child, self-sizing off its OWN
+    # Navigation input via Self-referential-by-name formulas (copied from the
+    # baseline verbatim, substituting only the control name), never a
+    # FillPortions share of a wrapper.
+    nav_block = _block(
+        nav_name, 6, "CanvasComponent",
+        [
+            ("Height", "=Parent.Height - %s.Height" % header_name),
+            ("Navigation", "=locNavigation"),
+            ("OnClose", "=UpdateContext({locNavigation: false})"),
+            ("Width", "=If(%s.Navigation, 250, 60)" % nav_name),
+            ("Y", "=%s.Y + %s.Height" % (header_name, header_name)),
+        ], component_name="cmp_Navigation")
+
+    return header_block, nav_block, header_name, nav_name
+
+
 # ---- list screen: per-field pieces ---------------------------------------
 
 def _header_sort_toggle(entity, field):
@@ -482,8 +552,17 @@ def emit_list_screen(entity, model):
     # scrolls horizontally as one unit instead of squeezing columns.
     grid_width_sum = sum(_column_px(f) for f in grid_fields)
 
-    header_name = "cmp_%sList_Header" % entity.plural
-    nav_name = "cmp_%sList_Navigation" % entity.plural
+    # cmp_%sList_Header / cmp_%sList_Navigation: the baseline's own header +
+    # nav-rail pair, via the shared _screen_chrome helper (Ruling 12, Phase 3
+    # Task 7) — see that function's docstring for why this is not entity-
+    # specific beyond the prefix/display name/refresh formula passed in here.
+    refresh_formula = (
+        "=funcStartLoading();\n"
+        "%s();\n"
+        "funcStopLoading();\n"
+        "funcNotifySuccess(\"Data reloaded.\")" % entity.func_load)
+    header_block, nav_block, header_name, nav_name = _screen_chrome(
+        "%sList" % entity.plural, entity.plural, on_refresh=refresh_formula)
 
     filter_ctrls = {}
     for f in entity.filter_fields:
@@ -675,38 +754,6 @@ def emit_list_screen(entity, model):
             ("X", "=%s.Width + 10" % nav_name),
             ("Y", "=%s.Height + 10" % header_name),
         ], variant="AutoLayout", children=[toolbar_block, table_block, footer_block])
-
-    # cmp_%sList_Navigation: also a direct SCREEN child now (the baseline's
-    # cmp_Activities_Navigation) — self-sizing off its OWN Navigation input
-    # via Self-referential-by-name formulas (copied from the baseline
-    # verbatim, substituting only the control name), never a FillPortions
-    # share of a wrapper.
-    nav_block = _block(
-        nav_name, 6, "CanvasComponent",
-        [
-            ("Height", "=Parent.Height - %s.Height" % header_name),
-            ("Navigation", "=locNavigation"),
-            ("OnClose", "=UpdateContext({locNavigation: false})"),
-            ("Width", "=If(%s.Navigation, 250, 60)" % nav_name),
-            ("Y", "=%s.Y + %s.Height" % (header_name, header_name)),
-        ], component_name="cmp_Navigation")
-
-    header_block = _block(
-        header_name, 6, "CanvasComponent",
-        [
-            ("AllowNavigation", "=true"),
-            ("CanRefresh", "=true"),
-            ("DisplayName", "=%s" % _quote(entity.plural)),
-            ("Height", "=constStyle.Header.Height"),
-            ("IsLoading", "=glBoolIsLoading"),
-            ("NotificationCount", "=CountRows(colNotifications)"),
-            ("OnNavigate", "=UpdateContext({locNavigation: !locNavigation})"),
-            ("OnSelectRefresh", "=funcStartLoading();\n"
-                                "%s();\n"
-                                "funcStopLoading();\n"
-                                "funcNotifySuccess(\"Data reloaded.\")" % entity.func_load),
-            ("Width", "=Parent.Width"),
-        ], component_name="cmp_Header")
 
     notification_block = _block(
         "cmp_%sList_Notification" % entity.plural, 6, "CanvasComponent",
