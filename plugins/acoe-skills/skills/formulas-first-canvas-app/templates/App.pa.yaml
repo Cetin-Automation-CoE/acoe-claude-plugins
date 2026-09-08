@@ -241,6 +241,14 @@ App:
           // inconsistently. Power Fx also treats % as a LITERAL — no x100.
           Text(value, "[$-en-US]#,##0");
 
+      funcAsDate(value: DateTime): Text =
+          // Same reasoning as funcAsCurrency, and the same bug found live:
+          // DateTimeFormat.ShortDate is LOCALE-DEPENDENT, and in this app it
+          // rendered "November 14, 2026" — which wrapped and clipped inside a
+          // 112px grid column. An explicit, locale-pinned format is bounded
+          // at 11 characters and fits any date column.
+          Text(value, "[$-en-US]dd mmm yyyy");
+
       funcEllipsis(label: Text, maxLength: Number): Text =
           If(
               Len(label) <= maxLength,
@@ -251,7 +259,10 @@ App:
       =// Globals a UDF reads MUST be Set to a fully typed value here.
       // Power Fx cannot infer a record type from Blank().
       Set(glBoolIsLoading, false);
-      Set(glScopeFilter, "");
+      // "ALL" not "": the header's scope selector seeds its selection from
+      // this global, so a blank leaves the combobox showing its placeholder
+      // instead of the default scope.
+      Set(glScopeFilter, "ALL");
       Set(glSelectedKey, "");
       // cmp_Notification reads this to restart its countdown. It only works
       // because that component sets AccessAppScope: true — without it the

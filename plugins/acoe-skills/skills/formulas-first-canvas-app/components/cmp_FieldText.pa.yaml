@@ -84,6 +84,7 @@ ComponentDefinitions:
                 Control: ModernText
                 Properties:
                   AutoHeight: =true
+                  Color: =constStyle.BasicStyle.FontColor
                   FontWeight: =FontWeight.Semibold
                   Size: =constStyle.BasicStyle.FontSize.Small
                   Text: =cmp_FieldText.Label & If(cmp_FieldText.Required, " *", "")

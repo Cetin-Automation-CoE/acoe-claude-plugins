@@ -297,7 +297,7 @@ Screens:
           ComponentName: cmp_Notification
           Properties:
             Notifications: =colNotifications
-            OnCancel: =RemoveIf(colNotifications, Created = ThisRecord.Created)
+            OnCancel: =RemoveIf(colNotifications, Created = Item.Created)
             Visible: =!IsEmpty(colNotifications)
             Width: =400
             X: =Parent.Width - Self.Width - constStyle.Spacing.XL

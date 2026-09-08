@@ -138,7 +138,10 @@ def _band_section(model, item_indent):
             ("BorderColor", "=constBrandTint.T200.RGBA"),
             ("BorderThickness", "=1"),
             ("Fill", "=constPaperColor.RGBA"),
-            ("Height", "=Parent.TemplateHeight"),
+            # Inset from the template so adjacent tiles keep a visible gap.
+            # The reference insets the CHILD because TemplatePadding
+            # (now 0) would widen every template past the gallery.
+            ("Height", "=Parent.TemplateHeight - 14"),
             ("LayoutDirection", "=LayoutDirection.Vertical"),
             ("LayoutGap", "=constStyle.Spacing.XS"),
             ("PaddingBottom", "=constStyle.Spacing.S"),
@@ -149,7 +152,8 @@ def _band_section(model, item_indent):
             ("RadiusBottomRight", "=constStyle.Dashboard.Radius"),
             ("RadiusTopLeft", "=constStyle.Dashboard.Radius"),
             ("RadiusTopRight", "=constStyle.Dashboard.Radius"),
-            ("Width", "=Parent.TemplateWidth"),
+            ("Width", "=Parent.TemplateWidth - 12"),
+            ("Y", "=5"),
         ], variant="AutoLayout",
         children=[
             _block(
@@ -193,7 +197,14 @@ def _band_section(model, item_indent):
             ("FillPortions", "=0"),
             ("Height", "=constStyle.Dashboard.BandHeight"),
             ("Items", "=constDashboardBand"),
-            ("TemplatePadding", "=constStyle.Spacing.S"),
+            # TemplatePadding is PER-TEMPLATE and adds to each template's
+            # footprint, so N templates of Self.Width/N plus padding is
+            # always wider than the gallery — that clipped the last tile
+            # and raised a horizontal scrollbar. The reference uses 0 and
+            # insets the CHILD instead (Parent.TemplateWidth - n).
+            ("TemplatePadding", "=0"),
+            ("LoadingSpinner", "=LoadingSpinner.None"),
+            ("ShowScrollbar", "=false"),
             # Bundled fidelity item (deferred from Task 7): divides the
             # gallery's own rendered width by its status field's vocab
             # count — the same shape the pipeline gallery below already
@@ -245,14 +256,24 @@ def _pipeline_section(model, item_indent):
         con_name = "con_Dash_Pipeline" + suffix
         chip_name = "con_Dash_StatusChip" + suffix
         chip_lbl_name = "lbl_Dash_Chip" + suffix
-        height_formula = "=constStyle.Dashboard.ChipHeight + constStyle.Spacing.M"
+        height_formula = "=constStyle.Dashboard.ChipHeight + constStyle.Spacing.L"
 
         # The baseline's exact chip shape: "<value> · <count in the current
         # scope>" — `entity.scope_formula`/`status.name`, never a hand-typed
         # collection or column name, so a rename anywhere else in model.py
         # cannot silently desync this string.
         chip_text = (
-            '=$"{ThisItem.S} · {CountRows(Filter(%s, %s = ThisItem.S))}"'
+            # ThisItem.S is STAGED through With() before the Filter rather
+            # than referenced inside it. `Filter` opens its own row scope over
+            # the scope formula, and reaching back out to the gallery's
+            # ThisItem from inside that scope is the same class of collision
+            # that made cmp_Notification's `ThisRecord` parameter bind to the
+            # wrong record. A live render showed one chip counting 0 while the
+            # KPI tile beside it, over the same collection with a literal
+            # instead of ThisItem.S, counted 3. With() binds the value once,
+            # outside any row scope, so the predicate compares two plain
+            # values.
+            '=With({s: ThisItem.S}, $"{s} · {CountRows(Filter(%s, %s = s))}")'
             % (entity.scope_formula, status.name))
         chip_lbl = _block(
             chip_lbl_name, item_indent + 18, "ModernText",
@@ -275,16 +296,17 @@ def _pipeline_section(model, item_indent):
                 ("BorderColor", "=constBrandTint.T200.RGBA"),
                 ("BorderThickness", "=1"),
                 ("Fill", "=constBrandTint.T100.RGBA"),
-                ("Height", "=Parent.TemplateHeight"),
+                ("Height", "=constStyle.Dashboard.ChipHeight"),
                 ("LayoutAlignItems", "=LayoutAlignItems.Center"),
                 ("LayoutDirection", "=LayoutDirection.Horizontal"),
                 ("PaddingLeft", "=constStyle.Spacing.M"),
                 ("PaddingRight", "=constStyle.Spacing.M"),
-                ("RadiusBottomLeft", "=constStyle.Dashboard.Radius"),
-                ("RadiusBottomRight", "=constStyle.Dashboard.Radius"),
-                ("RadiusTopLeft", "=constStyle.Dashboard.Radius"),
-                ("RadiusTopRight", "=constStyle.Dashboard.Radius"),
-                ("Width", "=Parent.TemplateWidth"),
+                ("RadiusBottomLeft", "=constStyle.Dashboard.ChipRadius"),
+                ("RadiusBottomRight", "=constStyle.Dashboard.ChipRadius"),
+                ("RadiusTopLeft", "=constStyle.Dashboard.ChipRadius"),
+                ("RadiusTopRight", "=constStyle.Dashboard.ChipRadius"),
+                ("Width", "=Parent.TemplateWidth - 8"),
+                ("Y", "=6"),
             ], variant="AutoLayout", children=[chip_lbl])
         # TemplateSize: the baseline's own pipeline gallery divides its
         # rendered width by its vocab count (`RoundDown(Self.Width / 6, 0)`
@@ -301,7 +323,14 @@ def _pipeline_section(model, item_indent):
                 ("FillPortions", "=0"),
                 ("Height", height_formula),
                 ("Items", "=constDashboardPipeline%s" % entity.entity),
-                ("TemplatePadding", "=constStyle.Spacing.S"),
+                # TemplatePadding is PER-TEMPLATE and adds to each template's
+            # footprint, so N templates of Self.Width/N plus padding is
+            # always wider than the gallery — that clipped the last tile
+            # and raised a horizontal scrollbar. The reference uses 0 and
+            # insets the CHILD instead (Parent.TemplateWidth - n).
+            ("TemplatePadding", "=0"),
+            ("LoadingSpinner", "=LoadingSpinner.None"),
+            ("ShowScrollbar", "=false"),
                 ("TemplateSize", "=RoundDown(Self.Width / %d, 0)" % len(status.vocab)),
                 ("Width", "=Parent.Width"),
             ], variant="Horizontal", children=[chip_block])
@@ -402,12 +431,13 @@ def _tiles_section(model, item_indent):
             ("BorderColor", "=constBrandTint.T200.RGBA"),
             ("BorderThickness", "=1"),
             ("Fill", "=constPaperColor.RGBA"),
-            ("Height", "=Parent.TemplateHeight"),
+            ("Height", "=Parent.TemplateHeight - 20"),
             ("RadiusBottomLeft", "=constStyle.Dashboard.Radius"),
             ("RadiusBottomRight", "=constStyle.Dashboard.Radius"),
             ("RadiusTopLeft", "=constStyle.Dashboard.Radius"),
             ("RadiusTopRight", "=constStyle.Dashboard.Radius"),
-            ("Width", "=Parent.TemplateWidth"),
+            ("Width", "=Parent.TemplateWidth - 16"),
+            ("Y", "=10"),
         # I3: lbl_ScreenTiles_Screen ONLY — btn_ScreenTiles_Navigate/_Count
         # are siblings of this container in the gallery template below, not
         # children of it (see this function's own docstring).
@@ -421,15 +451,22 @@ def _tiles_section(model, item_indent):
             ("FillPortions", "=0"),
             ("Height", "=constStyle.Dashboard.TileHeight"),
             ("Items", "=constDashboardNavigation"),
-            ("TemplatePadding", "=constStyle.Spacing.S"),
+            # TemplatePadding is PER-TEMPLATE and adds to each template's
+            # footprint, so N templates of Self.Width/N plus padding is
+            # always wider than the gallery — that clipped the last tile
+            # and raised a horizontal scrollbar. The reference uses 0 and
+            # insets the CHILD instead (Parent.TemplateWidth - n).
+            ("TemplatePadding", "=0"),
+            ("LoadingSpinner", "=LoadingSpinner.None"),
+            ("ShowScrollbar", "=false"),
             ("TemplateSize", "=constStyle.Dashboard.TileSize"),
             ("Width", "=Parent.Width"),
-            # WrapCount derived from width: how many TileSize-plus-Gap
-            # columns fit the gallery's OWN rendered width, floor 1 so a
-            # very narrow canvas still shows a single column rather than 0.
-            ("WrapCount",
-             "=Max(1, RoundDown(Self.Width / (constStyle.Dashboard.TileSize + "
-             "constStyle.Dashboard.Gap), 0))"),
+            # NO WrapCount here, deliberately. It is a real Gallery property
+            # (variant-scoped to Horizontal/Vertical), but on a tile STRIP it
+            # turns one row into a wrapping grid — and this template's three
+            # children position themselves off Parent.TemplateWidth with
+            # absolute badge offsets, so once wrapped they overlap each other
+            # into an unreadable pile. The reference has no WrapCount.
         # I3 (final review): baseline order — con_ScreenTiles,
         # btn_ScreenTiles_Navigate, btn_ScreenTiles_Count — as three SIBLING
         # template children, not two of them nested inside the first.
@@ -466,6 +503,7 @@ def _trailer(item_indent):
     spacer_block = _block(
         "lbl_Dash_Spacer", item_indent, "ModernText",
         [
+            ("Color", "=constStyle.BasicStyle.FontColor"),
             ("FillPortions", "=1"),
             ("Text", "=%s" % _quote("")),
         ])
@@ -534,12 +572,29 @@ def emit_dashboard_screen(model):
     top_props = [
         ("Fill", "=constReactGray.RGBA"),
         ("LoadingSpinnerColor", "=constPrimaryColor.RGBA"),
-        # I4 (final review): seeds locNavigation collapsed on entry, exactly
-        # like every list screen's own OnVisible tail (emit_list_screen) —
-        # without this, a dashboard-as-StartScreen app never resets the nav
-        # rail's expanded/collapsed state on entry the way every other
-        # screen does.
-        ("OnVisible", "=UpdateContext({locNavigation: false})"),
+        # Re-runs every entity's load before this screen paints, then
+        # seeds locNavigation collapsed on entry (I4: exactly like every
+        # list screen's own OnVisible tail).
+        #
+        # The loads are here because the dashboard reads its counts through
+        # NAMED FORMULAS over mutable collections — constDashboardNavigation
+        # holds `CountRows(col<Entity>)`, constDashboard*InScope wrap
+        # `Filter(col<Entity>, true)`. A named formula over a collection can
+        # settle on a value while OnStart is still filling that collection,
+        # and it does not reliably re-evaluate afterwards. Observed live
+        # 2026-09-08 with two entities: the first entity's badges were right
+        # (18, 4) and the second's were all 0, which is exactly the state
+        # between `funcLoadRequests()` and `funcLoadAutomations()`.
+        #
+        # Every funcLoad* is a ClearCollect, so calling it again is
+        # idempotent and cheap over local data. funcStopLoading() follows
+        # the loads deliberately: if OnStart ever dies part-way,
+        # glBoolIsLoading is left true forever and cmp_Spinner's scrim
+        # covers every screen with no way back. Clearing it here means
+        # reaching the dashboard always recovers from that.
+        ("OnVisible", "=" + "\n".join(
+            ["%s();" % e.func_load for e in model.entities]
+            + ["funcStopLoading();", "UpdateContext({locNavigation: false})"])),
     ]
     lines = ["Screens:", "  DashboardScreen:", "    Properties:"]
     for name, value in sorted(top_props):

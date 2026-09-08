@@ -57,8 +57,23 @@ class TestDashboardScreen(unittest.TestCase):
         self.assertIn("Items: =constDashboardNavigation", self.text)
         self.assertIn("Items: =constDashboardPipelineAsset", self.text)
 
-    def test_chip_text_matches_the_baseline_shape(self):
-        self.assertIn('CountRows(Filter(constAssetsInScope, Status = ThisItem.S))', self.text)
+    def test_chip_count_stages_thisitem_outside_the_filter_scope(self):
+        """The chip count must bind the gallery item's status through With()
+        BEFORE the Filter, never reference ThisItem from inside the Filter's
+        own row scope.
+
+        UPDATED 2026-09-08. This used to assert the un-staged shape
+        `Filter(constAssetsInScope, Status = ThisItem.S)`. A live render then
+        showed one chip counting 0 while the KPI tile beside it — same
+        collection, same predicate but a literal in place of ThisItem.S —
+        counted 3. Reaching out to a gallery's ThisItem from inside a Filter
+        row scope is the same class of collision that made
+        cmp_Notification's `ThisRecord` event parameter bind to the wrong
+        record. With() binds the value once, outside any row scope.
+        """
+        self.assertIn('With({s: ThisItem.S}', self.text)
+        self.assertIn('CountRows(Filter(constAssetsInScope, Status = s))', self.text)
+        self.assertNotIn('Status = ThisItem.S))', self.text)
 
     def test_tile_navigates(self):
         self.assertIn("OnSelect: =Navigate(ThisItem.Screen, ScreenTransition.Fade)", self.text)
@@ -99,8 +114,28 @@ class TestDashboardScreen(unittest.TestCase):
         same reason the nav instance's own OnClose (identical value)
         already renders this way."""
         self.assertIn("OnVisible: |-", self.text)
-        block = self.text.split("OnVisible: |-", 1)[1].split("\n", 2)[1]
-        self.assertIn("=UpdateContext({locNavigation: false})", block)
+        on_visible = self.text.split("OnVisible: |-", 1)[1].split("    Children:", 1)[0]
+        self.assertIn("UpdateContext({locNavigation: false})", on_visible)
+
+    def test_dashboard_onvisible_reloads_every_entity(self):
+        """The dashboard reads its counts through named formulas over
+        MUTABLE collections (constDashboardNavigation holds
+        `CountRows(col<Entity>)`). A named formula can settle on a value
+        while App.OnStart is still filling that collection and then not
+        re-evaluate: observed live 2026-09-08 as the first entity's badges
+        being correct and the second entity's all reading 0 — exactly the
+        state between the two funcLoad* calls in OnStart.
+
+        Re-running each load here is idempotent (they are ClearCollects) and
+        guarantees every collection is populated before this screen paints.
+        funcStopLoading() follows them so that an OnStart which died
+        part-way cannot leave glBoolIsLoading true forever, with
+        cmp_Spinner's scrim covering every screen and no way to clear it.
+        """
+        on_visible = self.text.split("OnVisible: |-", 1)[1].split("    Children:", 1)[0]
+        for entity in dash_model().entities:
+            self.assertIn("%s();" % entity.func_load, on_visible)
+        self.assertIn("funcStopLoading();", on_visible)
 
     def test_band_omitted_when_model_has_none(self):
         mo = dash_model()

@@ -134,6 +134,7 @@ ComponentDefinitions:
                         # default — check_layout.py's Rule 3. Its sibling
                         # lbl_Dialog_Description already carries this.
                         AutoHeight: =true
+                        FontColor: =constStyle.BasicStyle.FontColor
                         Size: =constStyle.BasicStyle.FontSize.Large
                         Text: =cmp_Dialog.Title
                         VerticalAlign: =VerticalAlign.Middle
@@ -198,6 +199,7 @@ ComponentDefinitions:
                             Properties:
                               AccessibleLabel: =Self.Text
                               Appearance: ='ButtonCanvas.Appearance'.Primary
+                              BasePaletteColor: =constPrimaryColor.RGBA
                               BorderRadius: =constStyle.Button.BorderRadius
                               Height: =constStyle.Button.Height.Medium
                               OnSelect: =Reset(dp_Dialog_DatePicker); cmp_Dialog.OnSubmit()

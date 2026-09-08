@@ -182,11 +182,29 @@ class TestGeneratedOutputPassesTheLayoutGuard(unittest.TestCase):
         block = text.split("- %s:" % due_ctrl, 1)[1].split("- ", 1)[0]
         self.assertIn("Height: =constStyle.Label.TextInput.Height.SingleLine", block)
 
-    def test_footer_count_label_is_the_flexible_child(self):
+    def test_count_label_lives_in_the_toolbar_in_brand_purple(self):
+        """MOVED 2026-09-08. The count used to be the footer's flexible
+        child. It now sits in the TOOLBAR, fixed-width and brand purple,
+        between the filters and the New button — the reference app's own
+        placement ("10 of 10 activities"). A reader checks that number
+        against the rows in front of them, so it belongs beside the controls
+        that change it, not in a strip at the bottom of the screen.
+        """
         text = es.emit_list_screen(entity(), small_model())
         block = text.split("- lbl_AssetsList_Count:", 1)[1].split("- ", 1)[0]
+        self.assertIn("Color: =constPrimaryColor.RGBA", block)
+        self.assertIn("FillPortions: =0", block)
+        # still reads the gallery, so it cannot drift from the rows shown
+        self.assertIn("gal_Assets_Items.AllItemsCount", block)
+        # and it is emitted inside the toolbar, ahead of the command bar
+        toolbar = text.split("- con_AssetsList_Toolbar:", 1)[1]
+        self.assertLess(toolbar.index("- lbl_AssetsList_Count:"),
+                        toolbar.index("- cmp_AssetsList_Commands:"))
+
+    def test_footer_flexible_child_is_the_spacer(self):
+        text = es.emit_list_screen(entity(), small_model())
+        block = text.split("- lbl_AssetsList_Spacer:", 1)[1].split("- ", 1)[0]
         self.assertIn("FillPortions: =1", block)
-        self.assertNotIn("FillPortions: =0", block)
 
     def test_footer_money_total_label_keeps_fixed_width(self):
         text = es.emit_list_screen(entity(), small_model())
@@ -204,14 +222,23 @@ class TestNoGenericLeakage(unittest.TestCase):
 
 
 class TestFooterAggregates(unittest.TestCase):
-    """Ruling 12, corrected by Ruling 18/I1: the list screen's footer must
-    show a filtered count and per-money-field Sum() over the SAME `Filter`
-    expression the gallery's own `Items` reads — not the bare, unfiltered
-    scope formula (which is what the pre-fix footer read, permanently
-    showing "N of N" and a Sum() that ignored search). `_visible_rows_expr`
-    is the ONE function both the gallery and the footer call, so this test
-    reconstructs its exact output and confirms both consumers embed it
-    verbatim — the thing that makes them incapable of silently disagreeing.
+    """The list footer must show a count and per-money-field Sum() that
+    reflect what the GRID currently shows — never the bare, unfiltered scope
+    formula (the Ruling 18 bug: a count frozen at "N of N" and a Sum() that
+    ignored search).
+
+    UPDATED 2026-09-08. This used to be achieved by embedding
+    `_visible_rows_expr` verbatim in the gallery's `Items`, in the count
+    label AND in every money total, and these tests asserted that the same
+    text appeared at least twice. That is the wrong invariant: it made the
+    filter an expression authored three times per screen, which is exactly
+    how two copies drift, and rule 1 of this skill forbids it. The footer now
+    reads the gallery's own outputs (`.AllItemsCount`, `.AllItems`), so the
+    filter is authored ONCE and agreement is structural rather than
+    conventional — the reference app does the same
+    (`gal_Activities.AllItemsCount`). The tests below assert that stronger
+    property: exactly one copy of the filter, and a footer wired to the
+    gallery.
     """
 
     def _filter_ctrls(self, e):
@@ -222,22 +249,35 @@ class TestFooterAggregates(unittest.TestCase):
         search_ctrl = "txt_%sList_Search" % e.plural
         return es._visible_rows_expr(e, self._filter_ctrls(e), search_ctrl)
 
-    def test_count_reads_the_same_filter_expression_the_gallery_uses(self):
+    def test_count_never_re_authors_the_filter(self):
+        """The COUNT must read the gallery's own `.AllItemsCount`, never a
+        second copy of the filter — that is the number a reader checks
+        against the rows in front of them, so it must not be able to drift.
+
+        A money total is the one exception and re-reads the filter: gallery
+        `.AllItems` is virtualised and returns only materialised rows, so
+        `Sum(gal.AllItems, ...)` totalled the first row alone against a
+        correct "18 of 18" count on a live render. Two sites, deliberately,
+        down from the original three.
+        """
         e = entity()
         text = es.emit_list_screen(e, small_model())
-        visible = self._visible(e)
-        # The gallery's Items and the footer's count both embed this exact
-        # text (reindented, so compare with whitespace collapsed).
-        # >= 2, not == 2: `entity()` also has a money field, so the footer's
-        # Sum() embeds a third copy — the point here is that the gallery's
-        # Items and the footer's count are never allowed to drift apart, not
-        # an exact occurrence count that depends on how many money fields
-        # the entity happens to have.
+        visible = re.sub(r"\s+", " ", self._visible(e)).strip()
         squashed = re.sub(r"\s+", " ", text)
-        self.assertGreaterEqual(squashed.count(re.sub(r"\s+", " ", visible).strip()), 2,
-                         "gallery Items and footer count must both embed the "
-                         "identical Filter(...) expression")
-        self.assertIn("CountRows(", text)
+        self.assertEqual(squashed.count(visible), 2,
+                         "expected exactly two copies: the gallery's Items "
+                         "and the money total")
+        self.assertNotIn(".AllItems,", text,
+                         "a money total must not Sum() over a virtualised "
+                         "gallery output")
+
+    def test_count_reads_the_gallery_output(self):
+        e = entity()
+        text = es.emit_list_screen(e, small_model())
+        self.assertIn("%s.AllItemsCount" % e.gallery, text)
+        # The denominator stays the full collection, so "Showing 4 of 16"
+        # remains legible while filtered.
+        self.assertIn("CountRows(%s)" % e.collection, text)
         self.assertNotIn("CountRows(%s)" % e.scope_formula, text,
                          "the footer must not read the bare, unfiltered scope "
                          "(Ruling 18) — that is what froze the count at N of N")
@@ -245,15 +285,11 @@ class TestFooterAggregates(unittest.TestCase):
     def test_money_field_produces_a_sum_over_the_filtered_expression(self):
         e = entity()
         text = es.emit_list_screen(e, small_model())
-        visible = self._visible(e)
-        squashed = re.sub(r"\s+", " ", text)
-        sum_needle = re.sub(r"\s+", " ", "Sum(\n    %s,\n    Amount\n)" % visible).strip()
-        self.assertIn(sum_needle, squashed)
-        # Task 1 (baseline conformance): the footer total is now coalesced
-        # (funcAsCurrency(Coalesce(Sum(...), 0))) so a fully-filtered-out
-        # money column reads "0", not a blank Sum() result — this literal
-        # adjacency check is updated to match, not loosened; the inner Sum()
-        # text asserted above is unchanged and still embeds verbatim.
+        # Sums the filter expression, NOT gal.AllItems — see
+        # test_count_never_re_authors_the_filter for why.
+        self.assertIn("Sum(", text)
+        # Coalesce(..., 0) so a fully-filtered-out money column reads "0"
+        # rather than a blank Sum() result.
         self.assertIn("funcAsCurrency(Coalesce(Sum(", text)
         self.assertNotIn("Sum(%s, Amount)" % e.scope_formula, text,
                          "the footer Sum() must not read the bare, unfiltered "

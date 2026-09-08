@@ -187,6 +187,13 @@ constStyle = {
     // a status-chip pipeline and a navigation-tile grid, none of which
     // shares a size with any other screen's controls, so none of them
     // belongs under an existing group above.
+    Avatar: {
+        Size: 40,
+        // A radius far larger than the box is how a square image renders as a
+        // circle. The reference app uses 150 for roughly this size; it is a
+        // radius, so check_tokens.py requires it to live here and not inline.
+        Radius: 150
+    },
     Dashboard: {
         TileSize: 200,
         TileHeight: 170,
@@ -196,8 +203,11 @@ constStyle = {
         // gallery already used — a fixed pixel width never adapted to a
         // model with a different vocab size. grep confirmed no other
         // reference before removal.
-        BandHeight: 120,
-        ChipHeight: 32,
+        BandHeight: 150,
+        ChipHeight: 36,
+        // Pill, not a rounded box: half the 36px chip height. Used on 8
+        // corner properties across the pipeline strips, so it is a token.
+        ChipRadius: 18,
         Radius: 15,
         Gap: 20,
         // Ruling 17: the baseline's btn_ScreenTiles_Navigate carries

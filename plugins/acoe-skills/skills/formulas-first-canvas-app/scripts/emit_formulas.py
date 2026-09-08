@@ -152,6 +152,35 @@ def _param_sig(field):
 
 # ---- block builders: each returns (layer, name, text) -----------------------
 
+def _scope_choices_spec(model):
+    """The header's scope selector vocabulary: "ALL" plus every distinct
+    entity `group:` in the model.
+
+    The reference app's header carries a country-scope switcher. A generated
+    app has no country dimension, but it does have `group:` on every entity
+    (the same value the navigation rail groups by), so that is what scope
+    means here. The selected value lands in `glScopeFilter` — the global this
+    skill already documents as the seam a real scope predicate will read.
+    Emitting the vocabulary as a named formula keeps the header's Items off
+    the screen, like every other choices table.
+    """
+    groups = []
+    for entity in model.entities:
+        if entity.group not in groups:
+            groups.append(entity.group)
+    rows = ["          {Value: \"ALL\"}%s" % ("," if groups else "")]
+    for i, group in enumerate(groups):
+        comma = "," if i < len(groups) - 1 else ""
+        rows.append("          {Value: %s}%s" % (_quote(group), comma))
+    text = (
+        "      // ---- vocabulary: header scope --------------------------\n"
+        "      constScopeChoices = Table(\n"
+        + "\n".join(rows) + "\n"
+        "      );"
+    )
+    return ("vocab", "constScopeChoices", text)
+
+
 def _enum_screen_type_spec():
     text = (
         "      // ---- enums: screen kinds -------------------------------\n"
@@ -611,7 +640,8 @@ def _all_specs(model, rows, today):
     the emitted order; that is computed by `topo_sort` from real `uses`
     edges detected in each block's text.
     """
-    specs = [_enum_screen_type_spec(), _enum_entity_spec(model)]
+    specs = [_enum_screen_type_spec(), _enum_entity_spec(model),
+             _scope_choices_spec(model)]
     for entity in model.entities:
         for field in entity.choice_fields:
             specs.append(_choices_spec(entity, field))
@@ -636,6 +666,7 @@ def _known_names(model):
     round exists to close.
     """
     names = {"enumScreenType", "enumEntity", "constScreens",
+              "constScopeChoices",
               "funcTableSortColumn", "funcTableSortOrder"}
     for entity in model.entities:
         for field in entity.choice_fields:

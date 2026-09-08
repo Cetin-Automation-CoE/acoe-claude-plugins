@@ -81,6 +81,9 @@ enums:
   BorderStyle: [None, Solid, Dashed, Dotted]
   LayoutDirection: [Horizontal, Vertical]
   DisplayMode: [Edit, View, Disabled]
+  # Verified 2026-09-08 via describe_control Gallery against a live session.
+  LoadingSpinner: [Controls, Data, None]
+  Transition: [None, Pop, Push]
 
 controls:
 
@@ -228,21 +231,44 @@ controls:
     absent: [TabIndex]
 
   Gallery:
-    generation: modern
+    generation: classic
     note: >-
       LEAF CONTROL. Inside an auto-layout container it defaults to FillPortions 0 and
       collapses to the ~200px control default — always set FillPortions or an explicit
-      Height. No ShowScrollbar (classic only).
+      Height.
+      CORRECTED 2026-09-08: this entry previously read `generation: modern` and
+      `absent: [ShowScrollbar, TabIndex]` with the note "No ShowScrollbar (classic
+      only)". Both were wrong for `Control: Gallery`. `describe_control Gallery`
+      against a live authoring session reports "Part of the control family Classic"
+      and lists ShowScrollbar: Boolean as an input property; the Regional
+      Procurement Plan baseline sets `ShowScrollbar: =false` on its dashboard
+      galleries, and a live compile_canvas accepted it on four galleries with
+      0 errors (2026-09-08). The old entry made check_control_props.py reject
+      valid YAML.
+      TabIndex is the OPPOSITE case and stays `absent`. describe_control lists
+      it here too, and the baseline's exported source carries `TabIndex: =0` —
+      but a live compile_canvas REJECTED it with "Unknown property 'TabIndex'"
+      (2026-09-07, 52 of 59 errors in that run). So describe_control
+      over-reports, an exported published app is not proof a push will be
+      accepted, and a live compile is the only arbiter. Do not promote a
+      property here on describe_control alone.
+      WrapCount is real but is variant-scoped (Horizontal and Vertical only) —
+      it turns the gallery into a wrapping grid, which shreds a tile strip
+      whose template children position themselves off Parent.TemplateWidth.
     properties:
       - Items, TemplateSize, TemplatePadding, Transition, WrapCount
       - DelayItemLoading, LoadingSpinner, LoadingSpinnerColor
-      - BorderColor, BorderThickness, BorderStyle
+      - BorderColor, BorderThickness, BorderStyle, Fill
+      - FocusedBorderColor, FocusedBorderThickness
       - AccessibleLabel, Visible, FillPortions
       - LayoutDirection, LayoutGap, LayoutJustifyContent, LayoutAlignItems
       - LayoutMinHeight, LayoutMinWidth, LayoutOverflowX, LayoutOverflowY
-      - Height, Width, X, Y, AlignInContainer, Default, Selectable, ShowNavigation
+      - Height, Width, X, Y, AlignInContainer, Default, Selectable
+      - ShowNavigation, NavigationStep, ShowScrollbar
     enums:
       BorderStyle: BorderStyle
       LayoutDirection: LayoutDirection
-    absent: [ShowScrollbar, TabIndex]
+      LoadingSpinner: LoadingSpinner
+      Transition: Transition
+    absent: [TabIndex]
     requires_one_of: [FillPortions, Height]
