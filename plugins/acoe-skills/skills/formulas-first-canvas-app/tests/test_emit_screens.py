@@ -485,6 +485,17 @@ class TestListScreenMatchesBaselineSkeleton(unittest.TestCase):
         self.assertIn("cmp_%sList_Header.Height" % self.e.plural, p["Y"])
         self.assertIn("Parent.Height", p["Height"])
 
+    def test_nav_instance_binds_the_registry(self):
+        """C1 (final review, CRITICAL): the shipped cmp_Navigation's menu
+        gallery reads `Filter(cmp_Navigation.Screens, ...)` — its own
+        component Default is only a one-row typed SEED (proven live), never
+        the real registry. Nothing renders in the nav rail unless the
+        INSTANCE overrides Screens with the app-scope constScreens, exactly
+        like the baseline's cmp_Activities_Navigation
+        (Activities.pa.yaml:97)."""
+        p = self._props_of("cmp_%sList_Navigation" % self.e.plural)
+        self.assertEqual(p["Screens"], "=constScreens")
+
     def test_list_container_derives_position_from_nav_and_header(self):
         p = self._props_of("con_%sList_List" % self.e.plural)
         self.assertEqual(p["X"], "=cmp_%sList_Navigation.Width + 10" % self.e.plural)

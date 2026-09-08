@@ -38,6 +38,13 @@ class TestDashboardScreen(unittest.TestCase):
         for n in ("cmp_Dashboard_Header", "cmp_Dashboard_Navigation", "con_Dashboard_Body"):
             self.assertIn("- %s:" % n, self.text, n)
 
+    def test_nav_instance_binds_the_registry(self):
+        """C1 (final review, CRITICAL): the dashboard's own nav rail comes
+        from the same _screen_chrome() helper the list screen uses — this
+        pins that the fix there (Screens: =constScreens on the instance)
+        actually reaches the dashboard too, not just the list screen."""
+        self.assertIn("Screens: =constScreens", self.text)
+
     def test_five_regions(self):
         for n in ("lbl_Dash_BandTitle", "gal_Dash_Band", "lbl_Dash_PipelineTitle",
                   "gal_Dash_Pipeline", "gal_NavigationTiles", "lbl_Dashboard_Trademark"):

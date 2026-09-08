@@ -64,6 +64,12 @@ Screens:
                   Navigation: =locNavigation
                   OnClose: |-
                     =UpdateContext({locNavigation: false})
+                  # C1 (final review, CRITICAL): the component's own Screens
+                  # Default is only a one-row typed seed (proven live) — its
+                  # menu gallery reads Filter(cmp_Navigation.Screens, Type =
+                  # enumScreenType.List), so without this override the rail
+                  # renders empty and constScreens is never read.
+                  Screens: =constScreens
                   # Fixed child of a Horizontal auto-layout container: the
                   # main axis (Width) must be explicit, matching whichever
                   # branch cmp_Navigation's own root Width formula picks —

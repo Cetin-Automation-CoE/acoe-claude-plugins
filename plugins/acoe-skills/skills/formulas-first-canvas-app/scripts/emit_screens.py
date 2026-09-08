@@ -287,6 +287,17 @@ def _screen_chrome(prefix, display_name, on_refresh=None):
             ("Height", "=Parent.Height - %s.Height" % header_name),
             ("Navigation", "=locNavigation"),
             ("OnClose", "=UpdateContext({locNavigation: false})"),
+            # C1 (final review, CRITICAL): the component's own Screens
+            # Default (components/cmp_Navigation.pa.yaml) is only a one-row
+            # TYPED SEED — proven live, kept exactly as shipped — never the
+            # real registry. Its menu gallery reads
+            # `Filter(cmp_Navigation.Screens, Type = enumScreenType.List)`,
+            # so without this instance override every generated nav rail
+            # renders EMPTY and constScreens (defined in App.pa.yaml) is
+            # never read anywhere. Baseline: Activities.pa.yaml:97
+            # (cmp_Activities_Navigation carries the identical
+            # `Screens: =constScreens`).
+            ("Screens", "=constScreens"),
             ("Width", "=If(%s.Navigation, 250, 60)" % nav_name),
             ("Y", "=%s.Y + %s.Height" % (header_name, header_name)),
         ], component_name="cmp_Navigation")

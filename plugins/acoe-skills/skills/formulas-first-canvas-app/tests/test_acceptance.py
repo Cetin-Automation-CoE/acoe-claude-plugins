@@ -249,6 +249,31 @@ class _AcceptanceBase(object):
             self.assertIn(entity.collection, app)
             self.assertIn(entity.func_save, app)
 
+    # ---- 9. C1: constScreens is referenced, not just defined --------------
+    def test_constscreens_is_referenced_not_just_defined(self):
+        """The nav rail's menu gallery reads `Filter(cmp_Navigation.Screens,
+        ...)`, and the component's own Default is only a one-row typed seed
+        (proven live) — nothing shows in the rail unless some INSTANCE
+        overrides Screens with the app-scope constScreens. A build where
+        constScreens is defined in App.pa.yaml but never read anywhere else
+        is the exact empty-nav-rail defect (C1, final review).
+
+        Checks for the literal `Screens: =constScreens` REFERENCE shape, not
+        just the bare identifier: the shipped cmp_Navigation.pa.yaml's own
+        prose comments ("Reads the constScreens REGISTRY", "Defaults to the
+        app-wide constScreens") already mention the bare word in every
+        generated app, fixed or not — a substring check on the bare name
+        alone would pass even with the defect still present."""
+        for p in self.out.rglob("*.pa.yaml"):
+            if p.name == "App.pa.yaml":
+                continue
+            if "Screens: =constScreens" in p.read_text(encoding="utf-8"):
+                return
+        self.fail("constScreens is defined in App.pa.yaml but no "
+                 "'Screens: =constScreens' instance override was found "
+                 "anywhere else in the generated tree — the nav rail would "
+                 "render empty")
+
     # ---- 8. all eight base components are written -------------------------
     def test_all_base_components_written(self):
         base = ("cmp_Header", "cmp_Navigation", "cmp_CommandBar",
@@ -392,6 +417,14 @@ class TestLegacyNamePath(unittest.TestCase):
                          "the --name (legacy) path must copy "
                          "cmp_Navigation.pa.yaml unchanged — only a --model "
                          "build rewrites its Screens default's Screen column")
+
+    def test_list_screen_nav_instance_binds_the_registry(self):
+        """C1 (final review, CRITICAL): the legacy --name path's own
+        ListScreen.pa.yaml template must set Screens: =constScreens on its
+        cmp_List_Navigation instance too — the component's own Default is
+        only a one-row typed seed, never the real registry."""
+        listing = (self.out / "ListScreen.pa.yaml").read_text(encoding="utf-8")
+        self.assertIn("Screens: =constScreens", listing)
 
 
 def _yaml_load(text):
