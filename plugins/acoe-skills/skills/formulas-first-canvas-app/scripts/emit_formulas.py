@@ -416,6 +416,29 @@ def _entity_data_layer_specs(entity, rows, today):
 
 def _registry_spec(model):
     rows = []
+    if model.dashboard:
+        # Ruling 10 (Phase 3 Task 6): `cmp_Navigation` renders
+        # Filter(cmp_Navigation.Screens, Type = enumScreenType.List) — a
+        # row typed anything else (an earlier plan tried
+        # enumScreenType.Dashboard) is invisible in the nav rail, which
+        # would make the dashboard the START screen yet unreachable the
+        # moment the user navigates away from it. `Entity: ""` is the
+        # marker that distinguishes this row from an entity's own (every
+        # entity row below always carries a real enumEntity member).
+        rows.append(
+            "          {\n"
+            "              Screen: DashboardScreen,\n"
+            "              DisplayName: %s,\n"
+            "              Icon: %s,\n"
+            "              Entity: %s,\n"
+            "              Type: enumScreenType.List,\n"
+            "              Group: %s,\n"
+            "              BackLabel: %s\n"
+            "          }" % (
+                _quote("Dashboard"), _quote("Home"), _quote(""),
+                _quote("Overview"), _quote("Dashboard"),
+            )
+        )
     for entity in model.entities:
         # entity.enum_member is model.py's single source of truth for the
         # fully-qualified "enumEntity.<Plural>" reference — hand-rebuilding
@@ -459,6 +482,115 @@ def _registry_spec(model):
     return ("registry", "constScreens", text)
 
 
+def _dashboard_specs(model):
+    """The optional dashboard sources — navigation tiles, one pipeline
+    table per entity with a status field, and a single money-by-status
+    band — emitted only when `model.dashboard` is true. A dashboard-off
+    model must define nothing named `constDashboard*`:
+    `test_nothing_emitted_when_dashboard_off` is the guard.
+
+    Layered as "data", same as `_scope_spec`/`_load_spec`/etc: `_all_specs`
+    appends these AFTER every entity's own scope/load/save/delete blocks,
+    since `constDashboardNavigation`'s overdue and status-slice rows, and
+    `constDashboardBand`, each Filter() a scope formula
+    (`const<Plural>InScope`) by name and so carry a real dependency edge
+    on it — topo_sort derives the required order from that edge; this
+    layer placement is only the tie-break for `constDashboardPipeline
+    <Entity>`, which names no other block at all and would otherwise be
+    free to float anywhere.
+
+    `constDashboardNavigation` is built as three priority tiers — entity
+    totals, then per-entity overdue counts, then per-entity status-value
+    slices — concatenated in that order, then capped at 8 rows: a model
+    with several entities and long vocabularies must not overflow the
+    tile grid Task 7's screen renders them on. Rows past the cap are
+    dropped silently, lowest-priority first.
+    """
+    if not model.dashboard:
+        return []
+
+    # ---- tier 1: one row per entity, the running total -------------
+    nav_rows = []
+    for entity in model.entities:
+        nav_rows.append(
+            "          {Screen: %s, DisplayName: %s, Icon: %s, "
+            "Count: CountRows(%s)}"
+            % (entity.list_screen, _quote(entity.plural), _quote(entity.icon),
+               entity.collection)
+        )
+
+    # ---- tier 2: one row per entity per due field -------------------
+    for entity in model.entities:
+        for due in entity.due_fields:
+            nav_rows.append(
+                "          {Screen: %s, DisplayName: %s, Icon: %s, "
+                "Count: CountRows(Filter(%s, %s < Today()))}"
+                % (entity.list_screen, _quote(entity.plural + " overdue"),
+                   _quote("Clock"), entity.scope_formula, due.name)
+            )
+
+    # ---- tier 3: one row per status-field vocab value, per entity ---
+    for entity in model.entities:
+        status = entity.status_field
+        if status is None:
+            continue
+        for value in status.vocab:
+            nav_rows.append(
+                "          {Screen: %s, DisplayName: %s, Icon: %s, "
+                "Count: CountRows(Filter(%s, %s = %s))}"
+                % (entity.list_screen, _quote(value), _quote(entity.icon),
+                   entity.scope_formula, status.name, _quote(value))
+            )
+
+    nav_rows = nav_rows[:8]
+    nav_text = (
+        "      // ---- dashboard: navigation tiles -----------------------\n"
+        "      // Priority order: entity totals, then overdue counts, then\n"
+        "      // status-value slices — see _dashboard_specs. Capped at 8.\n"
+        "      constDashboardNavigation = [\n"
+        + ",\n".join(nav_rows) + "\n"
+        "      ];"
+    )
+    specs = [("data", "constDashboardNavigation", nav_text)]
+
+    # ---- pipeline: one Table of status values, per entity with one --
+    for entity in model.entities:
+        status = entity.status_field
+        if status is None:
+            continue
+        name = "constDashboardPipeline" + entity.entity
+        pipe_rows = ["          {S: %s}" % _quote(v) for v in status.vocab]
+        text = (
+            "      // ---- dashboard: pipeline — %s.%s ------------------\n"
+            "      %s = Table(\n"
+            + ",\n".join(pipe_rows) + "\n"
+            "      );"
+        ) % (entity.entity, status.name, name)
+        specs.append(("data", name, text))
+
+    # ---- band: money-by-status, first entity with both --------------
+    for entity in model.entities:
+        status = entity.status_field
+        if not entity.money_fields or status is None:
+            continue
+        money = entity.money_fields[0]
+        band_rows = [
+            "          {Code: %s, Amount: Sum(Filter(%s, %s = %s), %s)}"
+            % (_quote(v), entity.scope_formula, status.name, _quote(v), money.name)
+            for v in status.vocab
+        ]
+        text = (
+            "      // ---- dashboard: money-by-status band — %s.%s ------\n"
+            "      constDashboardBand = Table(\n"
+            + ",\n".join(band_rows) + "\n"
+            "      );"
+        ) % (entity.entity, money.name)
+        specs.append(("data", "constDashboardBand", text))
+        break
+
+    return specs
+
+
 # ---- assembly ----------------------------------------------------------
 
 def _all_specs(model, rows, today):
@@ -475,6 +607,7 @@ def _all_specs(model, rows, today):
     specs.extend(_sort_udf_specs())
     for entity in model.entities:
         specs.extend(_entity_data_layer_specs(entity, rows, today))
+    specs.extend(_dashboard_specs(model))
     specs.append(_registry_spec(model))
     return specs
 
@@ -500,6 +633,19 @@ def _known_names(model):
         names.add(entity.func_load)
         names.add(entity.func_save)
         names.add(entity.func_delete)
+    # Hand-maintained mirror of _dashboard_specs's own conditionals — a
+    # name missing here gets no dependency edges (it just won't be found
+    # when another block's text is scanned for known names), so this must
+    # stay in exact lockstep with what that function actually defines.
+    if model.dashboard:
+        names.add("constDashboardNavigation")
+        for entity in model.entities:
+            if entity.status_field is not None:
+                names.add("constDashboardPipeline" + entity.entity)
+        for entity in model.entities:
+            if entity.money_fields and entity.status_field is not None:
+                names.add("constDashboardBand")
+                break
     return frozenset(names)
 
 

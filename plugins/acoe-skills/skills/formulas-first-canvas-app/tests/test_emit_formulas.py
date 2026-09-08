@@ -142,7 +142,13 @@ class TestPerEntityLayer(unittest.TestCase):
                                 "parameter %r must use the p prefix" % param)
 
     def test_registry_has_two_rows_per_entity(self):
-        reg = ef.emit_screens_registry(self.model)
+        # two_entity_model() defaults `dashboard` on (Task 5: on by default
+        # for >1 entity) — scoped off here so this test's own claim (two
+        # rows PER ENTITY) stays exact regardless of the dashboard feature,
+        # which prepends its own row and is covered by TestDashboardFormulas.
+        mo = two_entity_model()
+        mo.dashboard = False
+        reg = ef.emit_screens_registry(mo)
         self.assertEqual(reg.count("Screen:"), 4)
         for s in ("AssetsListScreen", "AssetFormScreen",
                   "SitesListScreen", "SiteFormScreen"):
@@ -306,6 +312,89 @@ class TestSortUdfs(unittest.TestCase):
 
     def test_udf_parameter_uses_p_prefix(self):
         self.assertNotIn("(TableName: Text)", self.text)
+
+
+def dashboard_model():
+    mo = two_entity_model()
+    mo.dashboard = True
+    return mo
+
+
+class TestDashboardFormulas(unittest.TestCase):
+    def setUp(self):
+        self.text = ef.emit_all(dashboard_model(), rows=4, today=TODAY)
+
+    def test_navigation_has_entity_totals_first(self):
+        nav = self.text.split("constDashboardNavigation =")[1].split("];")[0]
+        self.assertLess(nav.index("CountRows(colAssets)"), nav.index("Status ="))
+        self.assertIn("Screen: AssetsListScreen", nav)
+        self.assertIn("Screen: SitesListScreen", nav)
+
+    def test_navigation_has_status_slices(self):
+        nav = self.text.split("constDashboardNavigation =")[1].split("];")[0]
+        self.assertIn('CountRows(Filter(constAssetsInScope, Status = "Open"))', nav)
+
+    def test_navigation_capped_at_eight_rows(self):
+        nav = self.text.split("constDashboardNavigation =")[1].split("];")[0]
+        self.assertLessEqual(nav.count("Screen:"), 8)
+
+    def test_pipeline_per_entity_with_status(self):
+        self.assertIn("constDashboardPipelineAsset =", self.text)
+        self.assertIn("constDashboardPipelineSite =", self.text)
+        pipe = self.text.split("constDashboardPipelineAsset =")[1].split(";")[0]
+        self.assertIn('{S: "Open"}', pipe)
+        self.assertIn('{S: "Shut"}', pipe)
+
+    def test_band_only_when_money_and_status_coexist(self):
+        self.assertIn("constDashboardBand =", self.text)            # Asset has Amount + Status
+        band = self.text.split("constDashboardBand =")[1].split(";")[0]
+        self.assertIn('Code: "Open"', band)
+        self.assertIn("Sum(Filter(constAssetsInScope, Status = \"Open\"), Amount)", band)
+
+    def test_no_band_without_money(self):
+        mo = dashboard_model()
+        for e in mo.entities:
+            e.fields = [f for f in e.fields if not f.money]
+        self.assertNotIn("constDashboardBand", ef.emit_all(mo, rows=4, today=TODAY))
+
+    def test_dashboard_registry_row_is_typed_list_and_grouped_overview(self):
+        # RULING 10: cmp_Navigation renders Filter(cmp_Navigation.Screens,
+        # Type = enumScreenType.List) — a row typed anything else (the
+        # brief's original enumScreenType.Dashboard) is invisible in the
+        # nav rail, making the dashboard the start screen yet unreachable
+        # the moment the user navigates away from it. Group "Overview"
+        # gives it a section in the expanded menu, same as any entity.
+        reg = ef.emit_screens_registry(dashboard_model())
+        row = reg.split("Screen: DashboardScreen")[1].split("}")[0]
+        self.assertIn("Type: enumScreenType.List", row)
+        self.assertIn('Group: "Overview"', row)
+
+    def test_registry_lists_dashboard_first(self):
+        reg = ef.emit_screens_registry(dashboard_model())
+        self.assertLess(reg.index("Screen: DashboardScreen"), reg.index("Screen: AssetsListScreen"))
+        # RULING 10: typed List (see test_dashboard_registry_row_is_typed_
+        # list_and_grouped_overview), not the brief's original Dashboard —
+        # scoped to the dashboard row itself, not just anywhere in `reg`
+        # (every entity's list row also carries Type: enumScreenType.List).
+        row = reg.split("Screen: DashboardScreen")[1].split("}")[0]
+        self.assertIn("Type: enumScreenType.List", row)
+
+    def test_nothing_emitted_when_dashboard_off(self):
+        mo = two_entity_model(); mo.dashboard = False
+        t = ef.emit_all(mo, rows=4, today=TODAY)
+        self.assertNotIn("constDashboard", t)
+        self.assertNotIn("DashboardScreen", t)
+
+    def test_assembled_body_still_has_no_forward_references(self):
+        # the existing forward-reference test in this file runs over two_entity_model();
+        # run its logic over the dashboard model too:
+        text = self.text
+        defined_at = {}
+        for match in re.finditer(r"^      (\w+)(?:\([^)]*\))?\s*(?::\s*\w+\s*)?=", text, re.M):
+            defined_at.setdefault(match.group(1), match.start())
+        for name, pos in defined_at.items():
+            for use in re.finditer(r"\b%s\b" % re.escape(name), text):
+                self.assertGreaterEqual(use.start(), pos, "%s used before definition" % name)
 
 
 if __name__ == "__main__":
