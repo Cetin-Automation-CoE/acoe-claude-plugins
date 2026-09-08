@@ -37,14 +37,25 @@ references here actually exists.
 
 TOKENS: `templates/design-tokens.pa.yaml`'s `constStyle.Dashboard` group
 (`TileSize`, `TileHeight`, `BandTileSize`, `BandHeight`, `ChipHeight`,
-`Radius`, `Gap`) is this screen's ONLY new token surface — every dimension
-this module writes that isn't already covered by an existing `constStyle.*`
-token (Spacing, BasicStyle.FontSize, Label.Height, ...) comes from that one
-group. The one deliberate literal exception is `Size: =28` on
-`lbl_Dash_TileValue` — `constStyle.BasicStyle.FontSize`'s own comment
-reserves 28 for "the one control that shows a headline figure," which is
-exactly this KPI value, and `check_tokens.py --allow-sizes` (default
-`28,20,14,12,11`) already permits it as a literal.
+`Radius`, `Gap`, `TileIconSize`) plus `constStyle.BasicStyle.FontColorMuted`
+are this screen's ONLY new token surface — every dimension/colour this
+module writes that isn't already covered by an existing `constStyle.*` token
+(Spacing, BasicStyle.FontSize, Label.Height, ...) comes from one of those two
+additions. `FontColorMuted` (Ruling 17, Phase 3 Task 7 fix round) is the
+baseline's own muted secondary-text colour
+(`constStyle.Button.ColorGrey`/`RGBA(89, 91, 95, 1)` there) — this skill had
+no equivalent, so `lbl_Dash_BandCaption`/`lbl_Dash_TileCode`/
+`lbl_Dash_TileUnit`/`lbl_Dashboard_Trademark` used to fall back to full body
+ink (`FontColor`) and the text hierarchy flattened. The one deliberate
+literal exception is `Size: =28` on `lbl_Dash_TileValue` —
+`constStyle.BasicStyle.FontSize`'s own comment reserves 28 for "the one
+control that shows a headline figure," which is exactly this KPI value, and
+`check_tokens.py --allow-sizes` (default `28,20,14,12,11`) already permits it
+as a literal. The pipeline gallery's `TemplateSize` divides `Self.Width` by a
+plain COUNT literal (`len(status.vocab)`) rather than a token — a count is
+not a colour/size/radius value `check_tokens.py` restricts, and it can never
+collide with the forbidden dimension literals (it always appears after `/ `,
+never immediately after `=`).
 
 CONTRACT-AWARE BY CONSTRUCTION, same discipline as `emit_screens.py`: every
 property is written through `_block`, imported from there rather than
@@ -55,10 +66,7 @@ time. `GroupContainer` is not in `references/control-contracts.yaml` at all
 """
 from __future__ import annotations
 
-from emit_screens import (
-    _block, _check_control_prop, _quote, _needs_block_scalar, _label_block,
-    _screen_chrome,
-)
+from emit_screens import _block, _quote, _screen_chrome
 
 
 # ---- eligibility: mirrors emit_formulas._dashboard_specs's own conditions -
@@ -110,7 +118,7 @@ def _band_section(model, item_indent):
         [
             ("AccessibleLabel", "=Self.Text"),
             ("AutoHeight", "=true"),
-            ("Color", "=constStyle.BasicStyle.FontColor"),
+            ("Color", "=constStyle.BasicStyle.FontColorMuted.RGBA"),
             ("Size", "=constStyle.BasicStyle.FontSize.Small"),
             ("Text", "=%s" % _quote(caption_text)),
         ])
@@ -146,7 +154,7 @@ def _band_section(model, item_indent):
                 [
                     ("AccessibleLabel", "=Self.Text"),
                     ("AutoHeight", "=true"),
-                    ("Color", "=constStyle.BasicStyle.FontColor"),
+                    ("Color", "=constStyle.BasicStyle.FontColorMuted.RGBA"),
                     ("FontWeight", "=FontWeight.Semibold"),
                     ("Size", "=constStyle.BasicStyle.FontSize.Small"),
                     ("Text", "=ThisItem.Code"),
@@ -167,7 +175,7 @@ def _band_section(model, item_indent):
                 [
                     ("AccessibleLabel", "=Self.Text"),
                     ("AutoHeight", "=true"),
-                    ("Color", "=constStyle.BasicStyle.FontColor"),
+                    ("Color", "=constStyle.BasicStyle.FontColorMuted.RGBA"),
                     ("Size", "=constStyle.BasicStyle.FontSize.Small"),
                     ("Text", "=%s" % _quote(currency)),
                 ]),
@@ -264,6 +272,13 @@ def _pipeline_section(model, item_indent):
                 ("RadiusTopRight", "=constStyle.Dashboard.Radius"),
                 ("Width", "=Parent.TemplateWidth"),
             ], variant="AutoLayout", children=[chip_lbl])
+        # TemplateSize: the baseline's own pipeline gallery divides its
+        # rendered width by its vocab count (`RoundDown(Self.Width / 6, 0)`
+        # for its 6-value Status field) so its chips fill one row evenly —
+        # generalised here to `len(status.vocab)` rather than a hand-typed
+        # 6. A plain count, not a colour/size/radius value check_tokens.py
+        # restricts, and it can never collide with a forbidden dimension
+        # literal (it always follows `/ `, never `=`).
         gallery_block = _block(
             gal_name, item_indent + 6, "Gallery",
             [
@@ -273,6 +288,8 @@ def _pipeline_section(model, item_indent):
                 ("Height", height_formula),
                 ("Items", "=constDashboardPipeline%s" % entity.entity),
                 ("TemplatePadding", "=constStyle.Spacing.S"),
+                ("TemplateSize", "=RoundDown(Self.Width / %d, 0)" % len(status.vocab)),
+                ("Width", "=Parent.Width"),
             ], variant="Horizontal", children=[chip_block])
         wrapper_block = _block(
             con_name, item_indent, "GroupContainer",
@@ -308,6 +325,8 @@ def _tiles_section(model, item_indent):
             ("Color", "=constPrimaryColor.RGBA"),
             ("FontWeight", "=FontWeight.Bold"),
             ("Height", "=20"),
+            ("PaddingLeft", "=constStyle.Spacing.S"),
+            ("PaddingRight", "=constStyle.Spacing.S"),
             ("Size", "=constStyle.BasicStyle.FontSize.Small"),
             ("Text", "=ThisItem.DisplayName"),
             ("VerticalAlign", "=VerticalAlign.Top"),
@@ -321,6 +340,7 @@ def _tiles_section(model, item_indent):
             ("AccessibleLabel", '=$"Open {ThisItem.DisplayName}"'),
             ("Appearance", "='ButtonCanvas.Appearance'.Transparent"),
             ("BasePaletteColor", "=constSecondaryColor.RGBA"),
+            ("FontSize", "=constStyle.Dashboard.TileIconSize"),
             ("Height", "=con_ScreenTiles.Height"),
             ("Icon", "=ThisItem.Icon"),
             ("IconStyle", "='ButtonCanvas.IconStyle'.Filled"),
@@ -420,7 +440,7 @@ def _trailer(item_indent):
         [
             ("AccessibleLabel", "=Self.Text"),
             ("Align", "='TextCanvas.Align'.Center"),
-            ("Color", "=constStyle.BasicStyle.FontColor"),
+            ("Color", "=constStyle.BasicStyle.FontColorMuted.RGBA"),
             ("FillPortions", "=0"),
             ("Height", "=constStyle.Label.Height.Small"),
             ("Size", "=constStyle.BasicStyle.FontSize.Small"),

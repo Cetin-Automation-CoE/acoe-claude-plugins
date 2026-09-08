@@ -88,7 +88,15 @@ constStyle = {
             Style: BorderStyle.Solid,
             Color: constPrimaryColor.RGBA
         },
-        FontColor: constInkColor.RGBA
+        FontColor: constInkColor.RGBA,
+        // Ruling 17 (Phase 3 Task 7 fix round): the baseline's own muted
+        // secondary-text colour (App.pa.yaml's constStyle.Button.ColorGrey,
+        // RGBA(89, 91, 95, 1) / #595b5f) — this skill's own tokens had no
+        // equivalent, so captions/units/the trademark rendered as full body
+        // ink and the text hierarchy flattened. Unlike FontColor above (already
+        // a bare RGBA value), this is the {RGBA, HEX} object shape every other
+        // const*Color carries, hence the `.RGBA` at every call site.
+        FontColorMuted: {RGBA: RGBA(89, 91, 95, 1), HEX: "#595b5f"}
     },
     Spacing: {
         XS: 4, S: 8, M: 12, L: 16, XL: 24, XXL: 32
@@ -179,7 +187,12 @@ constStyle = {
         BandHeight: 120,
         ChipHeight: 32,
         Radius: 15,
-        Gap: 20
+        Gap: 20,
+        // Ruling 17: the baseline's btn_ScreenTiles_Navigate carries
+        // FontSize: =40 (an icon-only button's icon glyph size) — tokenized
+        // here rather than left a literal so check_tokens.py's FontSize
+        // check (default allow-list 28,20,14,12,11) never has to special-case it.
+        TileIconSize: 40
     }
 };
 

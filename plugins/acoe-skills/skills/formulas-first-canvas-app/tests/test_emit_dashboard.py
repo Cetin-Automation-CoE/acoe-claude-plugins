@@ -60,6 +60,39 @@ class TestDashboardScreen(unittest.TestCase):
             e.fields = [f for f in e.fields if not f.money]
         t = ed.emit_dashboard_screen(mo)
         self.assertNotIn("gal_Dash_Band", t)
+        # Important 3 (Phase 3 Task 7 fix round): the title/caption above the
+        # band must be omitted too, not just the gallery — this held by
+        # construction (both live inside _band_section's early `return []`)
+        # but nothing pinned it before this assertion existed.
+        self.assertNotIn("lbl_Dash_BandTitle", t)
+        self.assertNotIn("lbl_Dash_BandCaption", t)
+
+    def test_pipeline_omitted_for_an_entity_with_no_status_field(self):
+        """An entity with no `role: status` field AND no choice field that
+        is also `filter: true` has `status_field is None` (model.py's own
+        fallback chain) — _pipeline_entities must skip it, so its own
+        suffixed gal_Dash_Pipeline<Entity>/con_Dash_Pipeline<Entity>/etc.
+        never appear, even though Asset (unaffected) still gets the bare,
+        unsuffixed set."""
+        mo = dash_model()
+        site = [e for e in mo.entities if e.entity == "Site"][0]
+        for f in site.fields:
+            f.filter = False
+        self.assertIsNone(site.status_field, "fixture no longer exercises the intended shape")
+        t = ed.emit_dashboard_screen(mo)
+        self.assertNotIn("gal_Dash_PipelineSite", t)
+        self.assertNotIn("con_Dash_PipelineSite", t)
+        self.assertNotIn("con_Dash_StatusChipSite", t)
+        self.assertNotIn("lbl_Dash_ChipSite", t)
+        # Asset (still status-bearing, and now the ONLY such entity) keeps
+        # its own bare-named pipeline.
+        self.assertIn("- gal_Dash_Pipeline:", t)
+
+    def test_caption_falls_back_to_generated_text_when_description_is_empty(self):
+        mo = dash_model()
+        mo.description = ""
+        t = ed.emit_dashboard_screen(mo)
+        self.assertIn('Text: ="%d registers · live counts"' % len(mo.entities), t)
 
     def test_no_dimension_or_colour_literals_outside_tokens(self):
         for lit in ("=15", "=140", "=200", "=170", "RGBA("):
