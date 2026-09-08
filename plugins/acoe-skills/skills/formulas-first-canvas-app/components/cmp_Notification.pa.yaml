@@ -6,7 +6,7 @@
 #       ComponentName: cmp_Notification
 #       Properties:
 #         Notifications: =colNotifications
-#         OnCancel: =RemoveIf(colNotifications, Created = ThisRecord.Created)
+#         OnCancel: =RemoveIf(colNotifications, Created = Item.Created)
 #         Visible: =!IsEmpty(colNotifications)
 #         Width: =400
 #         X: =Parent.Width - Self.Width - 24
@@ -35,6 +35,19 @@
 #
 # Requires: constInkColor, constPaperColor, constStyle, constTransparent,
 #           constBorderRadius
+# 4. PORTED BUG FIX — the OnCancel event parameter used to be named
+#    `ThisRecord`, which is Power Fx's IMPLICIT record-scope accessor. The
+#    documented consumer binding was
+#      OnCancel: =RemoveIf(colNotifications, Created = ThisRecord.Created)
+#    and inside RemoveIf's own record scope over colNotifications,
+#    `ThisRecord` binds to the ROW BEING TESTED, not to the event
+#    parameter. So the predicate read `Created = Created` — always true —
+#    and dismissing one toast silently cleared the whole queue. A live
+#    compile also rejected it: "Invalid argument type. Expecting a Record
+#    value, but of a different schema" on both call sites below
+#    (2026-09-08). The parameter is now `Item`, which cannot collide.
+#    Consumers bind `Created = Item.Created`.
+#
 ComponentDefinitions:
   cmp_Notification:
     DefinitionType: CanvasComponent
@@ -76,7 +89,7 @@ ComponentDefinitions:
         ReturnType: None
         Default: =false
         Parameters:
-          - ThisRecord:
+          - Item:
               Description: The notification being dismissed
               DataType: Record
               Default: |-
@@ -281,6 +294,8 @@ ComponentDefinitions:
                         - lbl_Notification_Title:
                             Control: Text
                             Properties:
+                              # Control: Text is the LEGACY dialect — FontColor, not Color.
+                              FontColor: =constStyle.BasicStyle.FontColor
                               FillPortions: =1
                               LayoutMinHeight: =30
                               Size: =constStyle.BasicStyle.FontSize.Large
@@ -325,6 +340,8 @@ ComponentDefinitions:
                       Control: Text
                       Properties:
                         AutoHeight: =true
+                        # Control: Text is the LEGACY dialect — FontColor, not Color.
+                        FontColor: =constStyle.BasicStyle.FontColor
                         Height: =45
                         Size: =constStyle.BasicStyle.FontSize.Medium
                         Text: |-

@@ -31,6 +31,7 @@ ComponentDefinitions:
                 Properties:
                   AccessibleLabel: ="Loading"
                   Appearance: ='Spinner.Appearance'.Primary
+                  BasePaletteColor: =constPrimaryColor.RGBA
                   Height: =100
                   SpinnerSize: ='Spinner.SpinnerSize'.Huge
                   Width: =Parent.Width

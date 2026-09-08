@@ -295,6 +295,16 @@ def _screen_chrome(prefix, display_name, on_refresh=None):
         ("Height", "=constStyle.Header.Height"),
         ("IsLoading", "=glBoolIsLoading"),
         ("OnNavigate", "=UpdateContext({locNavigation: !locNavigation})"),
+        # The scope selector, ported from the reference header. It writes the
+        # chosen value to glScopeFilter — the global this skill already
+        # documents as "the seam a real per-entity scope condition will read
+        # the moment the model gains one". Nothing filters on it yet, so it
+        # sets scope without narrowing anything; wiring constXInScope to it
+        # needs a scope dimension the model does not have.
+        ("OnScopeChange", "=Set(glScopeFilter, %s.Scope)" % header_name),
+        ("ScopeItems", "=constScopeChoices"),
+        ("ScopeSelected", "=glScopeFilter"),
+        ("ShowScope", "=true"),
         ("Width", "=Parent.Width"),
     ]
     if on_refresh is not None:
@@ -398,9 +408,10 @@ def _header_block(entity, field, item_indent):
 
 def _cell_block(entity, field, item_indent):
     """One grid cell. Every archetype renders as ModernText — only the
-    Color/Text/Align formulas vary. Money and semafor-choice colour route
-    through the ONE function that owns that decision (funcMoneyTextColor,
-    funcStatusTextColor) rather than a Switch re-authored per screen.
+    Color/Text/Align formulas vary. Money, status and semafor colour each
+    route through the ONE function that owns that decision
+    (funcMoneyTextColor, funcStatusTextColor, funcSemaforColor) rather
+    than a Switch re-authored per screen.
     """
     color = "=constStyle.BasicStyle.FontColor"
     size = "=constStyle.BasicStyle.FontSize.Medium"
@@ -412,8 +423,19 @@ def _cell_block(entity, field, item_indent):
     elif field.type == "choice":
         text = "=%s" % ref
         size = "=constStyle.BasicStyle.FontSize.Small"
-        if field.semantics == "semafor":
+        if field.role == "status":
+            # The reference app colours its STATUS column — that is the
+            # column a reader scans. funcStatusTextColor owns that mapping.
             color = "=funcStatusTextColor(%s)" % ref
+        elif field.semantics == "semafor":
+            # funcSemaforColor, NOT funcStatusTextColor. A semafor field's
+            # vocabulary is the traffic-light triple (green/amber/red) and
+            # funcSemaforColor is the one function that owns that mapping;
+            # funcStatusTextColor maps a STATUS vocabulary, so routing a
+            # semafor field there matched none of its arms and every value
+            # fell through to the same default colour — a green, an amber
+            # and a red row all rendered identically.
+            color = "=funcSemaforColor(%s)" % ref
     elif field.type == "number":
         align = "=constStyle.Label.NumberInput.AlignModern"
         if field.money:
@@ -422,7 +444,11 @@ def _cell_block(entity, field, item_indent):
         else:
             text = "=Text(%s)" % ref
     elif field.type == "date":
-        text = "=Text(%s, DateTimeFormat.ShortDate)" % ref
+        # NOT DateTimeFormat.ShortDate: that is locale-dependent and
+        # rendered a long "November 14, 2026" live, which wrapped and
+        # clipped in a 112px column. funcAsDate owns date formatting the
+        # same way funcAsCurrency owns money.
+        text = "=funcAsDate(%s)" % ref
         if field.semantics == "due":
             color = ("=If(%s < Today(), constLossTextColor.RGBA, "
                       "constStyle.BasicStyle.FontColor)" % ref)
@@ -501,15 +527,35 @@ def _visible_rows_expr(entity, filter_ctrls, search_ctrl):
 
 
 def _footer_block(entity, item_indent, filter_ctrls, search_ctrl):
-    """The footer aggregate strip (Ruling 12, corrected by Ruling 18/I1): a
-    filtered/total count and a `Sum()` per `money: true` field that read the
-    SAME `Filter(...)` expression the gallery's `Items` reads
-    (`_visible_rows_expr`) — that is what makes it genuinely impossible for
-    this count to disagree with what the grid shows, rather than merely
-    claiming so. The "of M" denominator stays the full, unfiltered
-    `entity.collection` — "Showing 4 of 16" — so the total is legible even
-    while filtered. `Sum()` totals are formatted through `funcAsCurrency` so
-    currency formatting stays owned by one function.
+    """The footer aggregate strip: a filtered/total count and a `Sum()` per
+    `money: true` field, both read off the GALLERY'S OWN OUTPUTS
+    (`.AllItemsCount`, `.AllItems`) rather than by re-authoring the filter
+    expression.
+
+    This used to paste `_visible_rows_expr` into the count label and again
+    into every money total, on the theory that using the same expression
+    made disagreement impossible. It does not: it made the filter an
+    expression authored three times per screen, which is exactly how two
+    copies drift apart, and it is what rule 1 of this skill forbids. The
+    gallery has already evaluated the filter; reading its result is one
+    authoring site and makes agreement structural instead of conventional.
+    The reference app does the same thing —
+    `$"{gal_Activities.AllItemsCount} of {CountRows(constActivitiesInScope)} activities"`.
+
+    CORRECTED 2026-09-08: the COUNT reads `.AllItemsCount`, but a money total
+    must NOT read `.AllItems`. `AllItemsCount` is the size of the gallery's
+    whole item set, but `AllItems` returns only the rows the gallery has
+    actually materialised — it is virtualised and capped. A live render showed
+    "Showing 18 of 18" beside a total of 1,450,000, which is the FIRST ROW's
+    Benefit alone. So the total re-reads the filter expression: two authoring
+    sites, not one, and that is a deliberate correctness-over-DRY trade. It is
+    still better than the three sites this started with, and the count — the
+    number a reader checks against the row they can see — cannot drift.
+
+    The "of M" denominator stays the full, unfiltered `entity.collection` —
+    "Showing 4 of 16" — so the total is legible even while filtered.
+    `Sum()` totals are formatted through `funcAsCurrency` so currency
+    formatting stays owned by one function.
 
     A fixed-height, `FillPortions: =0` sibling of the gallery (which keeps
     `FillPortions: =1`): the same leaf-control-collapse rule that requires
@@ -526,16 +572,16 @@ def _footer_block(entity, item_indent, filter_ctrls, search_ctrl):
     text is short and bounded ("Label: $amount") and letting them flex
     would just leave them adrift in the middle of the strip.
     """
-    visible = _visible_rows_expr(entity, filter_ctrls, search_ctrl)
-    count_text = ('="Showing " & CountRows(\n    %s\n) & " of " & CountRows(%s)'
-                  % (visible.replace("\n", "\n    "), entity.collection))
+    # The count is NOT in the footer any more — it sits in the toolbar, in
+    # brand purple, beside the filters, exactly where the reference app puts
+    # "10 of 10 activities". A reader checks that number against the rows in
+    # front of them, so it belongs next to the controls that change it.
     cells = [_block(
-        "lbl_%sList_Count" % entity.plural, item_indent + 6, "ModernText",
+        "lbl_%sList_Spacer" % entity.plural, item_indent + 6, "ModernText",
         [
             ("Color", "=constStyle.BasicStyle.FontColor"),
             ("FillPortions", "=1"),
-            ("Size", "=constStyle.BasicStyle.FontSize.Small"),
-            ("Text", count_text),
+            ("Text", '=""'),
         ])]
     for f in entity.fields:
         if f.type != "number" or not f.money:
@@ -543,6 +589,7 @@ def _footer_block(entity, item_indent, filter_ctrls, search_ctrl):
         # Coalesce(..., 0): Sum() over a filtered-to-nothing set returns
         # blank, not 0 — funcAsCurrency(blank) is not "0", it is whatever
         # that function does with a non-number. Coalesce pins the floor.
+        visible = _visible_rows_expr(entity, filter_ctrls, search_ctrl)
         total_text = ('="%s: " & funcAsCurrency(Coalesce(Sum(\n    %s,\n    %s\n), 0))'
                       % (f.label, visible.replace("\n", "\n    "), f.name))
         cells.append(_block(
@@ -616,11 +663,21 @@ def emit_list_screen(entity, model):
         "btn_%sRow_Open" % entity.plural, 30, "Button",
         [
             ("AccessibleLabel", "=\"Open \" & ThisItem.%s" % default_sort_field),
+            # Icon-only, and the accessible label above is what carries the
+            # word "Open". This button is ROW_OPEN_WIDTH (32px) wide, so a
+            # text label was physically impossible: it rendered clipped to
+            # "Oper" as a solid blue block on every row. A chevron is the
+            # conventional open-row affordance and fits 32px.
+            ("Appearance", "='ButtonCanvas.Appearance'.Transparent"),
+            ("BasePaletteColor", "=constPrimaryColor.RGBA"),
             ("Height", "=constStyle.Button.Height.Small"),
+            ("Icon", "=%s" % _quote("ChevronRight")),
+            ("IconStyle", "='ButtonCanvas.IconStyle'.Filled"),
+            ("Layout", "='ButtonCanvas.Layout'.IconOnly"),
             ("OnSelect", "=Set(glSelectedKey, ThisItem.Key);\n"
                          "funcAddBack();\n"
                          "Navigate(%s)" % entity.form_screen),
-            ("Text", "=%s" % _quote("Open")),
+            ("Text", '=""'),
             # I2 (final review): an explicit Width, via the same token the
             # header's trailing spacer and the row's own LayoutMinWidth
             # reserve space for — previously unset, so nothing accounted
@@ -633,8 +690,14 @@ def emit_list_screen(entity, model):
         "con_%sRow" % entity.plural, 24, "GroupContainer",
         [
             ("BorderStyle", "=BorderStyle.None"),
-            ("Fill", "=If(ThisItem.IsSelected, constBrandTint.T100.RGBA, "
-                     "constPaperColor.RGBA)"),
+            # A flat paper fill, NOT If(ThisItem.IsSelected, tint, paper).
+            # `ThisItem` is the record from Items and has no IsSelected
+            # column: describe_control lists no such Gallery output and the
+            # reference app never uses it. Live, it errored the Fill — which
+            # rendered the row BLACK and stopped the gallery after its first
+            # template, so a grid of 18 rows showed exactly one. Row-
+            # selection tinting needs a real signal, not an invented column.
+            ("Fill", "=constPaperColor.RGBA"),
             ("Height", "=constStyle.List.TemplateHeight"),
             ("LayoutDirection", "=LayoutDirection.Horizontal"),
             ("LayoutGap", "=constStyle.Spacing.S"),
@@ -664,6 +727,11 @@ def emit_list_screen(entity, model):
             ("FillPortions", "=1"),
             ("Items", items_formula),
             ("LayoutMinWidth", row_min_width),
+            # Without this a Gallery shows its own built-in spinner while it
+            # resolves Items, and over a local collection that spinner can
+            # sit there indefinitely — a spinner stuck over the grid was a
+            # live-render defect. The reference sets it on every gallery.
+            ("LoadingSpinner", "=LoadingSpinner.None"),
             ("TemplateSize", "=constStyle.List.TemplateHeight"),
         ], variant="Vertical", children=[row_block])
 
@@ -674,7 +742,7 @@ def emit_list_screen(entity, model):
             ("Height", "=200"),
             ("Icon", "=%s" % _quote("Search")),
             ("Message", "=%s" % _quote("No %s match these filters" % entity.plural.lower())),
-            ("Visible", "=IsEmpty(%s.AllItems)" % entity.gallery),
+            ("Visible", "=%s.AllItemsCount = 0" % entity.gallery),
         ], component_name="cmp_Empty")
 
     footer_block = _footer_block(entity, 12, filter_ctrls, search_ctrl)
@@ -728,6 +796,23 @@ def emit_list_screen(entity, model):
                 ("SelectMultiple", "=true"),
                 ("Width", "=200"),
             ]))
+    # "18 of 18 requests", brand purple, between the filters and the New
+    # button — the reference app's own placement for this number. It reads
+    # the gallery's AllItemsCount, so it cannot disagree with the rows shown.
+    toolbar_children.append(_block(
+        "lbl_%sList_Count" % entity.plural, 18, "ModernText",
+        [
+            ("AccessibleLabel", "=Self.Text"),
+            ("Color", "=constPrimaryColor.RGBA"),
+            ("FillPortions", "=0"),
+            ("FontWeight", "=FontWeight.Semibold"),
+            ("Height", "=constStyle.Label.Height.Medium"),
+            ("Size", "=constStyle.BasicStyle.FontSize.Small"),
+            ("Text", '=%s.AllItemsCount & " of " & CountRows(%s) & " %s"'
+                     % (entity.gallery, entity.collection, entity.plural.lower())),
+            ("VerticalAlign", "=VerticalAlign.Middle"),
+            ("Width", "=160"),
+        ]))
     toolbar_children.append(_block(
         "cmp_%sList_Commands" % entity.plural, 18, "CanvasComponent",
         [
@@ -764,6 +849,7 @@ def emit_list_screen(entity, model):
     header_spacer_block = _block(
         "lbl_%sList_HeaderSpacer" % entity.plural, 24, "ModernText",
         [
+            ("Color", "=constStyle.BasicStyle.FontColor"),
             ("Text", "=%s" % _quote("")),
             ("Width", "=%s" % ROW_OPEN_WIDTH),
         ])
@@ -788,11 +874,25 @@ def emit_list_screen(entity, model):
         "con_%sList_Table" % entity.plural, 12, "GroupContainer",
         [
             ("BorderStyle", "=BorderStyle.None"),
+            # The reference's con_Activities_List carries the paper fill,
+            # shadow, radius and padding that make the grid read as a card.
+            # Emitting none of them left the grid floating directly on the
+            # page background with the header row as the only visible edge.
+            ("DropShadow", "=constStyle.List.Shadow"),
+            ("Fill", "=constPaperColor.RGBA"),
             ("FillPortions", "=1"),
             ("LayoutAlignItems", "=LayoutAlignItems.Stretch"),
             ("LayoutDirection", "=LayoutDirection.Vertical"),
             ("LayoutGap", "=constStyle.Spacing.S"),
             ("LayoutOverflowX", "=LayoutOverflow.Scroll"),
+            ("PaddingBottom", "=constStyle.Spacing.S"),
+            ("PaddingLeft", "=constStyle.Spacing.S"),
+            ("PaddingRight", "=constStyle.Spacing.S"),
+            ("PaddingTop", "=constStyle.Spacing.S"),
+            ("RadiusBottomLeft", "=constStyle.List.Radius"),
+            ("RadiusBottomRight", "=constStyle.List.Radius"),
+            ("RadiusTopLeft", "=constStyle.List.Radius"),
+            ("RadiusTopRight", "=constStyle.List.Radius"),
         ], variant="AutoLayout", children=[headers_block, gallery_block, empty_block])
 
     # con_%sList_List: the baseline's con_Activities_List — a direct SCREEN
@@ -823,7 +923,7 @@ def emit_list_screen(entity, model):
         "cmp_%sList_Notification" % entity.plural, 6, "CanvasComponent",
         [
             ("Notifications", "=colNotifications"),
-            ("OnCancel", "=RemoveIf(colNotifications, Created = ThisRecord.Created)"),
+            ("OnCancel", "=RemoveIf(colNotifications, Created = Item.Created)"),
             ("Visible", "=!IsEmpty(colNotifications)"),
             ("Width", "=400"),
             ("X", "=Parent.Width - Self.Width - constStyle.Spacing.XL"),
@@ -832,7 +932,13 @@ def emit_list_screen(entity, model):
 
     spinner_block = _block(
         "cmp_%sList_Spinner" % entity.plural, 6, "CanvasComponent",
-        [("Visible", "=glBoolIsLoading")], component_name="cmp_Spinner")
+        # See the form screen's spinner: an unsized component instance
+        # renders at its definition default, not over the screen.
+        [("Height", "=Parent.Height"),
+         ("Visible", "=glBoolIsLoading"),
+         ("Width", "=Parent.Width"),
+         ("X", "=0"),
+         ("Y", "=0")], component_name="cmp_Spinner")
 
     top_props = [
         ("Fill", "=constReactGray.RGBA"),
@@ -862,13 +968,154 @@ def emit_list_screen(entity, model):
 
 # ---- form screen: per-field pieces ---------------------------------------
 
+# ---- form geometry, ported from the reference app -------------------------
+# Regional Procurement Plan, `Activity Form.pa.yaml`: a form is NOT a single
+# column of stacked label/input pairs. It is a card holding section headings
+# and HORIZONTAL rows, each row holding vertical field groups (`con_Fld_*`)
+# whose caption sits above the input. These four numbers are that layout:
+#   con_Project_Row1   Height: =70,  LayoutGap: =20
+#   con_Fld_Identificator / con_Fld_RegId   Width: =240 / =160
+# A one-column form was the single biggest visual divergence from the
+# reference, so these constants are deliberately named and commented rather
+# than inlined at their use sites.
+FORM_FIELD_WIDTH = 240
+FORM_ROW_HEIGHT = 70
+FORM_ROW_HEIGHT_MULTILINE = 150
+FORM_FIELDS_PER_ROW = 3
+# A field group's own height: caption + gap + input. check_layout.py's R2
+# wants an auto-layout container to resolve its OWN size, and a group whose
+# children are both fixed has no flexible child to resolve it from — so the
+# height is stated rather than left to the parent row's Stretch (which R2
+# deliberately does not model, cross-axis sizing being outside its scope).
+# 22 caption + constStyle.Spacing.XS (4) + Label.TextInput.Height.SingleLine
+# (32) / .MultiLine (96).
+# The caption needs an EXPLICIT height. With `AutoHeight: =true` and no
+# Height it collapsed to nothing inside the fixed-height field group, so a
+# live render showed rows of unlabelled input boxes. One constant, used both
+# by the caption itself and by the group-height arithmetic below, so the two
+# cannot drift apart.
+FORM_CAPTION_HEIGHT = 22
+FORM_GROUP_HEIGHT = FORM_CAPTION_HEIGHT + 4 + 32
+FORM_GROUP_HEIGHT_MULTILINE = FORM_CAPTION_HEIGHT + 4 + 96
+
+
 def _label_block(entity, field, item_indent):
+    """The field caption, with an EXPLICIT Height.
+
+    The reference's `lbl_Fld_*` uses `AutoHeight: =true` and no Height, and
+    copying that here produced rows of unlabelled input boxes on a live
+    render: inside a field group that has its own fixed Height, an
+    auto-height child resolves to zero. FORM_CAPTION_HEIGHT is the same
+    number the group-height arithmetic budgets for it."""
     return _block(
         "lbl_%sForm_%sLabel" % (entity.entity, field.name), item_indent, "ModernText",
         [
+            ("AccessibleLabel", "=Self.Text"),
+            # An explicit Color is mandatory. A pushed app carries no custom
+            # Theme, so a ModernText with no Color falls back to the stock
+            # Fluent default and rendered INVISIBLE against the form card —
+            # rows of unlabelled input boxes. Every other text control this
+            # generator emits already sets one; this was the only gap.
+            ("Color", "=constStyle.BasicStyle.FontColor"),
             ("FontWeight", "=FontWeight.Semibold"),
+            ("Height", "=%d" % FORM_CAPTION_HEIGHT),
             ("Size", "=constStyle.BasicStyle.FontSize.Small"),
             ("Text", "=%s" % _quote(field.label)),
+        ])
+
+
+def _field_group_block(entity, field, item_indent):
+    """The reference's `con_Fld_*`: a VERTICAL container holding the caption
+    above its input, gap 4. Fixed-width by default so a row of three lines up
+    into columns; the record's title field and any longtext stretch instead,
+    because a name or a paragraph is the thing that should absorb the slack.
+    """
+    props = [
+        ("BorderStyle", "=BorderStyle.None"),
+        # STRETCH is load-bearing. In a Vertical container the cross axis is
+        # horizontal, and the caption carries no explicit Width — without
+        # stretch it resolved to ZERO width and the caption text vanished,
+        # leaving a form of unlabelled input boxes. (The reference gets there
+        # the other way, with AlignInContainer: =AlignInContainer.Stretch on
+        # every child of con_Fld_*; one property on the parent is the same
+        # thing for less repetition.) This was the second, separate cause of
+        # invisible captions — the first was a missing Color.
+        ("LayoutAlignItems", "=LayoutAlignItems.Stretch"),
+        ("LayoutDirection", "=LayoutDirection.Vertical"),
+        ("LayoutGap", "=constStyle.Spacing.XS"),
+    ]
+    props.append(("Height", "=%d" % (FORM_GROUP_HEIGHT_MULTILINE
+                                     if field.type == "longtext"
+                                     else FORM_GROUP_HEIGHT)))
+    stretches = field.type == "longtext" or field.grid_width == "flex"
+    if stretches:
+        # Flexible: a GroupContainer child of an auto-layout parent defaults
+        # to FillPortions 1, so it absorbs the row's spare width. Declared
+        # explicitly rather than left to the default — the default differs
+        # between container and leaf controls and that asymmetry is a
+        # documented trap.
+        props.append(("FillPortions", "=1"))
+    else:
+        props.append(("FillPortions", "=0"))
+        props.append(("Width", "=%d" % FORM_FIELD_WIDTH))
+    return _block(
+        "con_%sForm_Fld_%s" % (entity.entity, field.name), item_indent,
+        "GroupContainer", props, variant="AutoLayout",
+        children=[_label_block(entity, field, item_indent + 6),
+                  _form_input_block(entity, field, item_indent + 6)])
+
+
+def _chunk_form_rows(fields):
+    """Group fields into rows of FORM_FIELDS_PER_ROW. A longtext takes a row
+    of its own — a paragraph next to two 240px inputs reads as a mistake, and
+    the reference gives its Notes field a full-width row too."""
+    rows, cur = [], []
+    for f in fields:
+        if f.type == "longtext":
+            if cur:
+                rows.append(cur)
+                cur = []
+            rows.append([f])
+            continue
+        cur.append(f)
+        if len(cur) == FORM_FIELDS_PER_ROW:
+            rows.append(cur)
+            cur = []
+    if cur:
+        rows.append(cur)
+    return rows
+
+
+def _form_row_block(entity, row_fields, item_indent, index):
+    tall = any(f.type == "longtext" for f in row_fields)
+    return _block(
+        "con_%sForm_Row%d" % (entity.entity, index), item_indent,
+        "GroupContainer",
+        [
+            ("BorderStyle", "=BorderStyle.None"),
+            # Fixed child of the card's VERTICAL layout, so Rule 1 wants an
+            # explicit main-axis (vertical) size — hence Height, not a min.
+            ("FillPortions", "=0"),
+            ("Height", "=%d" % (FORM_ROW_HEIGHT_MULTILINE if tall else FORM_ROW_HEIGHT)),
+            ("LayoutAlignItems", "=LayoutAlignItems.Stretch"),
+            ("LayoutDirection", "=LayoutDirection.Horizontal"),
+            ("LayoutGap", "=constStyle.Spacing.XL"),
+        ], variant="AutoLayout",
+        children=[_field_group_block(entity, f, item_indent + 6) for f in row_fields])
+
+
+def _form_section_label(entity, text, tag, item_indent):
+    """Purple bold section heading — the reference's `lbl_Project_Title`
+    ("Basic data") and `lbl_People_Title` ("People")."""
+    return _block(
+        "lbl_%sForm_Section%s" % (entity.entity, tag), item_indent, "ModernText",
+        [
+            ("AccessibleLabel", "=Self.Text"),
+            ("AutoHeight", "=true"),
+            ("Color", "=constPrimaryColor.RGBA"),
+            ("FontWeight", "=FontWeight.Bold"),
+            ("Size", "=constStyle.BasicStyle.FontSize.Large"),
+            ("Text", "=%s" % _quote(text)),
         ])
 
 
@@ -1018,24 +1265,44 @@ def emit_form_screen(entity, model):
     fields = entity.form_fields
     display_ref = _display_name_ref(entity)
 
+    # Sections mirror the reference card's two headings ("Basic data" /
+    # "People"). The split uses information the model already carries: a
+    # field that earns a table column is part of the record's identity, a
+    # grid-hidden one is detail. No new model syntax required.
+    on_grid = [f for f in fields if f.in_grid]
+    off_grid = [f for f in fields if not f.in_grid]
     card_children = []
-    for f in fields:
-        card_children.append(_label_block(entity, f, 18))
-        card_children.append(_form_input_block(entity, f, 18))
-    # A fixed-height card scaled to field count — plain pixel literals are
-    # fine here (check_tokens.py only restricts colour/font-size/radius
-    # literals), a fixed Height is mandatory for a fixed child of an
-    # auto-layout container.
-    card_height = 100 + 70 * len(fields)
+    row_no = 0
+    for tag, heading, group in (("Basic", "Basic data", on_grid),
+                                ("Detail", "Additional detail", off_grid)):
+        if not group:
+            continue
+        card_children.append(_form_section_label(entity, heading, tag, 18))
+        for row in _chunk_form_rows(group):
+            row_no += 1
+            card_children.append(_form_row_block(entity, row, 18, row_no))
+    # Trailing flexible spacer — the same idiom the dashboard uses
+    # (lbl_Dash_Spacer). It pins the rows to the top of the card instead of
+    # letting them distribute down it, and it gives check_layout.py's R2 the
+    # one flexible child it needs to resolve the card's own size.
+    card_children.append(_block(
+        "lbl_%sForm_Spacer" % entity.entity, 18, "ModernText",
+        [("Color", "=constStyle.BasicStyle.FontColor"),
+         ("FillPortions", "=1"), ("Text", "=\"\"")]))
     card_block = _block(
         "con_%sForm_Card" % entity.entity, 12, "GroupContainer",
         [
             ("DropShadow", "=constStyle.Card.Shadow"),
             ("Fill", "=constStyle.Card.Fill"),
-            ("FillPortions", "=0"),
-            ("Height", "=%d" % card_height),
+            # Flexible with its OWN vertical scroll, like the reference's
+            # con_Form_Card. This used to be a fixed `100 + 70 * len(fields)`
+            # Height, which produced one very tall single-column card that
+            # ran off the screen instead of scrolling inside a card.
+            ("FillPortions", "=1"),
+            ("LayoutAlignItems", "=LayoutAlignItems.Stretch"),
             ("LayoutDirection", "=LayoutDirection.Vertical"),
             ("LayoutGap", "=constStyle.Spacing.M"),
+            ("LayoutOverflowY", "=LayoutOverflow.Scroll"),
             ("PaddingBottom", "=constStyle.Card.Padding"),
             ("PaddingLeft", "=constStyle.Card.Padding"),
             ("PaddingRight", "=constStyle.Card.Padding"),
@@ -1139,7 +1406,10 @@ def emit_form_screen(entity, model):
             ("LayoutAlignItems", "=LayoutAlignItems.Stretch"),
             ("LayoutDirection", "=LayoutDirection.Vertical"),
             ("LayoutGap", "=constStyle.Spacing.M"),
-            ("LayoutOverflowY", "=LayoutOverflow.Scroll"),
+            # No LayoutOverflowY here on purpose: con_*Form_Card owns the
+            # vertical scroll, as it does in the reference. Nesting a
+            # scrolling card inside a scrolling body gives two competing
+            # scroll regions.
             # Baseline con_Form_Body: PaddingLeft/Right=20, PaddingTop/Bottom=15
             # literals. House style is tokens, not literals (check_tokens.py
             # would only flag colour/size/radius literals, not these — but
@@ -1200,7 +1470,7 @@ def emit_form_screen(entity, model):
         "cmp_%sForm_Notification" % entity.entity, 6, "CanvasComponent",
         [
             ("Notifications", "=colNotifications"),
-            ("OnCancel", "=RemoveIf(colNotifications, Created = ThisRecord.Created)"),
+            ("OnCancel", "=RemoveIf(colNotifications, Created = Item.Created)"),
             ("Visible", "=!IsEmpty(colNotifications)"),
             ("Width", "=400"),
             ("X", "=Parent.Width - Self.Width - constStyle.Spacing.XL"),
@@ -1209,7 +1479,18 @@ def emit_form_screen(entity, model):
 
     spinner_block = _block(
         "cmp_%sForm_Spinner" % entity.entity, 6, "CanvasComponent",
-        [("Visible", "=glBoolIsLoading")], component_name="cmp_Spinner")
+        # A component instance with no Width/Height renders at the
+        # DEFINITION's default size, and cmp_Spinner's scrim is sized off
+        # Parent.Width/Height — so with no size passed in it painted a grey
+        # box over part of the screen with a hard vertical seam down the
+        # middle, instead of covering it. Screens are ManualLayout, so
+        # check_layout.py's R1/R3 never see this: they only cover
+        # auto-layout children.
+        [("Height", "=Parent.Height"),
+         ("Visible", "=glBoolIsLoading"),
+         ("Width", "=Parent.Width"),
+         ("X", "=0"),
+         ("Y", "=0")], component_name="cmp_Spinner")
 
     top_props = [
         ("Fill", "=constReactGray.RGBA"),

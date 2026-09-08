@@ -188,6 +188,64 @@ ComponentDefinitions:
                         Width: =Parent.TemplateWidth
                         Y: =5
                       Children:
+                        # ORDER IS LOAD-BEARING, and it is the REVERSE of what
+                        # the rendered result suggests. With btn_Navigation
+                        # written first, Power Apps laid the LABEL out first and
+                        # put the icon after it — measured twice against live
+                        # renders (2026-09-08). Consequence: with the label
+                        # holding the first 96px, the 32px icon started at ~136px,
+                        # which is outside the COLLAPSED rail's 60px width, so a
+                        # collapsed rail rendered as an empty grey strip. That was
+                        # the "navigation is empty" defect.
+                        #
+                        # Writing the label first therefore renders the ICON first,
+                        # which is what an icon rail needs and what the reference
+                        # app shows. Why the order inverts is NOT understood — do
+                        # not "tidy" these two back into alphabetical order without
+                        # re-checking a live render of the collapsed rail.
+                        - lbl_Navigation_DisplayName:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: =Self.Text
+                              Color: |-
+                                =If(
+                                    ThisItem.Screen.Name = App.ActiveScreen.Name,
+                                    constPrimaryColor.RGBA,
+                                    constStyle.BasicStyle.FontColor
+                                )
+                              # FIXED, not flexible. As the ONE flexible child of
+                              # a 250px expanded row this label absorbed every
+                              # spare pixel and drove btn_Navigation's fixed 32px
+                              # to the far edge of the rail — icon and label ~190px
+                              # apart, with the icon clipped against the content
+                              # card (live 2026-09-08). With both children fixed the
+                              # row packs 32 + gap + 96 from the start, so the icon
+                              # and its label sit together.
+                              FillPortions: =0
+                              FontWeight: =FontWeight.Bold
+                              Height: =Parent.Height
+                              # ZERO width when the rail is collapsed. At a fixed
+                              # 96px the label consumed the whole 60px collapsed
+                              # rail and pushed the 32px icon out of view, so a
+                              # collapsed rail rendered as a blank strip — the
+                              # "collapsed menu not showing icons" defect. Blanking
+                              # the text alone was not enough: the label still held
+                              # its 96px of layout.
+                              LayoutMinWidth: =If(cmp_Navigation.Navigation, 96, 0)
+                              Size: =constStyle.BasicStyle.FontSize.Small
+                              # Blank the text rather than toggle Visible: an
+                              # invisible child is dropped from auto-layout
+                              # ENTIRELY, so the collapsed rail would lose the
+                              # slot this label holds rather than just hide its
+                              # text. (That is check_layout.py's Rule 4, which
+                              # only FLAGS flexible children — but the underlying
+                              # engine behaviour applies to fixed ones too, which
+                              # is why blanking stays the right call now that
+                              # FillPortions is 0.) btn_Navigation's
+                              # own AccessibleLabel already carries the name
+                              # when collapsed, so blanking here loses nothing.
+                              Text: =If(cmp_Navigation.Navigation, ThisItem.DisplayName, "")
+                              Width: =If(cmp_Navigation.Navigation, 96, 0)
                         - btn_Navigation:
                             Control: Button
                             Properties:
@@ -201,6 +259,7 @@ ComponentDefinitions:
                                     'ButtonCanvas.Appearance'.Primary,
                                     'ButtonCanvas.Appearance'.Outline
                                 )
+                              BasePaletteColor: =constPrimaryColor.RGBA
                               BorderRadius: =constBorderRadius
                               FontColor: |-
                                 =If(
@@ -217,28 +276,3 @@ ComponentDefinitions:
                                 Navigate(ThisItem.Screen)
                               Text: =ThisItem.DisplayName
                               Width: =32
-                        - lbl_Navigation_DisplayName:
-                            Control: ModernText
-                            Properties:
-                              AccessibleLabel: =Self.Text
-                              Color: |-
-                                =If(
-                                    ThisItem.Screen.Name = App.ActiveScreen.Name,
-                                    constPrimaryColor.RGBA,
-                                    constStyle.BasicStyle.FontColor
-                                )
-                              FillPortions: =1
-                              FontWeight: =FontWeight.Bold
-                              Height: =Parent.Height
-                              LayoutMinWidth: =96
-                              Size: =constStyle.BasicStyle.FontSize.Small
-                              # Blank the text rather than toggle Visible:
-                              # this is a FLEXIBLE (FillPortions: =1) child —
-                              # Power Apps drops an invisible child from
-                              # auto-layout entirely, which collapses the gap
-                              # it held instead of just hiding its content
-                              # (check_layout.py's Rule 4). btn_Navigation's
-                              # own AccessibleLabel already carries the name
-                              # when collapsed, so blanking here loses nothing.
-                              Text: =If(cmp_Navigation.Navigation, ThisItem.DisplayName, "")
-                              Width: =96

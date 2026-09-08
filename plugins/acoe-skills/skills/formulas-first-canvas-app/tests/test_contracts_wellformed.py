@@ -82,7 +82,14 @@ class TestContractsWellFormed(unittest.TestCase):
         self.assertNotIn("HintText", c["ModernTextInput"]["properties"])
         self.assertNotIn("Format", c["ModernTextInput"]["properties"])
         self.assertNotIn("Value", c["ModernCombobox"]["properties"])
-        self.assertNotIn("ShowScrollbar", c["Gallery"]["properties"])
+        # ShowScrollbar moved OUT of Gallery's `absent` list 2026-09-08:
+        # `Control: Gallery` is the Classic family per describe_control,
+        # the reference app uses it, and a live compile_canvas accepted
+        # `ShowScrollbar: =false` on four galleries with 0 errors. The old
+        # entry was inferred from a "modern gallery" reading rather than
+        # from a live rejection, and it made the guard refuse valid YAML.
+        # TabIndex stays asserted absent below — there a live rejection
+        # IS on record.
         self.assertNotIn("Color", c["Button"]["properties"])
         self.assertNotIn("Fill", c["Button"]["properties"])
 

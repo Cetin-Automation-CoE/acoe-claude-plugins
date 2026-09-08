@@ -168,6 +168,13 @@ ComponentDefinitions:
                   Align.Center
               )
             Appearance: ='ButtonCanvas.Appearance'.Primary
+            # A pushed app carries NO custom Theme: a theme lives in
+            # References/Themes.json, which the .pa.yaml surface cannot
+            # carry. An Appearance.Primary control therefore paints itself
+            # from the STOCK Fluent palette (Windows blue) unless the brand
+            # colour is supplied explicitly. The reference app only gets
+            # away without this because it sets Theme: =CETIN.
+            BasePaletteColor: =constPrimaryColor.RGBA
             BorderRadius: =0
             BorderThickness: =0
             DisplayMode: |-

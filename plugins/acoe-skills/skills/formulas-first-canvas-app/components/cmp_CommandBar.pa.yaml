@@ -24,6 +24,12 @@ ComponentDefinitions:
     # constStyle and carried its own literals.
     AccessAppScope: true
     CustomProperties:
+      AddLabel:
+        PropertyKind: Input
+        DisplayName: AddLabel
+        Description: Caption on the primary add action
+        DataType: Text
+        Default: ="New"
       CanAdd:
         PropertyKind: Input
         DisplayName: CanAdd
@@ -214,15 +220,24 @@ ComponentDefinitions:
                 Control: Button
                 Properties:
                   AccessibleLabel: ="New item"
-                  BorderRadius: =Self.Height / 2
+                  # Explicitly brand-filled. With no Appearance this fell back
+                  # to Secondary — a white round button on a white toolbar,
+                  # invisible, which is why "+ New" appeared to be missing
+                  # entirely. There is no Theme to inherit a fill from.
+                  Appearance: ='ButtonCanvas.Appearance'.Primary
+                  BasePaletteColor: =constPrimaryColor.RGBA
+                  BorderRadius: =constStyle.Button.BorderRadius
+                  # LABELLED, unlike its round icon-only siblings: this is the
+                  # primary action on a list screen and the reference app gives
+                  # it a wide "+ New activity" pill rather than a bare glyph.
                   Height: =cmp_CommandBar.Size
                   Icon: ="Add"
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
-                  Layout: ='ButtonCanvas.Layout'.IconOnly
+                  Layout: ='ButtonCanvas.Layout'.IconBefore
                   OnSelect: =cmp_CommandBar.OnAdd()
-                  Text: =""
+                  Text: =cmp_CommandBar.AddLabel
                   Visible: =cmp_CommandBar.CanAdd
-                  Width: =cmp_CommandBar.Size
+                  Width: =120
             - btn_CommandBar_Edit:
                 Control: Button
                 Properties:

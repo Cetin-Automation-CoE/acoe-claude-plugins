@@ -97,6 +97,54 @@ ComponentDefinitions:
         Description: Raised by the refresh action
         ReturnType: None
         Default: =false
+      OnScopeChange:
+        PropertyKind: Event
+        DisplayName: OnScopeChange
+        Description: Raised when the scope selector changes — stash the value here
+        ReturnType: None
+        Default: =false
+      OnSelectConfig:
+        PropertyKind: Event
+        DisplayName: OnSelectConfig
+        Description: Settings action
+        ReturnType: None
+        Default: =false
+      Scope:
+        PropertyKind: Output
+        DisplayName: Scope
+        Description: The scope value currently selected in the header
+        DataType: Text
+      ScopeItems:
+        PropertyKind: Input
+        DisplayName: ScopeItems
+        Description: Choices for the scope selector, as one-column Value records
+        DataType: Table
+        Default: |-
+          =[{Value: "ALL"}]
+      ScopeLabel:
+        PropertyKind: Input
+        DisplayName: ScopeLabel
+        Description: Caption beside the scope selector
+        DataType: Text
+        Default: ="Scope"
+      ScopeSelected:
+        PropertyKind: Input
+        DisplayName: ScopeSelected
+        Description: Currently selected scope value
+        DataType: Text
+        Default: =""
+      ShowProfile:
+        PropertyKind: Input
+        DisplayName: ShowProfile
+        Description: Show the signed-in user's photo at the right edge
+        DataType: Boolean
+        Default: =true
+      ShowScope:
+        PropertyKind: Input
+        DisplayName: ShowScope
+        Description: Show the scope selector beside the title
+        DataType: Boolean
+        Default: =false
       ShowCommandBar:
         PropertyKind: Input
         DisplayName: ShowCommandBar
@@ -105,6 +153,9 @@ ComponentDefinitions:
         Default: =true
     Properties:
       Height: =constStyle.Header.Height
+      # Output, so a screen can stash the choice without this component
+      # having to know the name of anybody's global.
+      Scope: =com_Header_Scope.Selected.Value
     Children:
       - con_Header:
           Control: GroupContainer
@@ -132,7 +183,11 @@ ComponentDefinitions:
                   FillPortions: =0
                   FontColor: =constPaperColor.RGBA
                   Height: =constStyle.Button.Height.Medium
-                  Icon: ="List"
+                  # "List" is NOT a valid Fluent icon name — it rendered as an
+                  # empty circle. GridDots is the waffle the reference app uses
+                  # for exactly this affordance, and it is in the proven set
+                  # (references/fluent-icon-names.md).
+                  Icon: ="GridDots"
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_Header.OnNavigate()
@@ -167,6 +222,50 @@ ComponentDefinitions:
                   Size: =constStyle.BasicStyle.FontSize.Large
                   Text: =cmp_Header.DisplayName
                   VerticalAlign: =VerticalAlign.Middle
+            - con_Header_Scope:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  BorderStyle: =BorderStyle.None
+                  FillPortions: =0
+                  Height: =constStyle.Label.Height.Large
+                  LayoutAlignItems: =LayoutAlignItems.Center
+                  LayoutDirection: =LayoutDirection.Horizontal
+                  LayoutGap: =constStyle.Spacing.XS
+                  Visible: =cmp_Header.ShowScope
+                  Width: =210
+                Children:
+                  - lbl_Header_Scope:
+                      Control: ModernText
+                      Properties:
+                        AccessibleLabel: =Self.Text
+                        Color: =constPaperColor.RGBA
+                        FillPortions: =0
+                        Height: =constStyle.Label.Height.Small
+                        Size: =constStyle.BasicStyle.FontSize.Caption
+                        Text: =cmp_Header.ScopeLabel
+                        VerticalAlign: =VerticalAlign.Middle
+                        Width: =78
+                  - com_Header_Scope:
+                      Control: ModernCombobox
+                      Properties:
+                        AccessibleLabel: =cmp_Header.ScopeLabel
+                        Appearance: =constStyle.Combobox.Appearance
+                        DefaultSelectedItems: =Filter(cmp_Header.ScopeItems, Value = cmp_Header.ScopeSelected)
+                        FillPortions: =0
+                        Height: =constStyle.Combobox.Height.Small
+                        IsSearchable: =false
+                        ItemDisplayText: =ThisItem.Value
+                        Items: =cmp_Header.ScopeItems
+                        OnChange: =cmp_Header.OnScopeChange()
+                        SelectMultiple: =false
+                        Width: =120
+            - lbl_Header_Spacer:
+                Control: ModernText
+                Properties:
+                  Color: =constPaperColor.RGBA
+                  FillPortions: =1
+                  Text: =""
             - btn_Header_Refresh:
                 Control: Button
                 Properties:
@@ -197,7 +296,10 @@ ComponentDefinitions:
                   FillPortions: =0
                   FontColor: =constPaperColor.RGBA
                   Height: =constStyle.Button.Height.Medium
-                  Icon: ="Alert"
+                  # "Alert" is not a Fluent icon name — it drew nothing, which is
+                  # why the header's right-hand cluster looked absent. The
+                  # reference app uses Warning here.
+                  Icon: ="Warning"
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_Header.OnSelectNotifications()
@@ -222,6 +324,21 @@ ComponentDefinitions:
                   Text: =Text(cmp_Header.NotificationCount)
                   Visible: =cmp_Header.ShowCommandBar And cmp_Header.NotificationCount > 0
                   Width: =18
+            - btn_Header_Config:
+                Control: Button
+                Properties:
+                  AccessibleLabel: ="Settings"
+                  Appearance: ='ButtonCanvas.Appearance'.Transparent
+                  FillPortions: =0
+                  FontColor: =constPaperColor.RGBA
+                  Height: =constStyle.Button.Height.Medium
+                  Icon: ="Settings"
+                  IconStyle: ='ButtonCanvas.IconStyle'.Filled
+                  Layout: ='ButtonCanvas.Layout'.IconOnly
+                  OnSelect: =cmp_Header.OnSelectConfig()
+                  Text: =""
+                  Visible: =cmp_Header.ShowCommandBar
+                  Width: =32
             - btn_Header_Help:
                 Control: Button
                 Properties:
@@ -230,13 +347,31 @@ ComponentDefinitions:
                   FillPortions: =0
                   FontColor: =constPaperColor.RGBA
                   Height: =constStyle.Button.Height.Medium
-                  Icon: ="QuestionCircle"
+                  # "QuestionCircle" is not a Fluent icon name either; the
+                  # reference uses plain Question.
+                  Icon: ="Question"
                   IconStyle: ='ButtonCanvas.IconStyle'.Filled
                   Layout: ='ButtonCanvas.Layout'.IconOnly
                   OnSelect: =cmp_Header.OnSelectHelp()
                   Text: =""
                   Visible: =cmp_Header.ShowCommandBar
                   Width: =32
+            - img_Header_Profile:
+                Control: Image
+                Properties:
+                  AccessibleLabel: ="Your profile photo"
+                  # User() is built in — no connector and no data source, so this
+                  # does not breach the data-access layer. Circular via a radius
+                  # far larger than the box, the same way the reference does it.
+                  FillPortions: =0
+                  Height: =constStyle.Avatar.Size
+                  Image: =User().Image
+                  RadiusBottomLeft: =constStyle.Avatar.Radius
+                  RadiusBottomRight: =constStyle.Avatar.Radius
+                  RadiusTopLeft: =constStyle.Avatar.Radius
+                  RadiusTopRight: =constStyle.Avatar.Radius
+                  Visible: =cmp_Header.ShowProfile
+                  Width: =constStyle.Avatar.Size
       - prg_Header_Loading:
           Control: Progress
           Properties:
