@@ -583,6 +583,11 @@ class TestListScreenMatchesBaselineSkeleton(unittest.TestCase):
 class TestFlexColumnBecomesWideFixed(unittest.TestCase):
     def test_flex_maps_to_240_px(self):
         f = [x for x in entity().fields if x.grid_width == "flex"]
+        # M2 (final review): without this, a fixture change that dropped the
+        # last `grid: flex` field would leave this test asserting nothing at
+        # all (the `if f:` guard would just skip the body) while still
+        # reporting green.
+        self.assertTrue(f, "fixture must keep a grid: flex field")
         if f:
             self.assertEqual(es._column_px(f[0]), 240)
 

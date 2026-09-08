@@ -4,8 +4,9 @@
 #
 # Prose version and the reasoning: references/control-dialects.md
 #
-# Provenance: seeded from Microsoft Learn, reconciled against the provably-compiled
-# app at /Users/krystofpe/powerapps-work/canvas-src. Where they disagreed, the
+# Provenance: seeded from Microsoft Learn, reconciled against the Phase 1
+# reference-app corpus (an older copy of the Regional Procurement Plan app;
+# superseded by the baseline named in SKILL.md). Where they disagreed, the
 # compiled app won.
 #
 # 2026-09-07: check_control_props.py's first real run against templates/ and
@@ -53,8 +54,9 @@
 # property 'TabIndex'" on all four (52 of 59 errors in that run). It had been
 # carried on 8 controls in this file since the file's original seeding from
 # Microsoft Learn and was never corpus-verified: it appears ZERO times in the
-# provably-compiled reference app at /Users/krystofpe/powerapps-work/canvas-src,
-# which is exactly the discipline violation the header above warns about.
+# Phase 1 reference-app corpus (an older copy of the Regional Procurement Plan
+# app; superseded by the baseline named in SKILL.md), which is exactly the
+# discipline violation the header above warns about.
 # Removed from every control's `properties` list and curated as an `absent`
 # negative everywhere it appeared (ModernText, Text, ModernTextInput,
 # ModernCombobox, ModernDatePicker, Button, ModernButton@1.0.0, Gallery) so a

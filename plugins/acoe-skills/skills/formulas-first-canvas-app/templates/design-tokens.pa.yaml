@@ -190,7 +190,12 @@ constStyle = {
     Dashboard: {
         TileSize: 200,
         TileHeight: 170,
-        BandTileSize: 140,
+        // BandTileSize (140) retired (final review, bundled fidelity item):
+        // gal_Dash_Band's TemplateSize now divides Self.Width by the band
+        // entity's own status vocab count, the same shape the pipeline
+        // gallery already used — a fixed pixel width never adapted to a
+        // model with a different vocab size. grep confirmed no other
+        // reference before removal.
         BandHeight: 120,
         ChipHeight: 32,
         Radius: 15,

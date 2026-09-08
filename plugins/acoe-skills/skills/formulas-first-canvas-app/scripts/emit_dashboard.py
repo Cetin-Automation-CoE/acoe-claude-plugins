@@ -36,11 +36,11 @@ this module and Task 6's formulas cannot silently disagree about whether a
 references here actually exists.
 
 TOKENS: `templates/design-tokens.pa.yaml`'s `constStyle.Dashboard` group
-(`TileSize`, `TileHeight`, `BandTileSize`, `BandHeight`, `ChipHeight`,
-`Radius`, `Gap`, `TileIconSize`) plus `constStyle.BasicStyle.FontColorMuted`
-are this screen's ONLY new token surface — every dimension/colour this
-module writes that isn't already covered by an existing `constStyle.*` token
-(Spacing, BasicStyle.FontSize, Label.Height, ...) comes from one of those two
+(`TileSize`, `TileHeight`, `BandHeight`, `ChipHeight`, `Radius`, `Gap`,
+`TileIconSize`) plus `constStyle.BasicStyle.FontColorMuted` are this screen's
+ONLY new token surface — every dimension/colour this module writes that isn't
+already covered by an existing `constStyle.*` token (Spacing,
+BasicStyle.FontSize, Label.Height, ...) comes from one of those two
 additions. `FontColorMuted` (Ruling 17, Phase 3 Task 7 fix round) is the
 baseline's own muted secondary-text colour
 (`constStyle.Button.ColorGrey`/`RGBA(89, 91, 95, 1)` there) — this skill had
@@ -51,11 +51,14 @@ literal exception is `Size: =28` on `lbl_Dash_TileValue` —
 `constStyle.BasicStyle.FontSize`'s own comment reserves 28 for "the one
 control that shows a headline figure," which is exactly this KPI value, and
 `check_tokens.py --allow-sizes` (default `28,20,14,12,11`) already permits it
-as a literal. The pipeline gallery's `TemplateSize` divides `Self.Width` by a
-plain COUNT literal (`len(status.vocab)`) rather than a token — a count is
-not a colour/size/radius value `check_tokens.py` restricts, and it can never
-collide with the forbidden dimension literals (it always appears after `/ `,
-never immediately after `=`).
+as a literal. Both the band and pipeline galleries' `TemplateSize` divide
+`Self.Width` by a plain COUNT literal (`len(status.vocab)`) rather than a
+token (final review: `BandTileSize`, a fixed pixel width that never adapted
+to a model's own status vocab size, is retired in favour of this — the same
+shape the pipeline gallery always used) — a count is not a colour/size/radius
+value `check_tokens.py` restricts, and it can never collide with the
+forbidden dimension literals (it always appears after `/ `, never
+immediately after `=`).
 
 CONTRACT-AWARE BY CONSTRUCTION, same discipline as `emit_screens.py`: every
 property is written through `_block`, imported from there rather than
@@ -191,7 +194,18 @@ def _band_section(model, item_indent):
             ("Height", "=constStyle.Dashboard.BandHeight"),
             ("Items", "=constDashboardBand"),
             ("TemplatePadding", "=constStyle.Spacing.S"),
-            ("TemplateSize", "=constStyle.Dashboard.BandTileSize"),
+            # Bundled fidelity item (deferred from Task 7): divides the
+            # gallery's own rendered width by its status field's vocab
+            # count — the same shape the pipeline gallery below already
+            # uses — rather than a fixed constStyle.Dashboard.BandTileSize
+            # token that never adapted to a model whose band entity has a
+            # different status vocab size. A plain count, not a
+            # colour/size/radius literal check_tokens.py restricts (see
+            # the pipeline gallery's own comment on this same shape).
+            ("TemplateSize", "=RoundDown(Self.Width / %d, 0)" % len(status.vocab)),
+            # M4: previously missing entirely — the pipeline gallery has
+            # always had this sibling property.
+            ("Width", "=Parent.Width"),
         ], variant="Horizontal", children=[tile_block])
 
     band_block = _block(

@@ -92,6 +92,56 @@ class TestGenerateTwoEntityApp(unittest.TestCase):
         self.assertEqual(len(list((self.out / "Components").glob("cmp_*.pa.yaml"))), 12)
 
 
+class TestMultiEntityDashboardExplicitlyOff(unittest.TestCase):
+    """M5 (final review): `dashboard` defaults ON above one entity (Task 5 —
+    see TestGenerateTwoEntityApp's own TWO_ENTITY fixture above, which has no
+    explicit `dashboard:` key at all) — an explicit `dashboard: false` must
+    still be honoured even with more than one entity: no DashboardScreen
+    written, and StartScreen falls back to the first entity's own list
+    screen (model.py's own Model.start_screen)."""
+
+    TWO_ENTITY_DASHBOARD_OFF = textwrap.dedent("""\
+        app_name: Ops Register No Dashboard
+        dashboard: false
+        entities:
+          - entity: Asset
+            plural: Assets
+            fields:
+              - {name: Tag, type: text, required: true, grid: 100, search: true}
+              - {name: Status, type: choice, required: true, grid: 120, filter: true, vocab: [Open, Shut]}
+          - entity: Site
+            plural: Sites
+            fields:
+              - {name: Name, type: text, required: true, grid: flex, search: true}
+              - {name: Status, type: choice, required: true, grid: 120, filter: true, vocab: [Live, Closed]}
+        """)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        model = pathlib.Path(cls.tmp) / "model.yaml"
+        model.write_text(cls.TWO_ENTITY_DASHBOARD_OFF, encoding="utf-8")
+        cls.out = pathlib.Path(cls.tmp) / "Src"
+        cls.proc = subprocess.run(
+            [sys.executable, str(SKILL / "scripts" / "new_app.py"),
+             "--model", str(model), "--out", str(cls.out), "--rows", "8"],
+            capture_output=True, text=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_exits_zero(self):
+        self.assertEqual(self.proc.returncode, 0, self.proc.stdout + self.proc.stderr)
+
+    def test_no_dashboard_screen_written(self):
+        self.assertFalse((self.out / "DashboardScreen.pa.yaml").exists())
+
+    def test_start_screen_is_the_first_entitys_list_screen(self):
+        app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
+        self.assertIn("StartScreen: =AssetsListScreen", app)
+
+
 class TestBadModelFailsBeforeWriting(unittest.TestCase):
     def test_invalid_model_exits_nonzero_and_writes_nothing(self):
         tmp = tempfile.mkdtemp()

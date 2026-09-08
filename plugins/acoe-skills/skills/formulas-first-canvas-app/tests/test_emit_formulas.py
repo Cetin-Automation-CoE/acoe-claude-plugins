@@ -566,5 +566,70 @@ class TestDashboardFormulas(unittest.TestCase):
                 self.assertGreaterEqual(use.start(), pos, "%s used before definition" % name)
 
 
+def _one_entity_model():
+    """A single entity, nothing forcing the dashboard on or off beyond
+    model.py's own default (one entity -> dashboard defaults False)."""
+    return m.Model({
+        "app_name": "Solo",
+        "entities": [{
+            "entity": "Widget", "plural": "Widgets",
+            "fields": [
+                {"name": "Name", "type": "text", "grid": "flex", "search": True},
+                {"name": "Status", "type": "choice", "grid": 120, "filter": True,
+                 "vocab": ["Open", "Closed"]},
+                {"name": "Amount", "type": "number", "grid": 118, "money": True},
+            ],
+        }],
+    })
+
+
+def _status_less_model():
+    """No choice field anywhere -> status_field is None for the only
+    entity -> neither the band nor any pipeline table is eligible. Forces
+    `dashboard` on (it would default off with a single entity) so
+    `_known_names`'s `if model.dashboard:` branch actually runs its
+    per-entity band/pipeline checks against a model where none qualify,
+    rather than short-circuiting on `model.dashboard` being falsy."""
+    mo = m.Model({
+        "app_name": "No Status",
+        "entities": [{
+            "entity": "Note", "plural": "Notes",
+            "fields": [
+                {"name": "Title", "type": "text", "grid": "flex", "search": True},
+                {"name": "Body", "type": "longtext", "grid": "hidden"},
+            ],
+        }],
+    })
+    mo.dashboard = True
+    return mo
+
+
+class TestKnownNamesMatchesAllSpecs(unittest.TestCase):
+    """`_known_names` is a HAND-MAINTAINED mirror of what `_all_specs` (via
+    `_dashboard_specs`/`_registry_spec`/etc) actually defines — its own
+    docstring says so explicitly for the dashboard branch. A model shape
+    that silently drifts the two apart is invisible until some OTHER
+    block's text happens to reference the missing/extra name by accident —
+    pin the two universes as certified EQUAL instead (every name
+    `_all_specs` would define is known, and `_known_names` claims nothing
+    that isn't actually defined), over three separate model shapes: a real
+    multi-entity model (the worked example every maker reads first), a
+    one-entity model, and a model with no status field anywhere."""
+
+    def _assert_names_match(self, mo):
+        spec_names = {name for (_, name, _) in ef._all_specs(mo, rows=4, today=TODAY)}
+        self.assertEqual(spec_names, set(ef._known_names(mo)))
+
+    def test_example_model(self):
+        mo = m.load_model(str(SKILL / "templates" / "model.example.yaml"))
+        self._assert_names_match(mo)
+
+    def test_one_entity_model(self):
+        self._assert_names_match(_one_entity_model())
+
+    def test_status_less_model(self):
+        self._assert_names_match(_status_less_model())
+
+
 if __name__ == "__main__":
     unittest.main()

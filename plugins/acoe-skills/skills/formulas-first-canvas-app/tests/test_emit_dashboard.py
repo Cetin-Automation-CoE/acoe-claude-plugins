@@ -45,7 +45,9 @@ class TestDashboardScreen(unittest.TestCase):
         actually reaches the dashboard too, not just the list screen."""
         self.assertIn("Screens: =constScreens", self.text)
 
-    def test_five_regions(self):
+    def test_all_dashboard_regions_present(self):
+        # M3 (final review): renamed from test_five_regions, which actually
+        # checked six names — the name is now what it asserts.
         for n in ("lbl_Dash_BandTitle", "gal_Dash_Band", "lbl_Dash_PipelineTitle",
                   "gal_Dash_Pipeline", "gal_NavigationTiles", "lbl_Dashboard_Trademark"):
             self.assertIn("- %s:" % n, self.text, n)
@@ -139,6 +141,27 @@ class TestDashboardScreen(unittest.TestCase):
         mo.description = ""
         t = ed.emit_dashboard_screen(mo)
         self.assertIn('Text: ="%d registers · live counts"' % len(mo.entities), t)
+
+    def test_band_template_size_divides_by_status_vocab_count(self):
+        """Bundled fidelity item (deferred from Task 7): gal_Dash_Band's
+        TemplateSize must divide the gallery's own rendered width by its
+        status field's vocab count — the same shape the pipeline gallery
+        already uses (RoundDown(Self.Width / len(vocab), 0)) — not the
+        fixed constStyle.Dashboard.BandTileSize token, which never adapted
+        to a model whose band entity has a different status vocab size."""
+        mo = dash_model()
+        asset = [e for e in mo.entities if e.entity == "Asset"][0]
+        n = len(asset.status_field.vocab)
+        t = ed.emit_dashboard_screen(mo)
+        self.assertIn("TemplateSize: =RoundDown(Self.Width / %d, 0)" % n, t)
+        self.assertNotIn("BandTileSize", t)
+
+    def test_band_gallery_has_explicit_width(self):
+        """M4: gal_Dash_Band previously had no Width at all, unlike the
+        pipeline gallery's own Width: =Parent.Width sibling property."""
+        text = ed.emit_dashboard_screen(dash_model())
+        block = text.split("- gal_Dash_Band:", 1)[1].split("Children:", 1)[0]
+        self.assertIn("Width: =Parent.Width", block)
 
     def test_no_dimension_or_colour_literals_outside_tokens(self):
         for lit in ("=15", "=140", "=200", "=170", "RGBA("):
