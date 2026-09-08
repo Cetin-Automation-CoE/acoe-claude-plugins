@@ -204,8 +204,9 @@ class _AcceptanceBase(object):
                                  "data — a filter on this value would render "
                                  "an empty grid" % (entity.entity, field.name, value))
 
-    # ---- 6. nav registry: two constScreens rows per entity ---------------
-    def test_nav_registry_has_two_rows_per_entity(self):
+    # ---- 6. nav registry: two constScreens rows per entity, plus the ------
+    #        dashboard row when the model has one
+    def test_nav_registry_has_two_rows_per_entity_plus_dashboard(self):
         app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
         self.assertIn("constScreens = [", app)
         # Scope every count to the registry block itself, not the whole
@@ -225,9 +226,14 @@ class _AcceptanceBase(object):
                              "%s missing (or duplicated) in constScreens"
                              % entity.form_screen)
         # Total row count: exactly 2 per entity, not accidentally shared
-        # across entities and not double-counted.
-        self.assertEqual(registry.count("Type: enumScreenType.List,"), len(self.model.entities))
+        # across entities and not double-counted — PLUS one more List-typed
+        # row when `dashboard` is on (Task 5 defaults it on for >1 entity):
+        # Ruling 10 types that row List too, so cmp_Navigation renders it.
+        expected_list = len(self.model.entities) + (1 if self.model.dashboard else 0)
+        self.assertEqual(registry.count("Type: enumScreenType.List,"), expected_list)
         self.assertEqual(registry.count("Type: enumScreenType.Form,"), len(self.model.entities))
+        if self.model.dashboard:
+            self.assertIn("Screen: DashboardScreen", registry)
 
     # ---- 7. no generic template identifier leaked -------------------------
     def test_no_generic_template_identifier_leaked(self):

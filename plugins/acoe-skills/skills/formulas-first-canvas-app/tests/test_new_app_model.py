@@ -73,8 +73,12 @@ class TestGenerateTwoEntityApp(unittest.TestCase):
 
     def test_navigation_registry_lists_all_four_screens(self):
         app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
-        self.assertEqual(app.count("Type: enumScreenType.List"), 2)
+        # Ruling 13: TWO_ENTITY has two entities, so `dashboard` defaults on
+        # (Task 5) — two entity list rows plus the dashboard row, which is
+        # typed List (Ruling 10) so cmp_Navigation renders it in the nav rail.
+        self.assertEqual(app.count("Type: enumScreenType.List"), 3)
         self.assertEqual(app.count("Type: enumScreenType.Form"), 2)
+        self.assertIn("Screen: DashboardScreen", app)
 
     def test_no_generic_template_identifier_leaked(self):
         for p in self.out.rglob("*.pa.yaml"):
