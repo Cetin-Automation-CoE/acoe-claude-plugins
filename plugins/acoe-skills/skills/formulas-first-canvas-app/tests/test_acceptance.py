@@ -270,6 +270,19 @@ class TestOneEntityModel(_AcceptanceBase, unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
+    # ---- Task 8: dashboard wired — StartScreen, registry, editor order ----
+    #      ONE_ENTITY_YAML has a single entity, so Model.dashboard defaults
+    #      OFF (Task 5) — Ruling 16: this fixture is not changed to force
+    #      it on; these assertions cover the dashboard-off path.
+    def test_no_dashboard_screen_written(self):
+        self.assertFalse(self.model.dashboard,
+                         "fixture must default dashboard off with 1 entity")
+        self.assertFalse((self.out / "DashboardScreen.pa.yaml").exists())
+
+    def test_start_screen_is_its_list_screen(self):
+        app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
+        self.assertIn("StartScreen: =%s" % self.model.entities[0].list_screen, app)
+
 
 class TestThreeEntityModel(_AcceptanceBase, unittest.TestCase):
     @classmethod
@@ -280,6 +293,51 @@ class TestThreeEntityModel(_AcceptanceBase, unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    # ---- Task 8: dashboard wired — StartScreen, registry, editor order ----
+    #      THREE_ENTITY_YAML has three entities, so Model.dashboard defaults
+    #      ON (Task 5) — Ruling 16: this existing fixture already has an
+    #      entity (Invoice) pairing a money field with a filter: true choice
+    #      field, so the KPI band is eligible too; no new fixture, no
+    #      `dashboard: true` added anywhere.
+    def test_dashboard_screen_written(self):
+        self.assertTrue(self.model.dashboard,
+                        "fixture must default dashboard on with 3 entities")
+        dash_file = self.out / "DashboardScreen.pa.yaml"
+        self.assertTrue(dash_file.exists(), dash_file)
+        # Not just present — the file-existence-is-not-the-bar check this
+        # whole module is built around (see the module docstring).
+        self.assertGreater(dash_file.stat().st_size, 200, dash_file)
+
+    def test_start_screen_is_the_dashboard(self):
+        app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
+        self.assertIn("StartScreen: =DashboardScreen", app)
+        # Invoice has both a money field (Amount) and a filterable Status
+        # field, so the KPI band is eligible and its named formula must be
+        # spliced into App.pa.yaml.
+        self.assertIn("constDashboardBand", app)
+
+    def test_editor_state_lists_dashboard_first(self):
+        lines = (self.out / "_EditorState.pa.yaml").read_text(encoding="utf-8").splitlines()
+        order_at = lines.index("  ScreensOrder:")
+        self.assertEqual(lines[order_at + 1].strip(), "- DashboardScreen",
+                         "DashboardScreen must be the first entry under "
+                         "ScreensOrder:\n%s" % "\n".join(lines))
+
+    def test_dashboard_registry_row_is_first_and_typed_list(self):
+        # Ruling 10 (Phase 3 Task 8 dispatch): there is no
+        # enumScreenType.Dashboard. cmp_Navigation renders
+        # Filter(Screens, Type = enumScreenType.List), so the dashboard's
+        # own constScreens row must be typed List (not something else that
+        # would make the start screen unreachable from the nav rail) and
+        # must be the FIRST row in the registry.
+        app = (self.out / "App.pa.yaml").read_text(encoding="utf-8")
+        start = app.index("constScreens = [")
+        end = app.index("];", start)
+        registry = app[start:end]
+        first_row = registry[registry.index("{"):registry.index("}") + 1]
+        self.assertIn("Screen: DashboardScreen,", first_row)
+        self.assertIn("Type: enumScreenType.List,", first_row)
 
 
 def _yaml_load(text):

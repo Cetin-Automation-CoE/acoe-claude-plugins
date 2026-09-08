@@ -44,6 +44,7 @@ import sys
 
 import yaml
 
+import emit_dashboard
 import emit_formulas
 import emit_screens
 from model import ModelError, load_model
@@ -221,6 +222,11 @@ def build_app_pa_yaml_for_model(model, rows, today, brand):
     helpers) — those stay put, unedited, from templates/App.pa.yaml. Only the
     vocabulary layer and the data-access-layer + constScreens registry are
     spliced in, at the two markers that file declares.
+
+    Returns (app_text, first_screen) — Task 8: the caller reuses
+    `first_screen` to write DashboardScreen.pa.yaml first in _EditorState.pa.yaml
+    and to repoint the copied Components/cmp_Navigation.pa.yaml's Screens
+    default at a screen this build actually defines (Ruling 18).
     """
     app = (TEMPLATES / "App.pa.yaml").read_text(encoding="utf-8")
     app = splice_tokens(app, inline_tokens(brand))
@@ -239,9 +245,13 @@ def build_app_pa_yaml_for_model(model, rows, today, brand):
     app = _splice_span(app, DATA_BEGIN, DATA_END, data_registry_part)
 
     # OnStart / StartScreen still name the template's generic ListScreen —
-    # repoint them at the first entity's list screen (a real, defined
-    # screen), and load every entity's collection on start, not just one.
-    first_screen = model.entities[0].list_screen
+    # repoint them at the app's real first screen, and load every entity's
+    # collection on start, not just one. Task 8: when the model has a
+    # dashboard, that IS the first screen — DashboardScreen, the fixed name
+    # Task 6/7 already build every dashboard named formula and the registry
+    # row around — otherwise the first entity's list screen, same as before
+    # Task 8.
+    first_screen = "DashboardScreen" if model.dashboard else model.entities[0].list_screen
     app = _replace_once(
         app,
         'ClearCollect(colBack, Table({Screen: ListScreen, Label: ""}));',
@@ -255,7 +265,7 @@ def build_app_pa_yaml_for_model(model, rows, today, brand):
 
     app = _replace_once(app, "StartScreen: =ListScreen",
                         "StartScreen: =%s" % first_screen, "StartScreen")
-    return app
+    return app, first_screen
 
 
 class _PaYamlLoader(yaml.SafeLoader):
@@ -407,8 +417,13 @@ def main():
         # and data-layer/registry, spliced in at the two markers. ----------
         today = datetime.date.today()
         brand = model.brand if model.brand else args.brand
-        app = build_app_pa_yaml_for_model(model, args.rows, today, brand)
+        app, first_screen = build_app_pa_yaml_for_model(model, args.rows, today, brand)
         (out / "App.pa.yaml").write_text(app, encoding="utf-8")
+
+        # ---- dashboard screen, when the model has one (Task 8) ------------
+        if model.dashboard:
+            (out / "DashboardScreen.pa.yaml").write_text(
+                emit_dashboard.emit_dashboard_screen(model), encoding="utf-8")
 
         # ---- one list screen and one form screen per entity --------------
         for entity in model.entities:
@@ -424,8 +439,11 @@ def main():
         # ---- frame: reference layout named by model.yaml's own frame: field
         frame_screen = write_frame(out, model.frame)
 
-        # ---- _EditorState: every generated screen, entity by entity -------
+        # ---- _EditorState: dashboard first (if any), then every generated
+        #      screen, entity by entity -------------------------------------
         editor = ["EditorState:", "  ScreensOrder:"]
+        if model.dashboard:
+            editor.append("    - %s" % first_screen)
         for entity in model.entities:
             editor += ["    - %s" % entity.list_screen, "    - %s" % entity.form_screen]
         if frame_screen:
