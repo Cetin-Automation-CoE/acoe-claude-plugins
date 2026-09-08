@@ -167,6 +167,19 @@ constStyle = {
         Appearance: Appearance.FilledDarker,
         PaddingLeft: 8,
         PaddingRight: 8
+    },
+    // Phase 3 Task 7: the dashboard screen's own dimensions — a KPI band,
+    // a status-chip pipeline and a navigation-tile grid, none of which
+    // shares a size with any other screen's controls, so none of them
+    // belongs under an existing group above.
+    Dashboard: {
+        TileSize: 200,
+        TileHeight: 170,
+        BandTileSize: 140,
+        BandHeight: 120,
+        ChipHeight: 32,
+        Radius: 15,
+        Gap: 20
     }
 };
 
