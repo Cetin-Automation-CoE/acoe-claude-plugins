@@ -16,9 +16,11 @@ Author content for **Team Hub**, the ACOE showcase site. A post is a
 to edit**: Team Hub derives the /solutions listing automatically from each
 post's frontmatter.
 
-Posts are published **through git**, not by uploading to storage. See
-[Publishing](#publishing) — that changed, and the old `az storage blob` route
-now breaks the audit trail.
+Posts are published **through the Team Hub Posts library**: you write and
+validate the folder, the author drops it into SharePoint and flips a status,
+and a flow copies it into the portal's storage. See [Publishing](#publishing).
+The old `az storage blob` route bypasses the validator and the library's
+history — do not use it.
 
 ## Two ways in
 
@@ -181,54 +183,66 @@ than no gallery.
 python scripts/validate_post.py <path-to-post-folder>
 ```
 
-Run it and fix everything it reports until it exits clean. This is the same
-script the publish pipeline runs, so anything it rejects here would have
-failed there twenty minutes later — except here the user is still in the
-conversation and a bad `category` is a one-turn fix.
+Run it and fix everything it reports until it exits clean. The publish flow
+checks only the folder's shape, not its content, so anything the validator
+rejects here would otherwise reach the portal and silently vanish from the
+listing — here the user is still in the conversation and a bad `category`
+is a one-turn fix.
 
 Do not describe a post as finished while the validator is unhappy.
 
 ## Publishing
 
-Publishing goes **through git**, not straight to storage. The `articles`
-container is a projection of `content/articles/` in the **team-hub** repo: a
-pipeline makes the container match git and deletes what git does not have.
-Uploading a blob by hand is not a shortcut — the next sync removes it, and the
-change has no history, no diff and no author.
+The **Team Hub Posts** library in SharePoint is the source of truth for posts:
+every version, author and timestamp is kept there, and a Power Automate flow
+copies a post from the library into the portal's storage. Nothing here needs
+a credential, a connected folder or any tool beyond the browser.
 
-**Write the post folder locally. The author uploads it.** Nothing here needs
-SharePoint sync, a connected library, or any credential.
+**Write the post folder locally. The author uploads it.**
 
-1. Write `<slug>/` — the `.md`, the `.cz.md` and the media, flat — somewhere
-   the author can get at it: a connected folder in this session if there is
-   one, otherwise hand the files over for download.
+1. Write `<slug>/` — the `.md`, the `.cz.md` and the media, flat — into this
+   session's outputs so the author can download it.
 2. Run the validator until it exits clean. Do this **before** telling them to
-   upload; a rejected post is much cheaper to fix while you are still holding
-   the material.
-3. Then tell them exactly this, with the folder path filled in:
+   upload; the flow checks only the folder's shape, not the content, so a bad
+   `category` found here costs one turn and found later costs a failed publish.
+3. Then tell them exactly this, with the slug filled in:
 
-   > Open <https://czcetin.sharepoint.com/sites/AutomationCoE/Team_Hub_Posts>
-   > and drag the **`<slug>` folder** into the library — the folder itself,
-   > not the files inside it. Then open the row for `<slug>.md`, set
-   > **`PostStatus`** to **`Ready`**, and you are done.
+   > Download the **`<slug>` folder**, open
+   > <https://czcetin.sharepoint.com/sites/AutomationCoE/Team_Hub_Posts> and
+   > drag the folder in — the folder itself, not the files inside it. Then
+   > open the row for `<slug>.md`, set **`PostStatus`** to **`Ready`**, and
+   > wait a minute: the row shows **`Published-DEV`** with a **`DevUrl`** to
+   > check the post on the DEV portal. When it looks right, set `PostStatus`
+   > to **`Publish live`** — the row shows **`Published`** with the
+   > **`LiveUrl`**.
 
-That is the whole handover. Two actions, no typing.
+That is the whole handover: one drag, two flips.
 
 **Do not ask the author to fill in `Slug`, `IdeaKey`, `ArticleAuthor` or
-`Title`.** The flow reads them out of the post's own frontmatter — the
-frontmatter is the manifest, the columns are only its projection for people to
-look at. Asking someone to retype what is already in the file is how the two
-drift apart.
+`Title`.** The flow reads them out of `<slug>.md`'s frontmatter and writes them
+onto the row — the frontmatter is the manifest, the columns are its projection
+for people to look at.
 
-Flipping `PostStatus` to `Ready` is the publish decision, and the only human
-gate before the post reaches the whole company. From there a flow commits the
-folder to the team-hub repo in one push, the pipeline validates it and syncs
-it to the container media-first, and the library shows `Published` with the
-live URL — or `Failed` with the reason in `PostMessage`. Live within ~60 s.
+What each status means:
+
+| `PostStatus` | Who sets it | Meaning |
+|---|---|---|
+| `Draft` | default on upload | in the library, not published |
+| `Ready` | author | publish to **DEV** now |
+| `Published-DEV` | flow | on the DEV portal; `DevUrl` filled |
+| `Publish live` | author | publish to **LIVE** now (DEV must have it first) |
+| `Published` | flow | on the LIVE portal; `LiveUrl` filled |
+| `Unpublish` | author | remove from both portals |
+| `Unpublished` | flow | removed (storage keeps 14 days of undo) |
+| `Failed` | flow | see `PostMessage` for the reason; fix, then flip `Ready` again |
 
 **Update** an existing post the same way: same slug, upload over it, flip
-`Ready` again. **Unpublish** by deleting the folder from `content/articles/`
-in git; the pipeline prunes the blobs (14 days of soft delete undo).
+`Ready` again (then `Publish live`). **Unpublish** by flipping `Unpublish`.
+Never rename the folder — slug = URL.
+
+If the Microsoft 365 connector is available in your session, upload the
+folder into the library yourself instead of asking the author to; everything
+after that is identical.
 
 ## Hosted HTML pages
 
@@ -242,11 +256,12 @@ A standalone page (strategy deck, workshop) is one **fully self-contained**
 
 | Mistake | Reality |
 |---|---|
-| Uploading with `az storage blob upload-batch` | Bypasses git, the validator and the audit trail, and the next sync deletes it. Publish through the library. |
+| Uploading with `az storage blob upload-batch` | Bypasses the validator and the library's history; the post has no row, no author and no undo. Publish through the library. |
+| Setting `PostStatus` on a media row | The flow reads the status from the `<slug>.md` row only; a flip on a screenshot is reported as `Failed` with a hint. |
 | Handing back without running the validator | Team Hub fails *silently* — a broken post just vanishes from the listing. The validator is the only thing that turns that into an error. |
 | Uploading the files loose instead of the folder | The slug folder *is* the post. Loose files scatter into the library root and publish nothing. |
 | Asking the author to type `Slug` / `IdeaKey` / `ArticleAuthor` | The flow reads them from the frontmatter. Retyping is how the file and the columns drift apart. |
-| Saying the post is published once it is uploaded | Uploading makes it a `Draft`. The `Ready` flip is what publishes it. |
+| Saying the post is published once it is uploaded | Uploading makes it a `Draft`. `Ready` publishes to DEV; `Publish live` is what puts it on the portal people use. |
 | English storyline headings in the `.cz.md` | The Czech post needs `### PŮVODNÍ STAV` / `### SOUČASNÝ STAV` / `### PŘÍNOSY`. |
 | Editing or commenting on the Jira Idea | This skill reads Jira only. Intake belongs to `acoe-jira-idea-intake`. |
 | Guessing `category` from `Power Platform` | Resolve it from Used Applications, or ask. It is a filter pill people browse by. |
