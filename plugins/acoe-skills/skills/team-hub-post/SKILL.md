@@ -214,7 +214,7 @@ a credential, a connected folder or any tool beyond the browser.
    > <https://czcetin.sharepoint.com/sites/AutomationCoE/Team_Hub_Posts> and
    > drag the folder in — the folder itself, not the files inside it. Then
    > open the row for `<slug>.md`, set **`PostStatus`** to **`Ready`**, and
-   > wait a minute: the row shows **`Published-DEV`** with a **`DevUrl`** to
+   > wait up to two minutes: the row shows **`Published-DEV`** with a **`DevUrl`** to
    > check the post on the DEV portal. When it looks right, set `PostStatus`
    > to **`Publish live`** — the row shows **`Published`** with the
    > **`LiveUrl`**.
@@ -237,7 +237,7 @@ What each status means:
 | `Published` | flow | on the LIVE portal; `LiveUrl` filled |
 | `Unpublish` | author | remove from both portals |
 | `Unpublished` | flow | removed (storage keeps 14 days of undo) |
-| `Failed` | flow | see `PostMessage` for the reason; fix, then flip `Ready` again |
+| `Failed` | flow | see `PostMessage` for the reason; fix, then flip `Ready` again (or `Publish live` again, if that was the flip that failed) |
 
 **Update** an existing post the same way: same slug, upload over it, flip
 `Ready` again (then `Publish live`). **Unpublish** by flipping `Unpublish`.
