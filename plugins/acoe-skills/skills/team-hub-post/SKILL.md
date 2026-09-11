@@ -141,6 +141,9 @@ Where the Idea is silent, write around the gap:
 - no named department → leave it out rather than guessing who benefits
 - an Idea whose **Delivery Type is not `New Functionalities`** has no business
   case at all. Say so and stop — there is nothing to showcase.
+- an Idea whose **status is not `Deployed`** is not finished. Say so and
+  stop — Team Hub shows delivered solutions only. `Rozpracováno` means the
+  post can be drafted for review but must not be uploaded to the library.
 
 ## Body conventions the renderer understands
 

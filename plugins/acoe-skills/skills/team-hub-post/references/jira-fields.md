@@ -25,6 +25,7 @@ customfield_10083, customfield_11296, customfield_11297
 | Field | id | Used for |
 |---|---|---|
 | Summary | `summary` | `title`, minus any `[FIS]`-style prefix |
+| Status | `status` | **gate** — `status.name` must be `Deployed` before the post may be uploaded |
 | Description | `description` | ORIGINAL STATE and the body |
 | Business Case Description | `customfield_10089` | the substance of the write-up |
 | Department | `customfield_10079` | `business` |
