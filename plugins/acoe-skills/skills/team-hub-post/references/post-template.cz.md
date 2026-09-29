@@ -1,6 +1,6 @@
 ---
 title: Moje nové řešení
-desc: Shrnutí v jedné až dvou větách zobrazené na kartě v přehledu řešení. České title a desc z tohoto souboru se použijí v českém výpisu.
+desc: Jedna celá věta, nejvýše 120 znaků: co řešení dělá a pro koho, věcně a konkrétně.
 category: Power Apps
 tags: AI
 business: HR
@@ -27,3 +27,11 @@ added: 2026-08-17
 ![](/solutions/my-new-solution/screenshot-1.png)
 
 ![](/solutions/my-new-solution/screenshot-2.png)
+
+![](/solutions/my-new-solution/demo.mp4)
+
+> „Volitelný ohlas uživatele z byznysu — na stránce se zobrazí celý v závěrečné sekci Ohlasy uživatelů.“
+>
+> — Příjmení Jméno, Role (Oddělení)
+
+_Zdroj: [ACOE-1234](https://cetin.atlassian.net/browse/ACOE-1234)_

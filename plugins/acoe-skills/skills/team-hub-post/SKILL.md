@@ -1,7 +1,7 @@
 ---
 name: team-hub-post
 description: |
-  Use when creating, writing, translating, or updating a solution post or a hosted HTML page for Team Hub — the internal ACOE showcase site with the /solutions listing. Triggers: "write a Team Hub post", "add a solution to Team Hub", "team hub post", "showcase post", "napiš příspěvek na Team Hub", "napiš článek na portál", "publikuj řešení", "solution showcase", "post z ACOE-1234", writing up a delivered solution from its ACOE Jira Idea, or converting a description of a Power Apps / Power BI / Power Automate / RPA solution into Team Hub content.
+  Use when creating, writing, translating, updating or publishing a solution post or a hosted HTML page for Team Hub — the ACOE portal (the site calls itself AI Hub) with the /automation-solutions listing. Triggers: "write a Team Hub post", "add a solution to Team Hub", "showcase post", "publish the post to DEV / LIVE", "napiš příspěvek na Team Hub", "publikuj řešení", "post z ACOE-1234", writing up a delivered solution from its ACOE Jira Idea, or a post that does not show up on the portal after it was uploaded.
   Do NOT use for fetching an existing SharePoint showcase page into the team-hub repo — that repo's publish-solution skill does that. Do NOT use for PRD/idea intake — use idea-forge or acoe-jira-idea-intake.
 cowork:
   category: productivity
@@ -11,14 +11,13 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep, mcp__Atlassian_Rovo__getJira
 
 # ACOE Team Hub post
 
-Author content for **Team Hub**, the ACOE showcase site. A post is a
-**self-describing folder of files** — there is **no central index or database
-to edit**: Team Hub derives the /solutions listing automatically from each
-post's frontmatter.
-
-Posts are published **through git**, not by uploading to storage. See
-[Publishing](#publishing) — that changed, and the old `az storage blob` route
-now breaks the audit trail.
+Author and publish content for **Team Hub**, the ACOE portal. A post is a
+**self-describing folder of files** — there is **no central index, no
+database, no deploy and no pipeline**: the portal reads the `articles`
+container of its storage account and derives the /automation-solutions listing
+from each post's frontmatter. Publishing is one upload into that container
+from the CETIN network — see [Publishing](#publishing). There are two portals,
+**DEV** and **LIVE**, one storage account each.
 
 ## Two ways in
 
@@ -35,8 +34,9 @@ in the same place.
 
 ## Folder contract
 
-Folder name = slug = URL (`/solutions/<slug>`). Kebab-case ASCII, never
-renamed after publishing. All files flat inside — no subfolders.
+Folder name = slug = URL (`/automation-solutions/#/<slug>`) = the stem of both
+markdown files. Kebab-case ASCII, never renamed after publishing. All files
+flat inside — no subfolders.
 
 ```
 <slug>/
@@ -46,6 +46,10 @@ renamed after publishing. All files flat inside — no subfolders.
 ├── demo.mp4         ← optional short demo video (≤ ~100 MB, H.264)
 └── demo-poster.jpg  ← optional thumbnail shown before demo.mp4 plays
 ```
+
+The portal lists a post only when the folder and the file are named alike:
+`acoe-1415-capex-reporting/acoe-1415-capex-reporting.md` is a post,
+`capex-report/acoe-1415-capex-reporting.md` is invisible.
 
 **Slug convention:** `acoe-<idea-number>-<short-name>` — e.g.
 `acoe-2440-analytics-hub`. Deriving it from the Idea key is what makes a
@@ -60,9 +64,9 @@ Start from [references/post-template.md](references/post-template.md) and
 | Field      | Required | Rules | From the Idea |
 |------------|----------|-------|---------------|
 | `title`    | yes      | In `.cz.md` this IS the Czech listing title. | Summary, `[FIS]`-style prefixes stripped |
-| `desc`     | yes      | 1–2 sentences for the listing card. Czech in `.cz.md`. | written from Description + Business Case |
-| `category` | yes      | Exactly one technology: `Power Apps`, `Power BI`, `Power Automate`, `RPA (UiPath)`, `SharePoint`, … | Components (see mapping below) |
-| `business` | yes      | One area: `Finance`, `Sales`, `HR`, `PMO`, `Network Deployment`, `Legal`, … | Department |
+| `desc`     | yes      | **One whole sentence, at most 120 characters**, not a copy of the opening paragraph. It is the listing card's text and the deck under the title in the post's band — three lines at most; what does not fit runs on in the body. Czech in `.cz.md`. | written from Description + Business Case |
+| `category` | yes      | Exactly one technology, **spelled as the listing already spells it**: `Power Apps`, `Power BI`, `RPA`, `Reporting`, `Power Automate`, `SharePoint`, `AI`, `Code`, `Excel`, `Copilot Studio`, `n8n`. A new spelling is a new filter pill — `RPA (UiPath)` would sit next to `RPA`. | Components (see mapping below) |
+| `business` | yes      | One area, as on the listing: `Finance`, `Sales`, `HR`, `PMO`, `Network Deployment`, `Network Operations`, `Legal`, `Procurement`, `IT`, `Wholesale`, `Regulatory`, `Automation CoE`. | Department |
 | `author`   | yes      | `Surname Firstname` (e.g. `Horák Dominik`). | **Assignee**, not the Requestor |
 | `added`    | yes      | `YYYY-MM-DD`; listing sorts newest first. | resolution date, else today |
 | `tags`     | no       | Extra filter pills, comma-separated. **If the solution uses AI in any form, set `tags: AI`.** | Components + Used Applications |
@@ -110,7 +114,7 @@ Take from the issue:
 
 | Jira component | `category` |
 |---|---|
-| `RPA` | `RPA (UiPath)` |
+| `RPA` | `RPA` |
 | `Power BI` | `Power BI` |
 | `AI` | `AI` |
 | `Excel` | `Excel` |
@@ -139,6 +143,8 @@ Where the Idea is silent, write around the gap:
 - no named department → leave it out rather than guessing who benefits
 - an Idea whose **Delivery Type is not `New Functionalities`** has no business
   case at all. Say so and stop — there is nothing to showcase.
+- an Idea whose **status is not `Deployed`** is not finished. Team Hub shows
+  delivered solutions only: draft the post for review, but do not publish it.
 
 ## Body conventions the renderer understands
 
@@ -158,7 +164,14 @@ Where the Idea is silent, write around the gap:
   `[▶ Watch the demo video](https://…)` link for externally hosted videos —
   and host those in a shared SharePoint/Stream location, never personal
   OneDrive (personal links 403 for other users).
-- `> quote` blockquotes render as styled testimonials.
+- `> quote` blockquotes are **user comments**. The portal gathers them,
+  wherever they sit in the post, into a closing "What users say" / „Ohlasy
+  uživatelů" section, each quote in full — there is no length to trim to. Put
+  the attribution on its own line starting with a dash,
+  `> — Name Surname, Role (Department)`: the dash marks it, the first comma
+  splits the name from the rest, which is shown as the role exactly as given —
+  the department in brackets is welcome, not required. In `.cz.md` the role
+  is Czech, the name is not.
 - Close the body with the source link:
   `_Source: [ACOE-2440](https://cetin.atlassian.net/browse/ACOE-2440)_`
 - Keep each language to roughly 250–450 words. This is a showcase card, not a
@@ -178,75 +191,113 @@ than no gallery.
 ## Validate before you hand back
 
 ```bash
-python scripts/validate_post.py <path-to-post-folder>
+python3 scripts/validate_post.py <path-to-post-folder>
 ```
 
-Run it and fix everything it reports until it exits clean. This is the same
-script the publish pipeline runs, so anything it rejects here would have
-failed there twenty minutes later — except here the user is still in the
+Nothing between the upload and the portal checks a post: a broken one does
+not fail, it silently vanishes from the listing. The validator is the only
+thing that turns that into an error — and here the user is still in the
 conversation and a bad `category` is a one-turn fix.
 
-Do not describe a post as finished while the validator is unhappy.
+An **error** means the post will not publish correctly: fix it, always. A
+**warning** is a judgment the author owns (a `desc` over 120, a video without
+a poster): fix it, or say what it costs and let the user choose. `--strict`
+turns warnings into errors for an unattended run.
+
+Do not describe a post as finished with an error outstanding, or with a
+warning the user has not seen.
 
 ## Publishing
 
-Publishing goes **through git**, not straight to storage. The `articles`
-container is a projection of `content/articles/` in the **team-hub** repo: a
-pipeline makes the container match git and deletes what git does not have.
-Uploading a blob by hand is not a shortcut — the next sync removes it, and the
-change has no history, no diff and no author.
+Publishing is **one upload into the `articles` container** of the target
+portal's storage account. No git, no pipeline, no SharePoint library, no
+deploy: the portal reads the container directly.
 
-**Write the post folder locally. The author uploads it.** Nothing here needs
-SharePoint sync, a connected library, or any credential.
+| Portal | Storage account | Address |
+|---|---|---|
+| **DEV** — check here first | `stacoenpwebhubgwc` | https://webapp-acoe-nonprod-team-hub-gwc.azurewebsites.net |
+| **LIVE** — what the company reads | `stacoepwebhubgwc` | https://webapp-acoe-prod-team-hub-gwc.azurewebsites.net |
 
-1. Write `<slug>/` — the `.md`, the `.cz.md` and the media, flat — somewhere
-   the author can get at it: a connected folder in this session if there is
-   one, otherwise hand the files over for download.
-2. Run the validator until it exits clean. Do this **before** telling them to
-   upload; a rejected post is much cheaper to fix while you are still holding
-   the material.
-3. Then tell them exactly this, with the folder path filled in:
+The two account names differ by one character (`np` = non-production). Read
+them twice.
 
-   > Open <https://czcetin.sharepoint.com/sites/AutomationCoE/Team_Hub_Posts>
-   > and drag the **`<slug>` folder** into the library — the folder itself,
-   > not the files inside it. Then open the row for `<slug>.md`, set
-   > **`PostStatus`** to **`Ready`**, and you are done.
+**What the upload needs:** a machine on the **CETIN network** (the storage
+firewall admits CETIN addresses only; from anywhere else every command fails
+with *"blocked by network rules"*), `az login`, and the **Storage Blob Data
+Contributor** role on the account. There are no account keys — always
+`--auth-mode login`.
 
-That is the whole handover. Two actions, no typing.
+If this session has none of that (Cowork, off-network, no `az`): **write the
+post folder where the colleague can pick it up — the session's outputs folder
+in Cowork, otherwise a path they named — and hand them the steps below with
+the slug filled in.** That is the whole handover.
 
-**Do not ask the author to fill in `Slug`, `IdeaKey`, `ArticleAuthor` or
-`Title`.** The flow reads them out of the post's own frontmatter — the
-frontmatter is the manifest, the columns are only its projection for people to
-look at. Asking someone to retype what is already in the file is how the two
-drift apart.
+1. Validate until clean (above).
+2. **DEV** — from inside the folder's parent directory:
 
-Flipping `PostStatus` to `Ready` is the publish decision, and the only human
-gate before the post reaches the whole company. From there a flow commits the
-folder to the team-hub repo in one push, the pipeline validates it and syncs
-it to the container media-first, and the library shows `Published` with the
-live URL — or `Failed` with the reason in `PostMessage`. Live within ~60 s.
+   ```bash
+   az storage blob upload-batch --auth-mode login --overwrite \
+     --account-name stacoenpwebhubgwc -d articles --destination-path <slug> -s <slug>
+   ```
 
-**Update** an existing post the same way: same slug, upload over it, flip
-`Ready` again. **Unpublish** by deleting the folder from `content/articles/`
-in git; the pipeline prunes the blobs (14 days of soft delete undo).
+   `-d` takes the container name alone; the slug goes in `--destination-path`
+   (`-d articles/<slug>` is rejected). `--overwrite` makes the same command an
+   update.
+3. **Check** `https://webapp-acoe-nonprod-team-hub-gwc.azurewebsites.net/automation-solutions/#/<slug>`.
+   The post itself is served the moment the upload ends; the **listing shows
+   it within 60 seconds** — the portal caches the derived listing for a
+   minute. Not there after a minute → the folder name, the file name or the
+   frontmatter (see [Common mistakes](#common-mistakes)).
+4. **LIVE** — the same command with `--account-name stacoepwebhubgwc`, then
+   the same check on the LIVE address.
+
+**Update** = the same upload; `--overwrite` replaces what is there.
+**Unpublish**:
+
+```bash
+az storage blob delete-batch --auth-mode login --account-name <account> \
+  -s articles --pattern '<slug>/*' --dryrun     # read the list, then run it without --dryrun
+```
+
+Soft delete and versioning are on: a deleted or overwritten file can be
+restored for **14 days on DEV and 30 days on LIVE** (Azure portal or Storage
+Explorer: *Show deleted blobs* → *Undelete*).
+
+Inside the team-hub repo, `acoe-team-hub/solutions/` is the seed copy of the
+container and `tools/seed-blob-content.sh <account>` uploads the whole tree
+the same way. When you are working in that repo, add the post folder there
+too, so the seed stays complete.
 
 ## Hosted HTML pages
 
 A standalone page (strategy deck, workshop) is one **fully self-contained**
-`.html` file (inline CSS/JS, images as data: URIs) uploaded to the
-`html-pages` container; `<name>.html` is served at `/<name>`. It must carry
-`portal:*` meta tags for the listing — copy
-[references/html-page-template.html](references/html-page-template.html).
+`.html` file (inline CSS/JS, images as data: URIs) in the `html-pages`
+container of the same accounts. `<name>.html` is served raw at `/<name>`,
+inside the portal chrome at `/presentations/<name>/`, and listed under
+Presentations automatically: its `<title>` is the listing title and its
+upload date is its date — no meta tags are read. Start from
+[references/html-page-template.html](references/html-page-template.html) and
+upload with
+
+```bash
+az storage blob upload --auth-mode login --overwrite \
+  --account-name <account> -c html-pages -f <name>.html -n <name>.html
+```
 
 ## Common mistakes
 
 | Mistake | Reality |
 |---|---|
-| Uploading with `az storage blob upload-batch` | Bypasses git, the validator and the audit trail, and the next sync deletes it. Publish through the library. |
+| Uploading to the wrong account | `stacoenpwebhubgwc` is DEV, `stacoepwebhubgwc` is LIVE — one letter apart. Check the address the post appeared on. |
+| `-d articles/<slug>` | az rejects it: `-d articles --destination-path <slug>`. |
+| Uploading from outside the CETIN network | The storage firewall blocks it ("blocked by network rules"). Hand the folder and the commands to someone on the network. |
+| Folder named differently from the file (`capex-report/acoe-1415-capex-reporting.md`) | The listing takes `<slug>/<slug>.md` only. Both carry the slug. |
+| Expecting the listing to show the post at once | The listing refreshes within 60 s; the post's own URL works immediately. |
+| Asking for a deploy, a pipeline run, a git push or a SharePoint library | None exists for posts. The container is the source; the upload is the publish. |
+| `category: RPA (UiPath)` or another new spelling | The listing spells it `RPA`; a new spelling is a second filter pill. Use the spellings in the frontmatter table. |
+| A `desc` over 120 characters | The band shows three lines and pushes the rest into the body; the card clamps at four. One whole sentence. |
 | Handing back without running the validator | Team Hub fails *silently* — a broken post just vanishes from the listing. The validator is the only thing that turns that into an error. |
-| Uploading the files loose instead of the folder | The slug folder *is* the post. Loose files scatter into the library root and publish nothing. |
-| Asking the author to type `Slug` / `IdeaKey` / `ArticleAuthor` | The flow reads them from the frontmatter. Retyping is how the file and the columns drift apart. |
-| Saying the post is published once it is uploaded | Uploading makes it a `Draft`. The `Ready` flip is what publishes it. |
+| Uploading the files loose instead of the folder | `<slug>/` is the post: files at the container root belong to nothing. |
 | English storyline headings in the `.cz.md` | The Czech post needs `### PŮVODNÍ STAV` / `### SOUČASNÝ STAV` / `### PŘÍNOSY`. |
 | Editing or commenting on the Jira Idea | This skill reads Jira only. Intake belongs to `acoe-jira-idea-intake`. |
 | Guessing `category` from `Power Platform` | Resolve it from Used Applications, or ask. It is a filter pill people browse by. |

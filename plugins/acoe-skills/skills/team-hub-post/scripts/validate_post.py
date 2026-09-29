@@ -3,8 +3,9 @@
 
 Team Hub derives its /solutions listing from each article's frontmatter and
 there is no central index. A broken article therefore does not fail loudly --
-it silently disappears from the listing. This script is what turns that silent
-failure into an error, and it is the same script the publish pipeline runs.
+it silently disappears from the listing. Nothing between the upload and the
+portal checks a post, so this script is what turns that silent failure into
+an error.
 
 Exit codes
     0  valid (warnings may still be printed)
@@ -32,8 +33,10 @@ from pathlib import Path
 REQUIRED_KEYS = ("title", "desc", "category", "business", "author", "added")
 OPTIONAL_KEYS = ("tags", "role")
 
+# Spelled as the listing already spells them: the filter pills group by the
+# exact string, so "RPA (UiPath)" would be a second pill beside "RPA".
 CATEGORIES = {
-    "Power Apps", "Power BI", "Power Automate", "RPA (UiPath)", "SharePoint",
+    "Power Apps", "Power BI", "RPA", "Reporting", "Power Automate", "SharePoint",
     "AI", "Code", "Excel", "Copilot Studio", "n8n",
 }
 
@@ -64,13 +67,15 @@ MAX_VIDEO_BYTES = 110 * 1024 * 1024
 # A single floor would systematically reject correct Czech.
 MIN_BODY_WORDS = {"EN": 90, "CZ": 70}
 
-# Finder / Office droppings. The publishing flow filters these out by
-# extension, so they are noise rather than a problem -- do not fail on them.
+# Finder / Office droppings. upload-batch takes everything in the folder, so
+# they would land in the container next to the post -- warn, the author deletes.
 IGNORED_RE = re.compile(r"^(\.DS_Store|Thumbs\.db|desktop\.ini|~\$.*)$", re.I)
 
 # OneDrive conflict copies. These DO end in .md and DO start with the slug, so
-# the flow's allowlist will happily commit one and publish a duplicate article.
-# This is the dangerous case and must be an error.
+# upload-batch would put a second markdown file next to the post: not listed
+# (the listing takes <slug>.md only) but served, and the wrong version waiting
+# to be pasted over the right one. This is the dangerous case and must be an
+# error.
 CONFLICT_RE = re.compile(r"-[A-Z][\w' .-]*(MacBook|iMac|Mac ?mini|PC|Laptop|Notebook)", re.I)
 
 
@@ -152,8 +157,11 @@ def check_frontmatter(fm: dict[str, str], rep: Report, label: str) -> None:
         rep.error(f"{label}: `author` must be `Surname Firstname` (e.g. `Horák Dominik`), got {author!r}")
 
     desc = fm.get("desc", "")
-    if desc and len(desc) > 320:
-        rep.warn(f"{label}: `desc` is {len(desc)} chars -- listing cards truncate around 200")
+    if desc and len(desc) > 120:
+        rep.warn(
+            f"{label}: `desc` is {len(desc)} chars -- the band shows three lines and the card "
+            "four, the rest runs on in the body; keep it to one whole sentence of at most 120"
+        )
 
     for key in fm:
         if key not in REQUIRED_KEYS + OPTIONAL_KEYS:
@@ -231,11 +239,11 @@ def validate_folder(folder: Path, *, allow_english_only: bool) -> Report:
         elif child.name == "index.json":
             rep.error("index.json is obsolete: the listing is derived from frontmatter. Delete it.")
         elif IGNORED_RE.match(child.name):
-            continue  # filtered out by the publishing flow; not the author's problem
+            rep.warn(f"`{child.name}` would be uploaded with the post -- delete it first")
         elif CONFLICT_RE.search(child.stem):
             rep.error(
-                f"`{child.name}` is a OneDrive conflict copy -- it would be committed and "
-                "published as a duplicate post. Delete it and re-check the original."
+                f"`{child.name}` is a OneDrive conflict copy -- it would be uploaded next to "
+                "the real post. Delete it and re-check the original."
             )
         elif child.suffix.lower() not in ALLOWED_EXT and not child.name.startswith("."):
             rep.warn(f"`{child.name}` has an unexpected extension for a Team Hub post")
