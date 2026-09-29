@@ -1,6 +1,6 @@
 ---
 title: My New Solution
-desc: One- to two-sentence summary shown on the listing card. Keep it factual and concrete.
+desc: One whole sentence, at most 120 characters: what it does and for whom, factual and concrete.
 category: Power Apps
 tags: AI
 business: HR
@@ -33,5 +33,8 @@ and the compliance/business driver if there is one.**
 
 ![](/solutions/my-new-solution/demo.mp4)
 
-> "Optional testimonial quote from a business user."
-> — Name Surname, Department
+> "Optional user comment from a business user — shown whole in the closing What users say section."
+>
+> — Surname Firstname, Role (Department)
+
+_Source: [ACOE-1234](https://cetin.atlassian.net/browse/ACOE-1234)_
