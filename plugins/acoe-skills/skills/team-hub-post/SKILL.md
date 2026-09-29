@@ -15,9 +15,10 @@ Author and publish content for **Team Hub**, the ACOE portal. A post is a
 **self-describing folder of files** — there is **no central index, no
 database, no deploy and no pipeline**: the portal reads the `articles`
 container of its storage account and derives the /automation-solutions listing
-from each post's frontmatter. Publishing is one upload into that container
-from the CETIN network — see [Publishing](#publishing). There are two portals,
-**DEV** and **LIVE**, one storage account each.
+from each post's frontmatter. Publishing puts the folder into that container —
+through the Team Hub Posts library, where a Logic App does the copying, or by
+a direct upload from the CETIN network — see [Publishing](#publishing). There
+are two portals, **DEV** and **LIVE**, one storage account each.
 
 ## Two ways in
 
@@ -209,17 +210,60 @@ warning the user has not seen.
 
 ## Publishing
 
-Publishing is **one upload into the `articles` container** of the target
-portal's storage account. No git, no pipeline, no SharePoint library, no
-deploy: the portal reads the container directly.
+A post is published when its folder sits in the **`articles` container** of
+the target portal's storage account: the portal reads the container directly,
+and there is no git, no pipeline and no deploy. Two routes put it there — the
+Team Hub Posts library, where a Logic App does the copying, and a direct
+upload from the CETIN network. Same container, same result.
 
-| Portal | Storage account | Address |
-|---|---|---|
-| **DEV** — check here first | `stacoenpwebhubgwc` | https://webapp-acoe-nonprod-team-hub-gwc.azurewebsites.net |
-| **LIVE** — what the company reads | `stacoepwebhubgwc` | https://webapp-acoe-prod-team-hub-gwc.azurewebsites.net |
+| Portal | Storage account | Address | Logic App |
+|---|---|---|---|
+| **DEV** — check here first | `stacoenpwebhubgwc` | https://webapp-acoe-nonprod-team-hub-gwc.azurewebsites.net | `logapp-acoe-nonprod-team-hub-gwc` |
+| **LIVE** — what the company reads | `stacoepwebhubgwc` | https://webapp-acoe-prod-team-hub-gwc.azurewebsites.net | `logapp-acoe-prod-team-hub-gwc` |
 
 The two account names differ by one character (`np` = non-production). Read
-them twice.
+them twice. Both addresses answer only from the CETIN network — elsewhere
+they return 403 — so from home the library's On DEV / On LIVE flags are the
+proof that a post is up, not the page.
+
+### Route 1 — the Team Hub Posts library (a browser is enough)
+
+The document library **Team Hub Posts** (`Team_Hub_Posts`) on
+<https://czcetin.sharepoint.com/sites/AutomationCoETeamHub> is the author's
+drop zone. Each environment's Logic App runs `publish-posts` every 5 minutes
+and carries out the command written on a folder.
+
+1. Drag the **`<slug>` folder** into the library (or *Upload → Folder*) — the
+   folder itself, not the files inside it.
+2. On the **folder's** row set **Post status** to **`Publish to DEV`**. Within
+   five minutes the DEV Logic App copies the folder into `articles/<slug>/`
+   (media first, then `.cz.md`, then `.md`, so the listing never shows a post
+   whose images are still on the way), sets **On DEV** to Yes and **Last
+   published**, and puts Post status back to `Idle`; the portal's listing
+   follows within a minute more. `Failed` means the command did not
+   complete: **Publish message** says why; set the command again to retry
+   the whole folder.
+3. Check the DEV address, then set **`Publish to LIVE`** the same way.
+   `Unpublish from DEV` / `Unpublish from LIVE` remove the post from that
+   portal's container.
+
+Post status is an **instruction, not a record**: On DEV and On LIVE say where
+the post actually is. An update is the changed files uploaded over the old
+ones and the command issued again. Only the folder row carries the command —
+a status set on a file row is marked `Failed`.
+
+**Is the route wired?** Before issuing a command, look at the Post status
+choices in the library: the route works once they read exactly `Draft`,
+`Publish to DEV`, `Publish to LIVE`, `Unpublish from DEV`, `Unpublish from
+LIVE`, `Idle`, `Failed` and the folder row shows **On DEV** and **On LIVE**
+columns. Other values there (`Published on DEV`, `Unpublished`, …) mean the
+library still carries an earlier draft of the schema. After a command, fifteen
+minutes with no `Idle`, no `Failed` and no On DEV / On LIVE flip mean that
+environment's Logic App is not running the workflow. Either way: publish by
+route 2 and tell the CoE — the Logic App and the library schema are theirs
+to fix, not the author's.
+
+### Route 2 — upload from the CETIN network
 
 **What the upload needs:** a machine on the **CETIN network** (the storage
 firewall admits CETIN addresses only; from anywhere else every command fails
@@ -229,8 +273,9 @@ Contributor** role on the account. There are no account keys — always
 
 If this session has none of that (Cowork, off-network, no `az`): **write the
 post folder where the colleague can pick it up — the session's outputs folder
-in Cowork, otherwise a path they named — and hand them the steps below with
-the slug filled in.** That is the whole handover.
+in Cowork, otherwise a path they named — and hand them route 1, or, where
+route 1 is not wired, the steps below with the slug filled in.** That is the
+whole handover.
 
 1. Validate until clean (above).
 2. **DEV** — from inside the folder's parent directory:
@@ -272,7 +317,10 @@ too, so the seed stays complete.
 
 A standalone page (strategy deck, workshop) is one **fully self-contained**
 `.html` file (inline CSS/JS, images as data: URIs) in the `html-pages`
-container of the same accounts. `<name>.html` is served raw at `/<name>`,
+container of the same accounts — put there through the **Team Hub Pages**
+library (`Team_Hub_Pages`: one file per page, the same Post status commands,
+carried out by `publish-pages`) or with the upload below. `<name>.html` is
+served raw at `/<name>`,
 inside the portal chrome at `/presentations/<name>/`, and listed under
 Presentations automatically: its `<title>` is the listing title and its
 upload date is its date — no meta tags are read. Start from
@@ -293,7 +341,9 @@ az storage blob upload --auth-mode login --overwrite \
 | Uploading from outside the CETIN network | The storage firewall blocks it ("blocked by network rules"). Hand the folder and the commands to someone on the network. |
 | Folder named differently from the file (`capex-report/acoe-1415-capex-reporting.md`) | The listing takes `<slug>/<slug>.md` only. Both carry the slug. |
 | Expecting the listing to show the post at once | The listing refreshes within 60 s; the post's own URL works immediately. |
-| Asking for a deploy, a pipeline run, a git push or a SharePoint library | None exists for posts. The container is the source; the upload is the publish. |
+| Asking for a deploy, a pipeline run or a git push | None exists for posts. The container is the source; the library command or the upload is the publish. |
+| Setting Post status on a file row instead of the folder | The workflow acts on folders only; a file row is marked `Failed`. |
+| Waiting on a library command that never completes | Fifteen minutes with no `Idle`, no `Failed` and no On DEV / On LIVE flip means that environment's Logic App is not running the workflow. Publish by upload. |
 | `category: RPA (UiPath)` or another new spelling | The listing spells it `RPA`; a new spelling is a second filter pill. Use the spellings in the frontmatter table. |
 | A `desc` over 120 characters | The band shows three lines and pushes the rest into the body; the card clamps at four. One whole sentence. |
 | Handing back without running the validator | Team Hub fails *silently* — a broken post just vanishes from the listing. The validator is the only thing that turns that into an error. |
