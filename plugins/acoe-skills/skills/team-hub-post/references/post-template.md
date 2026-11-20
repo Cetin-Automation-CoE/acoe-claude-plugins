@@ -2,10 +2,10 @@
 title: My New Solution
 desc: One whole sentence, at most 120 characters: what it does and for whom, factual and concrete.
 category: Power Apps
-tags: AI
+tags: AI — delete this line unless the solution really uses AI
 business: HR
-author: Pěnka Kryštof
-added: 2026-08-17
+author: Surname Firstname
+added: 2099-01-01
 ---
 
 **Bold lead paragraph — the elevator pitch: what the solution does, for whom,

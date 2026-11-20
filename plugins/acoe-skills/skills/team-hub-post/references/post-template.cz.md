@@ -2,10 +2,10 @@
 title: Moje nové řešení
 desc: Jedna celá věta, nejvýše 120 znaků: co řešení dělá a pro koho, věcně a konkrétně.
 category: Power Apps
-tags: AI
+tags: AI — tuto řádku smažte, pokud řešení AI nevyužívá
 business: HR
-author: Pěnka Kryštof
-added: 2026-08-17
+author: Příjmení Jméno
+added: 2099-01-01
 ---
 
 **Tučný úvodní odstavec — co řešení dělá, pro koho a jaký byznysový problém
@@ -14,12 +14,12 @@ added: 2026-08-17
 ### PŮVODNÍ STAV
 - Jak proces fungoval dříve (ruční kroky, tabulky, problémy)
 
-### SOUČASNÝ STAV
+### AKTUÁLNÍ STAV
 - Co řešení dělá nyní
   - Vnořené odrážky jsou v pořádku
 - Kde jsou uložena data (SharePoint / Dataverse / SQL)
 
-### PŘÍNOSY
+### BENEFITY
 - Úspora času, eliminace chyb, transparentnost
 
 ### Ukázky aplikace
