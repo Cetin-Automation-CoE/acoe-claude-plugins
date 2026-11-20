@@ -52,7 +52,7 @@ Org-wide (Team/Enterprise): an Owner can instead add the same repository under *
 | `projektovy-status-pmo` | "Připrav projektový status" — builds an R/A/G project status for PMO from recent emails, meetings, and Teams activity |
 | `rfp-evaluation` | "Evaluate vendor proposals", "score this RFP" — weighted scoring matrix, HTML dashboard, and shortlist memo for CETIN procurement |
 | `skill-explorer` | "Which skills should I use" — onboarding interview that recommends a personalised skill set for the user's role |
-| `team-hub-post` | "Write a Team Hub post", "napiš příspěvek na Team Hub" — authors or updates a solution post or hosted HTML page for Team Hub, optionally straight from an ACOE Jira Idea; validates the post and stages it for publishing |
+| `team-hub-post` | "Write a Team Hub post", "napiš příspěvek na Team Hub" — authors or updates a solution post or hosted HTML page for Team Hub, optionally straight from an ACOE Jira Idea; validates the post and publishes it through the Team Hub Posts library or a direct upload |
 | `weekly-planning` | "Plan my week", "weekly recap" — persistent weekly planning with task list in OneDrive and Adaptive Card dashboards |
 
 ## Updating
