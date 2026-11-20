@@ -1,11 +1,11 @@
 ---
 title: Moje nové řešení
-desc: Shrnutí v jedné až dvou větách zobrazené na kartě v přehledu řešení. České title a desc z tohoto souboru se použijí v českém výpisu.
+desc: Jedna celá věta, nejvýše 120 znaků: co řešení dělá a pro koho, věcně a konkrétně.
 category: Power Apps
-tags: AI
+tags: AI — tuto řádku smažte, pokud řešení AI nevyužívá
 business: HR
-author: Pěnka Kryštof
-added: 2026-08-17
+author: Příjmení Jméno
+added: 2099-01-01
 ---
 
 **Tučný úvodní odstavec — co řešení dělá, pro koho a jaký byznysový problém
@@ -14,12 +14,12 @@ added: 2026-08-17
 ### PŮVODNÍ STAV
 - Jak proces fungoval dříve (ruční kroky, tabulky, problémy)
 
-### SOUČASNÝ STAV
+### AKTUÁLNÍ STAV
 - Co řešení dělá nyní
   - Vnořené odrážky jsou v pořádku
 - Kde jsou uložena data (SharePoint / Dataverse / SQL)
 
-### PŘÍNOSY
+### BENEFITY
 - Úspora času, eliminace chyb, transparentnost
 
 ### Ukázky aplikace
@@ -27,3 +27,11 @@ added: 2026-08-17
 ![](/solutions/my-new-solution/screenshot-1.png)
 
 ![](/solutions/my-new-solution/screenshot-2.png)
+
+![](/solutions/my-new-solution/demo.mp4)
+
+> „Volitelný ohlas uživatele z byznysu — na stránce se zobrazí celý v závěrečné sekci Ohlasy uživatelů.“
+>
+> — Příjmení Jméno, Role (Oddělení)
+
+_Zdroj: [ACOE-1234](https://cetin.atlassian.net/browse/ACOE-1234)_

@@ -36,6 +36,7 @@ customfield_10083, customfield_11296, customfield_11297
 | Labels | `labels` | `teamhub-skip`, AI hints |
 | External ID | `customfield_10062` | a Clooney work package etc., if worth mentioning |
 | Delivery Type | `customfield_11396` | **gate** — must be `New Functionalities` |
+| Status | `status` | **gate** — `status.name` must be `Deployed` before the post is published; anything else is a draft for review |
 
 ## The benefit numbers
 

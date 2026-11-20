@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Validate an ACOE Team Hub post folder against the team-hub-post contract.
 
-Team Hub derives its /solutions listing from each article's frontmatter and
-there is no central index. A broken article therefore does not fail loudly --
-it silently disappears from the listing. This script is what turns that silent
-failure into an error, and it is the same script the publish pipeline runs.
+Team Hub derives its /automation-solutions listing from each post's
+frontmatter and there is no central index. A broken post therefore does not
+fail loudly -- it silently disappears from the listing. Nothing between the
+upload and the portal checks a post, so this script is what turns that silent
+failure into an error.
 
 Exit codes
     0  valid (warnings may still be printed)
@@ -30,10 +31,15 @@ from pathlib import Path
 # --------------------------------------------------------------------------- #
 
 REQUIRED_KEYS = ("title", "desc", "category", "business", "author", "added")
+# `role` renders after the author on the detail page ("Author -- Role").
+# titleCz/descCz are read ONLY from the English file, as the Czech listing
+# texts when there is no .cz.md (content.js: pick(cz.title, en.titleCz)).
 OPTIONAL_KEYS = ("tags", "role")
 
+# Spelled as the listing already spells them: the filter pills group by the
+# exact string, so "RPA (UiPath)" would be a second pill beside "RPA".
 CATEGORIES = {
-    "Power Apps", "Power BI", "Power Automate", "RPA (UiPath)", "SharePoint",
+    "Power Apps", "Power BI", "RPA", "Reporting", "Power Automate", "SharePoint",
     "AI", "Code", "Excel", "Copilot Studio", "n8n",
 }
 
@@ -42,12 +48,25 @@ BUSINESS_AREAS = {
     "Legal", "Procurement", "IT", "Wholesale", "Regulatory", "Automation CoE",
 }
 
-# The renderer keys the three-column storyline block off these exact headings.
-# The Czech post uses the Czech set -- see references/post-template.cz.md.
-STORYLINE = {
-    "EN": ("### ORIGINAL STATE", "### CURRENT STATE", "### BENEFITS"),
-    "CZ": ("### PŮVODNÍ STAV", "### SOUČASNÝ STAV", "### PŘÍNOSY"),
+# The three-column storyline block renders only when all three sections are
+# found. Mirrors kindOf() in portal/automation-solutions/index.html: any H2-H4,
+# compared case-insensitively with `*` and `:` stripped, against ONE bilingual
+# synonym set -- an English heading in a Czech post matches just as well.
+# Keep in step with that function; it is the thing that actually decides.
+STORYLINE_KINDS = {
+    "initial": ("initial state", "original state", "as is",
+                "původní stav", "originální status"),
+    "current": ("current state", "actual state",
+                "aktuální stav", "současný stav"),
+    "benefits": ("benefits", "benefits & statistics",
+                 "benefity", "benefity & statistiky", "výhody", "přínosy"),
 }
+# What a new post should use -- the spellings most of the library already has.
+HOUSE_STYLE = {
+    "EN": ("### ORIGINAL STATE", "### CURRENT STATE", "### BENEFITS"),
+    "CZ": ("### PŮVODNÍ STAV", "### AKTUÁLNÍ STAV", "### BENEFITY"),
+}
+HEADING_RE = re.compile(r"^(#{2,4})\s+(.+?)\s*$", re.M)
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 AUTHOR_RE = re.compile(r"^[^\W\d_][\w'-]+(?:\s+[^\W\d_][\w'-]+)+$", re.UNICODE)
@@ -64,13 +83,15 @@ MAX_VIDEO_BYTES = 110 * 1024 * 1024
 # A single floor would systematically reject correct Czech.
 MIN_BODY_WORDS = {"EN": 90, "CZ": 70}
 
-# Finder / Office droppings. The publishing flow filters these out by
-# extension, so they are noise rather than a problem -- do not fail on them.
+# Finder / Office droppings. upload-batch takes everything in the folder, so
+# they would land in the container next to the post -- warn, the author deletes.
 IGNORED_RE = re.compile(r"^(\.DS_Store|Thumbs\.db|desktop\.ini|~\$.*)$", re.I)
 
 # OneDrive conflict copies. These DO end in .md and DO start with the slug, so
-# the flow's allowlist will happily commit one and publish a duplicate article.
-# This is the dangerous case and must be an error.
+# upload-batch would put a second markdown file next to the post: not listed
+# (the listing takes <slug>.md only) but served, and the wrong version waiting
+# to be pasted over the right one. This is the dangerous case and must be an
+# error.
 CONFLICT_RE = re.compile(r"-[A-Z][\w' .-]*(MacBook|iMac|Mac ?mini|PC|Laptop|Notebook)", re.I)
 
 
@@ -152,42 +173,79 @@ def check_frontmatter(fm: dict[str, str], rep: Report, label: str) -> None:
         rep.error(f"{label}: `author` must be `Surname Firstname` (e.g. `Horák Dominik`), got {author!r}")
 
     desc = fm.get("desc", "")
-    if desc and len(desc) > 320:
-        rep.warn(f"{label}: `desc` is {len(desc)} chars -- listing cards truncate around 200")
+    if desc and len(desc) > 120:
+        rep.warn(
+            f"{label}: `desc` is {len(desc)} chars -- the band shows three lines and the card "
+            "four, the rest runs on in the body; keep it to one whole sentence of at most 120"
+        )
 
+    known = REQUIRED_KEYS + OPTIONAL_KEYS + (("titleCz", "descCz") if label == "EN" else ())
     for key in fm:
-        if key not in REQUIRED_KEYS + OPTIONAL_KEYS:
+        if key not in known:
             rep.warn(f"{label}: unknown frontmatter key `{key}` will be ignored")
 
-    if "titleCz" in fm or "descCz" in fm:
-        rep.error(
-            f"{label}: Czech texts come from the `.cz.md` file's own title/desc -- "
-            "titleCz/descCz are dead keys"
+    if label == "CZ" and ("titleCz" in fm or "descCz" in fm):
+        rep.warn(
+            "CZ: titleCz/descCz in the Czech file do nothing -- the portal reads "
+            "this file's own `title`/`desc` for the Czech listing"
         )
+
+
+def first_paragraph(body: str) -> str:
+    """The first blank-line-delimited block, joined into a single line.
+
+    A bold lead is normally hard-wrapped across several lines, so testing only
+    the first LINE for a closing ** rejects every correctly wrapped post --
+    both templates in references/ included.
+    """
+    block: list[str] = []
+    for line in body.splitlines():
+        if line.strip():
+            block.append(line.strip())
+        elif block:
+            break
+    return " ".join(block)
+
+
+def storyline_kinds(body: str) -> set[str]:
+    """Which storyline sections the portal would find -- see STORYLINE_KINDS."""
+    found = set()
+    for _, text in HEADING_RE.findall(body):
+        norm = " ".join(text.lower().replace("*", "").replace(":", "").split())
+        for kind, names in STORYLINE_KINDS.items():
+            if norm in names:
+                found.add(kind)
+    return found
 
 
 def check_body(body: str, rep: Report, label: str, slug: str, folder: Path) -> None:
-    stripped = [ln for ln in body.splitlines() if ln.strip()]
-    if not stripped:
+    lead = first_paragraph(body)
+    if not lead:
         rep.error(f"{label}: body is empty")
         return
 
-    lead = stripped[0].strip()
+    # House style, not a contract: the card deck comes from `desc`, never from
+    # the body, so a plain opening paragraph still renders correctly.
     if lead.startswith("#"):
-        rep.error(f"{label}: post opens with a heading -- the renderer expects a **bold lead paragraph**")
-    elif not (lead.startswith("**") and lead.rstrip().endswith("**")):
-        rep.error(f"{label}: first paragraph must be wrapped in ** ** (bold lead)")
+        rep.warn(f"{label}: opens with a heading -- a **bold lead paragraph** reads better as the elevator pitch")
+    elif not (lead.startswith("**") and lead.endswith("**")):
+        rep.warn(f"{label}: the lead paragraph is not bold -- wrap the elevator pitch in ** **")
 
-    expected = STORYLINE.get(label, STORYLINE["EN"])
-    missing = [h for h in expected if h not in body]
-    if missing and label == "CZ" and all(h in body for h in STORYLINE["EN"]):
-        rep.error(
-            "CZ: the Czech post uses the English storyline headings -- use "
-            f"{', '.join(STORYLINE['CZ'])} (see references/post-template.cz.md)"
-        )
-        missing = []
+    found = storyline_kinds(body)
+    missing = [k for k in ("initial", "current", "benefits") if k not in found]
     if missing:
-        rep.error(f"{label}: missing storyline heading(s) {', '.join(missing)} -- the three-column block will not render")
+        house = HOUSE_STYLE.get(label, HOUSE_STYLE["EN"])
+        rep.warn(
+            f"{label}: nothing matches the storyline section(s) {', '.join(missing)} -- "
+            f"the three-column block renders only when all three are found. "
+            f"House style is {', '.join(house)}"
+        )
+    elif label == "CZ" and any(
+        " ".join(h.lower().replace("*", "").replace(":", "").split())
+        in ("original state", "current state", "actual state", "benefits", "initial state", "as is")
+        for _, h in HEADING_RE.findall(body)
+    ):
+        rep.warn("CZ: storyline headings are in English -- the block renders, but write them in Czech")
 
     floor = MIN_BODY_WORDS.get(label, MIN_BODY_WORDS["EN"])
     words = len(re.findall(r"\w+", body))
@@ -231,11 +289,11 @@ def validate_folder(folder: Path, *, allow_english_only: bool) -> Report:
         elif child.name == "index.json":
             rep.error("index.json is obsolete: the listing is derived from frontmatter. Delete it.")
         elif IGNORED_RE.match(child.name):
-            continue  # filtered out by the publishing flow; not the author's problem
+            rep.warn(f"`{child.name}` would be uploaded with the post -- delete it first")
         elif CONFLICT_RE.search(child.stem):
             rep.error(
-                f"`{child.name}` is a OneDrive conflict copy -- it would be committed and "
-                "published as a duplicate post. Delete it and re-check the original."
+                f"`{child.name}` is a OneDrive conflict copy -- it would be uploaded next to "
+                "the real post. Delete it and re-check the original."
             )
         elif child.suffix.lower() not in ALLOWED_EXT and not child.name.startswith("."):
             rep.warn(f"`{child.name}` has an unexpected extension for a Team Hub post")
